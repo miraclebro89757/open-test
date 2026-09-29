@@ -78,6 +78,12 @@ npx open-test status
 # Run integration tests
 npx open-test test
 
+# Check for updates
+npx open-test update
+
+# Upgrade to latest
+npx open-test upgrade
+
 # View logs
 npx open-test logs [service]
 
@@ -86,7 +92,8 @@ npx open-test stop
 ```
 
 👉 **See [CLI_README.md](CLI_README.md) for complete CLI documentation**  
-👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup guide**
+👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup guide**  
+👉 **See [UPGRADE_GUIDE.md](UPGRADE_GUIDE.md) for upgrade instructions**
 
 ## 🏗️ Architecture
 

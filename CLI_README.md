@@ -173,6 +173,109 @@ npx open-test install
 - Node.js
 - Rust/Cargo (optional)
 
+### 🔄 Update (Check for Updates)
+
+Check if a new version is available:
+
+```bash
+npx open-test update
+```
+
+**Shows:**
+- Current version
+- Latest version
+- Update instructions
+
+### ⬆️ Upgrade (Auto-Upgrade)
+
+Upgrade to the latest version (for global installs):
+
+```bash
+npx open-test upgrade
+
+# Force upgrade
+npx open-test upgrade --force
+```
+
+**Note**: If using npx, you're always on the latest version!
+
+### 📋 Changelog (View Updates)
+
+View changelog and release notes:
+
+```bash
+npx open-test changelog
+```
+
+## 🔄 Upgrading OpenTest
+
+### For npx Users (Recommended)
+
+**No upgrade needed!** npx always uses the latest version:
+
+```bash
+# Always gets the latest version
+npx open-test@latest run
+```
+
+### For Global Install Users
+
+```bash
+# Option 1: Use built-in upgrade command
+npx open-test upgrade
+
+# Option 2: Use npm
+npm update -g open-test
+
+# Option 3: Reinstall
+npm uninstall -g open-test
+npm install -g open-test@latest
+```
+
+### For Project Dependency Users
+
+```bash
+# In your project directory
+npm update open-test
+```
+
+### Auto Update Check
+
+OpenTest automatically checks for updates when you run commands:
+
+```bash
+npx open-test run
+
+# If update available, shows:
+# ╔══════════════════════════════════════════════╗
+# ║  🎉 New version available: 2.0.0             ║
+# ║  Current: 1.0.0                              ║
+# ║  Run: npm update -g open-test                ║
+# ╚══════════════════════════════════════════════╝
+```
+
+Disable update check:
+
+```bash
+npx open-test run --no-update-check
+```
+
+### Version Management
+
+```bash
+# Check current version
+open-test --version
+
+# Check latest version on npm
+npm view open-test version
+
+# Use specific version
+npx open-test@2.0.0 run
+npm install -g open-test@2.0.0
+```
+
+📚 **Full Upgrade Guide**: See [UPGRADE_GUIDE.md](./UPGRADE_GUIDE.md) and [UPGRADE_QUICK_REF.md](./UPGRADE_QUICK_REF.md)
+
 ## 🎨 Usage Examples
 
 ### Example 1: First-Time User

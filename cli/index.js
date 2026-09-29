@@ -8,6 +8,7 @@ const { runTests } = require('./commands/run');
 const { initProject } = require('./commands/init');
 const { startServices } = require('./commands/start');
 const { statusCheck } = require('./commands/status');
+const { checkAndNotify, checkForUpdates, clearCache } = require('./update-checker');
 const pkg = require('../package.json');
 
 // Create CLI program
@@ -38,11 +39,17 @@ program
   .description('🚀 One-click setup and run OpenTest')
   .option('-p, --port <port>', 'API port', '8080')
   .option('--skip-checks', 'Skip dependency checks')
+  .option('--no-update-check', 'Skip update check')
   .action(async (options) => {
     showBanner();
     
     console.log(chalk.blue('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
     console.log(chalk.bold.green('🚀 Starting OpenTest...\n'));
+    
+    // Check for updates (non-blocking)
+    if (!options.noUpdateCheck) {
+      checkAndNotify(pkg.version, { silent: false }).catch(() => {});
+    }
     
     // Step 1: Check dependencies
     if (!options.skipChecks) {
@@ -159,6 +166,85 @@ program
     }
   });
 
+// Command: update - Check for updates
+program
+  .command('update')
+  .description('🔄 Check for updates')
+  .action(async () => {
+    showBanner();
+    console.log(chalk.blue('Checking for updates...\n'));
+    
+    const updateInfo = await checkForUpdates(pkg.version);
+    
+    if (updateInfo.updateAvailable) {
+      console.log(chalk.green('✨ Update available!\n'));
+      console.log(chalk.cyan(`Current version: ${updateInfo.currentVersion}`));
+      console.log(chalk.green(`Latest version:  ${updateInfo.latestVersion}\n`));
+      console.log(chalk.bold('Update instructions:\n'));
+      console.log(chalk.gray('Global install:'));
+      console.log(chalk.cyan('  npm update -g open-test\n'));
+      console.log(chalk.gray('Or use npx (always latest):'));
+      console.log(chalk.cyan('  npx open-test@latest run\n'));
+      console.log(chalk.gray('See full guide:'));
+      console.log(chalk.cyan('  cat UPGRADE_GUIDE.md\n'));
+    } else {
+      console.log(chalk.green('✅ You are using the latest version!'));
+      console.log(chalk.cyan(`Version: ${pkg.version}\n`));
+    }
+  });
+
+// Command: upgrade - Upgrade OpenTest (global install only)
+program
+  .command('upgrade')
+  .description('⬆️  Upgrade OpenTest to latest version')
+  .option('-f, --force', 'Force upgrade even if latest')
+  .action(async (options) => {
+    showBanner();
+    console.log(chalk.blue('Upgrading OpenTest...\n'));
+    
+    const updateInfo = await checkForUpdates(pkg.version);
+    
+    if (!updateInfo.updateAvailable && !options.force) {
+      console.log(chalk.green('✅ Already using latest version'));
+      console.log(chalk.cyan(`Version: ${pkg.version}\n`));
+      return;
+    }
+    
+    const { execSync } = require('child_process');
+    const ora = require('ora');
+    const spinner = ora('Upgrading...').start();
+    
+    try {
+      execSync('npm update -g open-test', { stdio: 'pipe' });
+      spinner.succeed(chalk.green('Upgraded successfully!'));
+      
+      if (updateInfo.latestVersion) {
+        console.log(chalk.cyan(`New version: ${updateInfo.latestVersion}\n'));
+      }
+      
+      console.log(chalk.gray('Verify with:'));
+      console.log(chalk.cyan('  open-test --version\n'));
+    } catch (error) {
+      spinner.fail(chalk.red('Upgrade failed'));
+      console.log(chalk.yellow('\n💡 Try manual upgrade:'));
+      console.log(chalk.cyan('  npm update -g open-test'));
+      console.log(chalk.gray('\nOr use npx (always latest):'));
+      console.log(chalk.cyan('  npx open-test@latest run\n'));
+    }
+  });
+
+// Command: changelog - View changelog
+program
+  .command('changelog')
+  .description('📋 View update changelog')
+  .action(() => {
+    console.log(chalk.cyan('\n📋 OpenTest Changelog\n'));
+    console.log(chalk.gray('View full changelog at:'));
+    console.log(chalk.blue('https://github.com/yourusername/open-test/releases\n'));
+    console.log(chalk.gray('Or read UPGRADE_GUIDE.md for migration instructions.'));
+    console.log();
+  });
+
 // Command: doctor - Check system health
 program
   .command('doctor')
@@ -166,6 +252,21 @@ program
   .action(async () => {
     showBanner();
     console.log(chalk.blue('Running system health check...\n'));
+    
+    // Check for updates
+    console.log(chalk.bold('Version Information:'));
+    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+    console.log(chalk.cyan(`Current version: ${pkg.version}`));
+    
+    const updateInfo = await checkForUpdates(pkg.version).catch(() => null);
+    if (updateInfo && updateInfo.updateAvailable) {
+      console.log(chalk.yellow(`Latest version:  ${updateInfo.latestVersion}`));
+      console.log(chalk.green('\n✨ Update available!'));
+      console.log(chalk.gray('Run: npm update -g open-test'));
+    } else {
+      console.log(chalk.green('✓ You are using the latest version'));
+    }
+    console.log();
     
     const { checkDependencies } = require('./install');
     const { allInstalled, installed, missing } = await checkDependencies();
