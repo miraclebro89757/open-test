@@ -1,41 +1,73 @@
 package main
 
 import (
-	"net/http"
+	"context"
+	"log"
+	"os"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/miraclebro89757/open-test/api/internal/db"
+	"github.com/miraclebro89757/open-test/api/internal/handler"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	e := echo.New()
+	// Initialize database
+	if err := db.InitDB(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.CloseDB()
 
+	// Initialize Redis
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379"
+	}
+
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+
+	redisClient := redis.NewClient(opt)
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	log.Println("Redis connected successfully")
+
+	// Initialize Echo
+	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{
-			"status": "ok",
-			"service": "api-gateway",
-		})
-	})
+	// Initialize handler
+	h := handler.NewHandler(redisClient)
 
-	e.POST("/api/projects/:project_id/execute", func(c echo.Context) error {
-		projectID := c.Param("project_id")
-		return c.JSON(http.StatusAccepted, map[string]any{
-			"project_id": projectID,
-			"status":     "queued",
-			"message":    "agent workflow accepted",
-		})
-	})
+	// Routes
+	e.GET("/health", h.HealthCheck)
+	e.GET("/ws", h.WebSocketHandler)
 
-	e.GET("/api/dashboard/metrics", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{
-			"total_executions": 128,
-			"pass_rate": "92.4%",
-			"avg_time": "9.4s",
-		})
-	})
+	// Project routes
+	e.POST("/api/projects", h.CreateProject)
+	e.GET("/api/projects", h.ListProjects)
+	e.GET("/api/projects/:id", h.GetProject)
+	e.GET("/api/projects/:id/test-cases", h.GetTestCases)
+	e.POST("/api/projects/:id/execute", h.ExecuteTests)
 
-	e.Logger.Fatal(e.Start(":8000"))
+	// Execution routes
+	e.GET("/api/executions/:execution_id", h.GetExecution)
+
+	// Dashboard
+	e.GET("/api/dashboard/metrics", h.GetDashboardMetrics)
+
+	// Start server
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+
+	log.Printf("API Gateway starting on port %s", port)
+	e.Logger.Fatal(e.Start(":" + port))
 }

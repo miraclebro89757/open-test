@@ -97,6 +97,20 @@ services:
       - api
     restart: unless-stopped
 
+  worker-pool:
+    build:
+      context: ./worker-pool
+    container_name: open-test-worker-pool
+    ports:
+      - "8002:8001"
+    environment:
+      REDIS_URL: redis://redis:6379
+      WORKER_COUNT: 4
+      RUST_LOG: info
+    depends_on:
+      - redis
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

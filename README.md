@@ -1,77 +1,221 @@
-# open-test
+# Open-Test
 
-AI-TEST-AI is an agentic test platform that turns requirements into executable QA workflows with a minimal UI focused on dashboards, reports, and execution summaries.
+AI-powered agentic test platform that turns requirements into executable QA workflows.
 
-The product is built for a new generation of automated testing: a reasoning-driven agent decides what to inspect, what to generate, what to execute, and how to summarize the outcome. The front end is intentionally thin and presentation-focused, while the real intelligence lives in the agentic system.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Goal
+## 🎯 What is Open-Test?
 
-We are trying to replace the usual manual, workflow-heavy QA toolchain with a system where:
+Open-Test is a next-generation testing platform where **AI agents** do the heavy lifting:
 
-- an agent understands requirements
-- it retrieves relevant business context and historical knowledge
-- it generates test cases automatically
-- it runs them through UI or API execution layers
-- it diagnoses failures and produces summaries, reports, and recommendations
-- the UI is mostly a reporting layer, not an orchestration layer
+- 📝 **Write requirements** in natural language
+- 🤖 **AI generates test cases** automatically using LLM reasoning
+- ⚡ **Automated execution** with Playwright browser automation
+- 📊 **Real-time dashboards** show results and metrics
 
-## Problem being solved
+No more manual test case writing. No more rigid test frameworks. Just describe what you want to test, and let the AI handle the rest.
 
-Most traditional test automation tools are still built around rigid forms, manual test case creation, and heavy front-end orchestration. That creates friction, slows down iteration, and makes advanced automation feel like a product problem instead of an engineering workflow.
+## 🚀 Quick Start
 
-The real challenge is not only generating tests, but also creating a system that can reason over product context, choose execution paths, use external tools, and continuously self-assess quality while keeping the product experience simple for users.
+### Prerequisites
 
-## Architecture
+- Docker & Docker Compose
+- OpenAI API key
+- 4GB+ RAM
 
-- Go API gateway for high-performance orchestration and WebSocket streaming
-- Python LangGraph agent for reasoning and workflow execution
-- Go Playwright execution layer for browser automation
-- PostgreSQL for structured state
-- Redis for queues and streaming updates
-- Neo4j for graph-based knowledge and relationships
-- Elasticsearch for full-text retrieval and BM25 search
-- React front-end focused on dashboards and reports
+### Start in 3 Steps
 
-## High-level flow
+1. **Clone and configure**
+   ```bash
+   git clone <repository>
+   cd open-test
+   cp .env.example .env
+   # Edit .env and add your OPENAI_API_KEY
+   ```
 
-1. User submits requirement or project context
-2. Agent parses the requirement and retrieves related knowledge
-3. Agent generates test plans and test cases
-4. Execution engine runs Playwright and API checks
-5. Failures are analyzed and summarized
-6. Final output is presented through lightweight dashboards and reports
+2. **Start all services**
+   ```bash
+   make up
+   ```
 
-## Local startup
+3. **Open the app**
+   ```
+   http://localhost:3000
+   ```
+
+👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup guide**
+
+## 🏗️ Architecture
+
+```
+┌─────────────┐
+│   Frontend  │  React dashboard & reports
+│  (Port 3000)│
+└──────┬──────┘
+       │
+┌──────▼──────┐
+│ API Gateway │  Go REST API + WebSocket
+│  (Port 8000)│
+└──────┬──────┘
+       │
+   ┌───┴───┐
+   │ Redis │  Message queue & pub/sub
+   └───┬───┘
+       │
+   ┌───┴────────┐
+   │            │
+┌──▼───┐   ┌───▼────┐
+│Agent │   │Executor│
+│Python│   │Go+PW   │
+└──┬───┘   └───┬────┘
+   │           │
+   └─────┬─────┘
+         │
+   ┌─────▼──────┐
+   │ PostgreSQL │  Structured data
+   └────────────┘
+```
+
+### Tech Stack
+
+- **Frontend**: React, React Router, Axios
+- **API Gateway**: Go, Echo framework, WebSocket
+- **Agent**: Python, LangGraph, LangChain, OpenAI
+- **Executor**: Go, Playwright for browser automation
+- **Databases**: PostgreSQL, Redis, Neo4j, Elasticsearch
+
+## 📋 Core Features
+
+### ✨ Implemented (MVP)
+
+- ✅ Natural language requirement input
+- ✅ AI-powered test case generation (LangGraph + OpenAI)
+- ✅ Automated UI test execution (Playwright)
+- ✅ Real-time execution monitoring
+- ✅ Dashboard with metrics and reports
+- ✅ Project management (CRUD)
+- ✅ Test result tracking and history
+
+### 🔮 Roadmap
+
+- 🔄 RAG-based knowledge retrieval (Neo4j + Elasticsearch)
+- 🔄 Advanced test strategies (API testing, integration tests)
+- 🔄 Failure analysis and auto-diagnosis
+- 🔄 Test optimization and flaky test detection
+- 🔄 CI/CD integration
+- 🔄 Multi-tenant support
+
+## 🎬 How It Works
+
+1. **Submit Requirements**
+   ```
+   "Test user login with valid and invalid credentials,
+   verify session persistence, and check forgot password flow"
+   ```
+
+2. **AI Agent Analyzes**
+   - Parses requirements using LLM
+   - Identifies test scenarios
+   - Generates structured test cases with steps
+   - Saves to database
+
+3. **Execute Tests**
+   - Executor picks up test cases
+   - Runs Playwright browser automation
+   - Records results, screenshots, timing
+   - Updates database in real-time
+
+4. **View Results**
+   - Dashboard shows pass/fail metrics
+   - Detailed execution logs
+   - Historical trends
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+open-test/
+├── api/              # Go API Gateway
+│   ├── cmd/
+│   ├── internal/
+│   └── Dockerfile
+├── agent/            # Python AI Agent
+│   ├── core/
+│   ├── main.py
+│   └── Dockerfile
+├── executor/         # Go + Playwright Executor
+│   ├── cmd/
+│   ├── internal/
+│   └── Dockerfile
+├── frontend/         # React Frontend
+│   ├── src/
+│   ├── public/
+│   └── Dockerfile
+├── db/              # Database schemas
+├── docker-compose.yml
+└── Makefile
+```
+
+### Available Commands
 
 ```bash
-make up
+make up       # Start all services
+make down     # Stop all services
+make logs     # View all logs
+make api      # View API logs
+make agent    # View agent logs
+make executor # View executor logs
+make frontend # View frontend logs
 ```
 
-## Services
+## 📊 Service Endpoints
 
-- Frontend: http://localhost:3000
-- API: http://localhost:8000
-- Neo4j: http://localhost:7474
-- Elasticsearch: http://localhost:9200
-- PostgreSQL: localhost:5432
-- Redis: localhost:6379
+| Service | Port | URL |
+|---------|------|-----|
+| Frontend | 3000 | http://localhost:3000 |
+| API | 8000 | http://localhost:8000 |
+| PostgreSQL | 5432 | localhost:5432 |
+| Redis | 6379 | localhost:6379 |
+| Neo4j | 7474, 7687 | http://localhost:7474 |
+| Elasticsearch | 9200 | http://localhost:9200 |
 
-## Repository structure
+## 🧪 API Examples
 
-```text
-open-test/
-├── api/
-├── agent/
-├── executor/
-├── frontend/
-├── docs/
-├── docker-compose.yml
-├── .env.example
-├── Makefile
-├── README.md
-└── LICENSE
+```bash
+# Create a project
+curl -X POST http://localhost:8000/api/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Login Tests",
+    "requirement": "Test login with valid/invalid credentials"
+  }'
+
+# Get dashboard metrics
+curl http://localhost:8000/api/dashboard/metrics
+
+# List projects
+curl http://localhost:8000/api/projects
 ```
 
-## Status
+## 🤝 Contributing
 
-This repository is a starter architecture for the AI-TEST-AI system. It intentionally focuses on the new modality: agentic intelligence first, UI as a dashboard second.
+Contributions welcome! This is an MVP showcasing agentic testing architecture.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file
+
+## 💡 Philosophy
+
+Traditional testing tools focus on UI orchestration and manual workflows. Open-Test flips this:
+
+- **AI does the thinking**: Requirements → Test Cases
+- **Automation does the work**: Test Cases → Results  
+- **UI shows the outcomes**: Results → Insights
+
+The goal is a testing platform that feels more like a copilot than a tool.
+
+---
+
+Built with ❤️ for the future of QA automation

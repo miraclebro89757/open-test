@@ -1,0 +1,85 @@
+open-test/
+├── 📁 api/                    # Go API Gateway
+│   ├── 📁 cmd/
+│   │   └── 📁 server/
+│   │       └── main.go       # API entry point
+│   ├── 📁 internal/
+│   │   ├── 📁 db/
+│   │   │   └── database.go   # DB connection
+│   │   ├── 📁 handler/
+│   │   │   └── handler.go    # HTTP handlers
+│   │   └── 📁 model/
+│   │       └── models.go     # Data models
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   └── go.mod
+│
+├── 📁 agent/                  # Python AI Agent
+│   ├── 📁 core/
+│   │   ├── agent.py          # LangGraph workflow
+│   │   └── workflow.py       # DB operations
+│   ├── main.py               # Agent entry point
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .dockerignore
+│
+├── 📁 executor/               # Go Test Executor
+│   ├── 📁 cmd/
+│   │   └── 📁 executor/
+│   │       └── main.go       # Executor entry point
+│   ├── 📁 internal/
+│   │   └── 📁 runner/
+│   │       └── runner.go     # Playwright runner
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   └── go.mod
+│
+├── 📁 frontend/               # React Frontend
+│   ├── 📁 public/
+│   │   └── index.html
+│   ├── 📁 src/
+│   │   ├── 📁 components/
+│   │   │   ├── Dashboard.js
+│   │   │   ├── Dashboard.css
+│   │   │   ├── NewProject.js
+│   │   │   ├── NewProject.css
+│   │   │   ├── ProjectDetail.js
+│   │   │   ├── ProjectDetail.css
+│   │   │   ├── ExecutionDetail.js
+│   │   │   └── ExecutionDetail.css
+│   │   ├── App.js
+│   │   ├── App.css
+│   │   ├── api.js            # API client
+│   │   ├── index.js
+│   │   └── index.css
+│   ├── package.json
+│   ├── nginx.conf
+│   ├── Dockerfile
+│   └── .dockerignore
+│
+├── 📁 db/
+│   └── init.sql              # Database schema
+│
+├── 📄 docker-compose.yml     # Service orchestration
+├── 📄 Makefile               # Build commands
+├── 📄 .env                   # Environment variables
+├── 📄 .env.example           # Environment template
+├── 📄 .dockerignore          # Docker ignore rules
+│
+├── 📖 README.md              # Project overview
+├── 📖 QUICKSTART.md          # Setup guide
+├── 📖 DEPLOYMENT.md          # Production guide
+├── 📖 MVP_SUMMARY.md         # MVP completion report
+├── 📖 PROJECT_STRUCTURE.txt  # This file
+│
+├── 🔧 test-build.sh          # Build verification script
+│
+└── 📜 LICENSE                # MIT License
+
+Summary:
+========
+• 4 Dockerized services (API, Agent, Executor, Frontend)
+• 4 infrastructure services (PostgreSQL, Redis, Neo4j, Elasticsearch)
+• Complete CI/CD ready with docker-compose
+• Full documentation and guides
+• Production deployment considerations included
