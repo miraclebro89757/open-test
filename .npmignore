@@ -1,0 +1,39 @@
+# Files to exclude from npm package
+
+# Git
+.git
+.gitignore
+
+# Development files
+.env
+.DS_Store
+
+# Test files (exclude Rust tests from npm package)
+tests/target/
+tests/Cargo.lock
+
+# Documentation (keep only essential)
+FILE_MANIFEST.txt
+PROJECT_STRUCTURE.txt
+
+# Docker development files
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+node_modules/
+dist/
+build/
+
+# Databases
+db/data/
+*.sqlite

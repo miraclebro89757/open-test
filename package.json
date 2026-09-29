@@ -1,0 +1,50 @@
+{
+  "name": "open-test",
+  "version": "1.0.0",
+  "description": "AI-powered test automation platform with semantic element location",
+  "main": "cli/index.js",
+  "bin": {
+    "open-test": "./cli/index.js",
+    "opentest": "./cli/index.js"
+  },
+  "scripts": {
+    "start": "node cli/index.js run",
+    "install:deps": "node cli/install.js",
+    "test": "cd tests && cargo test --all -- --nocapture",
+    "dev": "docker compose up",
+    "build": "docker compose build",
+    "postinstall": "node cli/postinstall.js"
+  },
+  "keywords": [
+    "test",
+    "automation",
+    "ai",
+    "semantic",
+    "playwright",
+    "e2e",
+    "testing",
+    "qa"
+  ],
+  "author": "OpenTest Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/open-test.git"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "inquirer": "^8.2.5",
+    "ora": "^5.4.1",
+    "figlet": "^1.6.0",
+    "boxen": "^5.1.2"
+  },
+  "devDependencies": {},
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
+  }
+}

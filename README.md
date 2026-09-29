@@ -3,27 +3,42 @@
 AI-powered agentic test platform that turns requirements into executable QA workflows.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/open-test.svg)](https://www.npmjs.com/package/open-test)
 
 ## 🎯 What is Open-Test?
 
 Open-Test is a next-generation testing platform where **AI agents** do the heavy lifting:
 
 - 📝 **Write requirements** in natural language
-- 🤖 **AI generates test cases** automatically using LLM reasoning
+- 🤖 **AI generates test cases** automatically using LLM reasoning  
 - ⚡ **Automated execution** with Playwright browser automation
+- 🧠 **Semantic element location** - Tests survive UI refactoring
 - 📊 **Real-time dashboards** show results and metrics
 
 No more manual test case writing. No more rigid test frameworks. Just describe what you want to test, and let the AI handle the rest.
 
-## 🚀 Quick Start
+## 🚀 One-Click Quick Start
 
-### Prerequisites
+### Method 1: NPX (Recommended - Zero Installation!)
 
+```bash
+# Just run this one command! 🎉
+npx open-test@latest run
+
+# That's it! OpenTest will:
+# ✓ Check and install dependencies
+# ✓ Start all services
+# ✓ Open dashboard at http://localhost:3000
+```
+
+### Method 2: Traditional Setup
+
+**Prerequisites:**
 - Docker & Docker Compose
+- Node.js 16+
 - OpenAI API key
-- 4GB+ RAM
 
-### Start in 3 Steps
+**Steps:**
 
 1. **Clone and configure**
    ```bash
@@ -36,6 +51,8 @@ No more manual test case writing. No more rigid test frameworks. Just describe w
 2. **Start all services**
    ```bash
    make up
+   # or
+   npx open-test start
    ```
 
 3. **Open the app**
@@ -43,6 +60,32 @@ No more manual test case writing. No more rigid test frameworks. Just describe w
    http://localhost:3000
    ```
 
+## 📦 CLI Commands
+
+```bash
+# One-click setup and run
+npx open-test run
+
+# Initialize new project
+npx open-test init my-project
+
+# Check system health
+npx open-test doctor
+
+# View service status
+npx open-test status
+
+# Run integration tests
+npx open-test test
+
+# View logs
+npx open-test logs [service]
+
+# Stop services
+npx open-test stop
+```
+
+👉 **See [CLI_README.md](CLI_README.md) for complete CLI documentation**  
 👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup guide**
 
 ## 🏗️ Architecture
