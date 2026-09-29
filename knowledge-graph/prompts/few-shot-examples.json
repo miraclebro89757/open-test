@@ -1,0 +1,343 @@
+{
+  "version": "1.0.0",
+  "description": "Few-Shot Examples for Test Case Generation Agent",
+  "spec_compliance": "SPEC-AI-HUMAN-READABLE-TESTCASE-002",
+  
+  "examples": [
+    {
+      "scenario": "Payment with SMS 2FA - Functional",
+      "input": {
+        "test_point": {
+          "test_point_id": "TP-PAY-2FA-01",
+          "angle": "Functional",
+          "title": "支付时触发短信验证码二次确认",
+          "description": "用户在结算时需要输入短信验证码完成支付"
+        },
+        "requirement": {
+          "req_id": "REQ-PAY-02",
+          "title": "支付短信二次验证",
+          "givenWhenThen": {
+            "given": ["用户已登录", "购物车有商品"],
+            "when": ["用户点击支付"],
+            "then": ["弹出短信验证码输入框"]
+          }
+        }
+      },
+      "output": {
+        "case_id": "CASE-PAY-02-FUNC-328",
+        "requirement_ref": "REQ-PAY-02@v1.0",
+        "title": "已绑定手机号的黄金会员，在购物车完成结算时正确触发并核销 6 位短信 2FA",
+        "priority": "P0",
+        "angle": "Functional",
+        "execution_type": "HYBRID_MANUAL_AUTOMATED",
+        "estimated_duration_seconds": 45,
+        
+        "fixtures": {
+          "env": "STAGING_ENV_02",
+          "test_account": {
+            "username": "tester_gold_01@corp.com",
+            "password": "Password#2026",
+            "initial_balance": "1000.00",
+            "bound_phone": "13800138000"
+          },
+          "test_payload": {
+            "item_id": "SKU_LAPTOP_PRO",
+            "item_name": "MacBook Pro 16\"",
+            "item_price": "100.00",
+            "mock_sms_code": "902188",
+            "expected_sms_phone_masked": "138****8000"
+          }
+        },
+        
+        "preconditions": [
+          "1. 测试账号 tester_gold_01@corp.com 已处于登录状态（环境：STAGING_ENV_02）",
+          "2. 账号钱包当前可用余额确认 >= ¥1000.00",
+          "3. 购物车内已添加 1 件 SKU_LAPTOP_PRO (单价 ¥100.00)"
+        ],
+        
+        "steps": [
+          {
+            "step_no": 1,
+            "intent": "进入结算台并提交订单",
+            "human_instruction": "在页面顶部点击【购物车图标】，在展开的抽屉中点击右下角绿色【去结算】按钮进入 /checkout 页面，核对商品为 MacBook Pro 16\"，金额为 ¥100.00 后，点击页面底部的橙色【立即支付】按钮",
+            "locators": {
+              "visual_anchor": "购物车图标 -> 去结算 -> 立即支付",
+              "dom_selector": "button#submit-payment-btn"
+            },
+            "expected_outcome": "页面居中弹出带有半透明遮罩的【短信二次验证码】弹窗，弹窗标题显示：'安全二次验证'，弹窗内文案显示：'验证码已发送至 138****8000'"
+          },
+          {
+            "step_no": 2,
+            "intent": "输入合法的短信验证码并核验",
+            "human_instruction": "在弹窗中的 6 个独立输入框中依次输入测试验证码 '902188'（注意：这是测试环境的固定桩码），输入完毕后点击弹窗底部的【确认划扣并支付】按钮",
+            "locators": {
+              "visual_anchor": "短信验证码输入框 -> 确认支付",
+              "dom_selector": "input.sms-digit-input, button#verify-pay-btn"
+            },
+            "expected_outcome": "弹窗自动淡出关闭；页面顶端弹出绿色 Toast 提示条，显示文字：'支付成功！'；页面在 1-2 秒内自动重定向至订单完成凭证页 /orders/success"
+          },
+          {
+            "step_no": 3,
+            "intent": "核对最终数据一致性",
+            "human_instruction": "点击页面右上角个人头像，在下拉菜单中选择【我的钱包】，进入钱包页面后按 F5 键刷新浏览器",
+            "locators": {
+              "visual_anchor": "个人中心 -> 我的钱包",
+              "dom_selector": "a[href='/wallet']"
+            },
+            "expected_outcome": "钱包页面顶部【账户可用余额】显示为 ¥900.00；页面下方【账单明细】列表的第一行显示：时间为当前时间、类型为'支出'、金额为 -¥100.00、备注为'购买 MacBook Pro 16\"'"
+          }
+        ]
+      },
+      "quality_score": 98,
+      "notes": "完美示例：具体数据、明确步骤、可验证预期"
+    },
+    
+    {
+      "scenario": "Insufficient Balance - Exception",
+      "input": {
+        "test_point": {
+          "test_point_id": "TP-PAY-INSUFFICIENT-01",
+          "angle": "Exception",
+          "title": "余额不足时支付失败",
+          "description": "当用户余额小于商品价格时，应阻止支付并提示"
+        },
+        "requirement": {
+          "req_id": "REQ-PAY-03",
+          "title": "支付余额验证"
+        }
+      },
+      "output": {
+        "case_id": "CASE-PAY-03-EXC-421",
+        "requirement_ref": "REQ-PAY-03@v1.0",
+        "title": "余额不足账号尝试支付时，系统正确阻止并显示明确错误提示",
+        "priority": "P1",
+        "angle": "Exception",
+        "execution_type": "MANUAL",
+        "estimated_duration_seconds": 30,
+        
+        "fixtures": {
+          "env": "STAGING_ENV_02",
+          "test_account": {
+            "username": "tester_insufficient_01@corp.com",
+            "password": "Test#2026",
+            "initial_balance": "50.00",
+            "bound_phone": "13900139000"
+          },
+          "test_payload": {
+            "item_id": "SKU_EXPENSIVE_ITEM",
+            "item_price": "9999.00"
+          }
+        },
+        
+        "preconditions": [
+          "1. 测试账号 tester_insufficient_01@corp.com 已处于登录状态",
+          "2. 账号当前余额为 ¥50.00（远小于商品价格）",
+          "3. 购物车内已添加价格为 ¥9999.00 的商品"
+        ],
+        
+        "steps": [
+          {
+            "step_no": 1,
+            "intent": "使用余额不足账号尝试支付",
+            "human_instruction": "在购物车页面点击【去结算】，进入结算页后直接点击页面底部的橙色【立即支付】按钮",
+            "locators": {
+              "visual_anchor": "立即支付按钮",
+              "dom_selector": "button#submit-payment-btn"
+            },
+            "expected_outcome": "页面不发生跳转或弹窗，而是在支付按钮上方显示红色错误提示条：'账户余额不足，请先充值'或'当前余额不足以完成支付（需要 ¥9999.00，可用 ¥50.00）'；支付按钮变为灰色不可点击状态"
+          },
+          {
+            "step_no": 2,
+            "intent": "验证数据未发生变更",
+            "human_instruction": "打开新标签页访问 /wallet 查看钱包余额，按 F5 刷新页面",
+            "locators": {
+              "visual_anchor": "钱包余额区域",
+              "dom_selector": "div.wallet-balance"
+            },
+            "expected_outcome": "账户余额保持不变，仍为 ¥50.00；账单明细中没有新增扣款记录；返回购物车页面，购物车中商品仍然存在，未被清空"
+          }
+        ]
+      },
+      "quality_score": 96,
+      "notes": "异常场景示例：明确错误提示、验证数据不变"
+    },
+    
+    {
+      "scenario": "Unauthorized Access - Security",
+      "input": {
+        "test_point": {
+          "test_point_id": "TP-SEC-UNAUTH-01",
+          "angle": "Security",
+          "title": "未登录用户访问受保护页面",
+          "description": "验证未登录用户无法访问需要认证的页面"
+        },
+        "requirement": {
+          "req_id": "REQ-SEC-01",
+          "title": "页面访问权限控制"
+        }
+      },
+      "output": {
+        "case_id": "CASE-SEC-01-SEC-156",
+        "requirement_ref": "REQ-SEC-01@v1.0",
+        "title": "未登录状态下直接访问受保护页面，系统正确重定向至登录页",
+        "priority": "P0",
+        "angle": "Security",
+        "execution_type": "AUTOMATED",
+        "estimated_duration_seconds": 20,
+        
+        "fixtures": {
+          "env": "STAGING_ENV_02",
+          "test_account": null,
+          "test_payload": {
+            "protected_urls": ["/checkout", "/wallet", "/orders"]
+          }
+        },
+        
+        "preconditions": [
+          "1. 浏览器处于无痕模式或已清除所有 Cookie（确保未登录状态）",
+          "2. 测试环境为 STAGING_ENV_02"
+        ],
+        
+        "steps": [
+          {
+            "step_no": 1,
+            "intent": "在未登录状态下访问受保护页面",
+            "human_instruction": "打开浏览器无痕模式（Ctrl+Shift+N 或 Cmd+Shift+N），在地址栏输入 https://staging-02.opentest.com/checkout 并回车",
+            "locators": {
+              "visual_anchor": "浏览器地址栏",
+              "dom_selector": "body"
+            },
+            "expected_outcome": "页面不显示结算页内容，而是自动重定向至登录页 /login，URL 参数中包含返回地址 ?redirect=/checkout；登录页顶部显示黄色提示条：'请先登录以继续访问'"
+          },
+          {
+            "step_no": 2,
+            "intent": "验证其他受保护页面同样被保护",
+            "human_instruction": "在同一浏览器窗口，分别访问 /wallet 和 /orders",
+            "locators": {
+              "visual_anchor": "浏览器地址栏",
+              "dom_selector": "body"
+            },
+            "expected_outcome": "两个页面均重定向至 /login，参数分别为 ?redirect=/wallet 和 ?redirect=/orders；不显示任何用户数据（如余额、订单信息）"
+          }
+        ]
+      },
+      "quality_score": 95,
+      "notes": "安全测试示例：验证未授权访问被正确阻断"
+    },
+    
+    {
+      "scenario": "API Response Time - Performance",
+      "input": {
+        "test_point": {
+          "test_point_id": "TP-PERF-LATENCY-01",
+          "angle": "Performance",
+          "title": "支付 API 响应时间验证",
+          "description": "验证支付接口响应时间符合 SLA"
+        },
+        "requirement": {
+          "req_id": "REQ-PERF-01",
+          "title": "API 性能要求"
+        }
+      },
+      "output": {
+        "case_id": "CASE-PERF-01-PERF-789",
+        "requirement_ref": "REQ-PERF-01@v1.0",
+        "title": "支付 API 在正常负载下响应时间 < 500ms，页面加载时间 < 2 秒",
+        "priority": "P2",
+        "angle": "Performance",
+        "execution_type": "AUTOMATED",
+        "estimated_duration_seconds": 60,
+        
+        "fixtures": {
+          "env": "STAGING_ENV_02",
+          "test_account": {
+            "username": "tester_gold_01@corp.com",
+            "password": "Password#2026",
+            "initial_balance": "1000.00"
+          },
+          "test_payload": {
+            "item_price": "100.00",
+            "sla_api_response_ms": 500,
+            "sla_page_load_ms": 2000
+          }
+        },
+        
+        "preconditions": [
+          "1. 测试账号已登录，购物车中有商品",
+          "2. 网络环境稳定（非 3G 模拟模式）",
+          "3. 服务端无异常流量或维护"
+        ],
+        
+        "steps": [
+          {
+            "step_no": 1,
+            "intent": "测量支付 API 响应时间",
+            "human_instruction": "打开浏览器开发者工具（F12），切换到 Network 标签页，勾选 'Disable cache'；执行正常支付流程（点击【立即支付】-> 输入验证码 -> 点击【确认支付】），观察 Network 面板",
+            "locators": {
+              "visual_anchor": "开发者工具 Network 面板",
+              "dom_selector": "button#submit-payment-btn"
+            },
+            "expected_outcome": "在 Network 面板中找到 POST /api/v2/payments 请求，查看其 Time 列：响应时间应 < 500ms（通常在 200-450ms 范围内）；Status 为 200 OK"
+          },
+          {
+            "step_no": 2,
+            "intent": "测量页面完整加载时间",
+            "human_instruction": "在 Network 面板底部查看总体性能指标区域",
+            "locators": {
+              "visual_anchor": "Network 面板底部状态栏",
+              "dom_selector": "Network panel footer"
+            },
+            "expected_outcome": "DOMContentLoaded 事件触发时间 < 800ms；Load 事件完成时间 < 2000ms；Finish（所有资源加载完成）时间 < 3000ms"
+          },
+          {
+            "step_no": 3,
+            "intent": "验证并发场景性能",
+            "human_instruction": "打开 5 个浏览器标签页，在每个标签页中同时点击【立即支付】（快速连续点击），观察 Network 面板",
+            "locators": {
+              "visual_anchor": "多标签页",
+              "dom_selector": "button#submit-payment-btn"
+            },
+            "expected_outcome": "所有 5 个请求均在 3 秒内完成；没有 502/504 网关超时错误；所有响应 Status 为 200 或 201；数据一致性正确（没有重复扣款）"
+          }
+        ]
+      },
+      "quality_score": 94,
+      "notes": "性能测试示例：明确 SLA 指标、测量方法、并发验证"
+    }
+  ],
+  
+  "anti_examples": [
+    {
+      "scenario": "BAD EXAMPLE - AI 废话用例",
+      "output": {
+        "title": "测试支付功能",
+        "preconditions": ["用户正常登录系统，系统运行正常"],
+        "steps": [
+          {
+            "step_no": 1,
+            "instruction": "打开商城网站，挑选喜欢的商品加入购物车"
+          },
+          {
+            "step_no": 2,
+            "instruction": "点击结账，输入有效的信息"
+          },
+          {
+            "step_no": 3,
+            "instruction": "点击付款，如果需要验证码就输入收到的验证码"
+          }
+        ],
+        "expected": "支付成功，系统运行平稳，数据显示正确"
+      },
+      "quality_score": 15,
+      "violations": [
+        "模糊词汇：'正常登录'、'运行正常'、'有效的信息'、'支付成功'、'运行平稳'、'数据正确'",
+        "缺少具体测试账号和密码",
+        "缺少具体商品 ID 和价格",
+        "缺少具体的验证码值",
+        "缺少可验证的预期结果（UI 变化、数据变更）",
+        "步骤过于抽象，测试员无法执行"
+      ],
+      "notes": "典型的 AI 废话用例，人类根本无法执行"
+    }
+  ]
+}
