@@ -1,13 +1,4 @@
-*.md
-.git
-.gitignore
-Dockerfile
-.dockerignore
 __pycache__
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.env
+.venv
+*.md

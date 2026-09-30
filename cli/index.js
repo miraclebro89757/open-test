@@ -8,7 +8,9 @@ const { runTests } = require('./commands/run');
 const { initProject } = require('./commands/init');
 const { startServices } = require('./commands/start');
 const { statusCheck } = require('./commands/status');
-const { checkAndNotify, checkForUpdates, clearCache } = require('./update-checker');
+const { checkForUpdates } = require('./update-checker');
+const { registerConfigCommand } = require('./commands/config');
+const { registerAgentCommand, startAgent } = require('./commands/agent');
 const pkg = require('../package.json');
 
 // Create CLI program
@@ -36,48 +38,11 @@ program
 // Command: run - Quick start (one-click setup and run)
 program
   .command('run')
-  .description('🚀 One-click setup and run OpenTest')
-  .option('-p, --port <port>', 'API port', '8080')
-  .option('--skip-checks', 'Skip dependency checks')
-  .option('--no-update-check', 'Skip update check')
-  .action(async (options) => {
-    showBanner();
-    
-    console.log(chalk.blue('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-    console.log(chalk.bold.green('🚀 Starting OpenTest...\n'));
-    
-    // Check for updates (non-blocking)
-    if (!options.noUpdateCheck) {
-      checkAndNotify(pkg.version, { silent: false }).catch(() => {});
-    }
-    
-    // Step 1: Check dependencies
-    if (!options.skipChecks) {
-      console.log(chalk.blue('📋 Step 1: Checking dependencies...'));
-      const { allInstalled, missing } = await checkDependencies();
-      
-      if (!allInstalled) {
-        console.log(chalk.yellow('\n⚠️  Missing dependencies detected:'));
-        missing.forEach(dep => console.log(chalk.yellow(`  - ${dep}`)));
-        console.log(chalk.blue('\n📦 Installing missing dependencies...\n'));
-        await installDependencies(missing);
-      } else {
-        console.log(chalk.green('✓ All dependencies installed\n'));
-      }
-    }
-    
-    // Step 2: Start services
-    console.log(chalk.blue('🐳 Step 2: Starting Docker services...'));
-    await startServices(options);
-    
-    // Step 3: Show status
-    console.log(chalk.blue('\n📊 Step 3: Service status...'));
-    await statusCheck();
-    
-    console.log(chalk.green('\n✅ OpenTest is running!\n'));
-    console.log(chalk.cyan('🌐 Access the dashboard: http://localhost:3000'));
-    console.log(chalk.cyan('🔧 API endpoint: http://localhost:' + options.port));
-    console.log(chalk.gray('\nPress Ctrl+C to stop\n'));
+  .description('Open the terminal test agent')
+  .argument('[prompt...]', 'First message. Prefix a document with @.')
+  .option('--print', 'Run one turn and exit')
+  .action((prompt, options) => {
+    startAgent(prompt, options);
   });
 
 // Command: init - Initialize new project
@@ -219,7 +184,7 @@ program
       spinner.succeed(chalk.green('Upgraded successfully!'));
       
       if (updateInfo.latestVersion) {
-        console.log(chalk.cyan(`New version: ${updateInfo.latestVersion}\n'));
+        console.log(chalk.cyan(`New version: ${updateInfo.latestVersion}\n`));
       }
       
       console.log(chalk.gray('Verify with:'));
@@ -297,11 +262,16 @@ program
     }
   });
 
-// Parse arguments
+registerConfigCommand(program);
+registerAgentCommand(program);
+
+if (process.argv.length === 2 && process.stdout.isTTY) {
+  process.argv.push('agent');
+}
+
 program.parse(process.argv);
 
-// Show help if no command provided
-if (!process.argv.slice(2).length) {
+if (process.argv.length === 2) {
   showBanner();
   program.outputHelp();
 }

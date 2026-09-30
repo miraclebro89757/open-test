@@ -3,6 +3,7 @@ const path = require('path');
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const ora = require('ora');
+const { buildScaffoldDocument } = require('../llm/config-store');
 
 async function initProject(projectName, options) {
   // Prompt for project name if not provided
@@ -65,7 +66,8 @@ async function initProject(projectName, options) {
           visual: 0.10,
           feature: 0.40
         }
-      }
+      },
+      ...buildScaffoldDocument(),
     };
 
     fs.writeFileSync(
@@ -132,10 +134,21 @@ await page.click('submit-button');
 ## Configuration
 
 Edit \`opentest.config.json\` to customize:
-- Base URL
+- Base URL of the app under test
 - Timeout settings
 - Worker configuration
 - Semantic matching thresholds
+
+## LLM provider
+
+\`\`\`bash
+npx open-test config
+npx open-test config use free-openrouter
+npx open-test config use deepseek-prod
+npx open-test config ping
+\`\`\`
+
+\`baseUrl\` at the top of the file is the application under test. Model endpoints live under \`profiles\`.
 
 ## Documentation
 

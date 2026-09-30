@@ -1,8 +1,9 @@
 import json
 from typing import Dict, Any, List
-from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, Field
+
+from agent.llm.runtime import build_chat_model
 
 
 class AgentState(BaseModel):
@@ -18,8 +19,8 @@ class AgentState(BaseModel):
 class TestAgent:
     """AI Agent for generating test cases from requirements"""
     
-    def __init__(self, llm_model: str = "gpt-4o-mini"):
-        self.llm = ChatOpenAI(model=llm_model, temperature=0.7)
+    def __init__(self, llm_model: str | None = None):
+        self.llm = build_chat_model(model_override=llm_model)
         self.workflow = self._build_workflow()
     
     def _build_workflow(self) -> StateGraph:

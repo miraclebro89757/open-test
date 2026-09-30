@@ -11,6 +11,7 @@
     "start": "node cli/index.js run",
     "install:deps": "node cli/install.js",
     "test": "cd tests && cargo test --all -- --nocapture",
+    "test:llm": "node --test cli/llm/config-store.test.js cli/llm/adapter.test.js cli/agent/launch.test.js cli/agent/tools.test.js && python3 -m unittest agent.llm.test_config agent.llm.test_adapter",
     "dev": "docker compose up",
     "build": "docker compose build",
     "postinstall": "node cli/postinstall.js"
@@ -35,15 +36,15 @@
     "node": ">=16.0.0"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "commander": "^11.0.0",
+    "figlet": "^1.6.0",
     "inquirer": "^8.2.5",
     "ora": "^5.4.1",
-    "figlet": "^1.6.0",
-    "boxen": "^5.1.2",
     "semver": "^7.5.4"
   },
-  "devDependencies": {},
   "preferGlobal": true,
   "publishConfig": {
     "access": "public"

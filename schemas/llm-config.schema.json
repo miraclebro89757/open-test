@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/miraclebro89757/open-test/main/schemas/llm-config.schema.json",
+  "title": "OpenTest LLM provider configuration",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "active_profile": { "type": "string" },
+    "failover_order": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["provider", "baseUrl", "model"],
+        "properties": {
+          "provider": {
+            "enum": ["openrouter", "deepseek", "cc-switch", "ollama", "custom"]
+          },
+          "baseUrl": { "type": "string" },
+          "apiKey": { "type": "string" },
+          "model": { "type": "string" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "maxTokens": { "type": "integer", "minimum": 1 },
+          "timeoutMs": { "type": "integer", "minimum": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

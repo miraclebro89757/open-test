@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>测试操作台</title>
+  <link rel="stylesheet" href="/static/bench.css">
+</head>
+<body>
+  <a class="skip" href="#composer">跳到输入</a>
+  <div class="shell">
+    <aside class="rail" aria-label="任务">
+      <p class="rail-kicker" lang="en">Bench</p>
+      <h1>测试操作台</h1>
+      <nav id="jobs" class="jobs"></nav>
+      <p id="model" class="model">正在读取模型配置</p>
+    </aside>
+
+    <main id="main-content" class="thread">
+      <header class="thread-bar">
+        <span id="status-dot" class="status-dot" data-on="idle" aria-hidden="true"></span>
+        <p id="status-line">选一件事，把材料贴在下面。</p>
+      </header>
+      <ol id="transcript" class="transcript"></ol>
+      <form id="composer" class="composer">
+        <label class="composer-label" for="input" id="hint">贴一段需求。操作台会写出可执行的用例。</label>
+        <textarea id="input" name="input" rows="4" placeholder="例如：用户可以用邮箱和密码登录。密码错误时显示错误提示。"></textarea>
+        <div class="composer-row">
+          <p class="keys"><kbd>Enter</kbd> 提交 <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行</p>
+          <button id="submit" type="submit">生成用例</button>
+        </div>
+      </form>
+    </main>
+
+    <section class="artifact" aria-label="产出" id="artifact">
+      <p class="sheet-kicker">产出</p>
+      <div id="sheet" class="sheet-empty">
+        <p>产出会写在这里。</p>
+      </div>
+    </section>
+  </div>
+  <script src="/static/bench.js"></script>
+</body>
+</html>
