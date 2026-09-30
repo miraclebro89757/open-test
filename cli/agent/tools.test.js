@@ -180,6 +180,7 @@ test('extension registers the terminal tools', async () => {
   const names = [];
   await extension({ registerTool(tool) { names.push(tool.name); } });
   assert.deepEqual(names, [
+    'task_checkpoint',
     'run_playwright_test',
     'record_playwright_scenario',
     'heal_selector',

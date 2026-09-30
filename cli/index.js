@@ -11,6 +11,7 @@ const { statusCheck } = require('./commands/status');
 const { checkForUpdates } = require('./update-checker');
 const { registerConfigCommand } = require('./commands/config');
 const { registerAgentCommand, startAgent } = require('./commands/agent');
+const { startGraphService, stopGraphService, logGraphService } = require('./services/local');
 const pkg = require('../package.json');
 
 // Create CLI program
@@ -41,9 +42,9 @@ program
   .description('Open the terminal test agent')
   .argument('[prompt...]', 'First message. Prefix a document with @.')
   .option('--print', 'Run one turn and exit')
-  .action((prompt, options) => {
-    startAgent(prompt, options);
-  });
+    .action(async (prompt, options) => {
+      await startAgent(prompt, options);
+    });
 
 // Command: init - Initialize new project
 program
@@ -259,6 +260,34 @@ program
     } else {
       console.log(chalk.yellow.bold('⚠️  Some dependencies are missing'));
       console.log(chalk.blue('Run: npx open-test install\n'));
+    }
+  });
+
+// Command: services - start the local graph service shipped with the agent
+program
+  .command('services [action]')
+  .description('启动随 agent 附带的本机 Neo4j')
+  .action(async (action = 'up') => {
+    try {
+      if (action === 'stop') {
+        stopGraphService();
+        console.log('Neo4j 已停止。');
+        return;
+      }
+      if (action === 'logs') {
+        logGraphService();
+        return;
+      }
+      if (action !== 'up') {
+        console.error('用法：npx open-test services [up|stop|logs]');
+        process.exitCode = 2;
+        return;
+      }
+      const started = await startGraphService();
+      console.log(started.message);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
     }
   });
 

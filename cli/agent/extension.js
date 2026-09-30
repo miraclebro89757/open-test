@@ -16,12 +16,34 @@ const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
 const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
+const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
+const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
 
 const execFileAsync = promisify(execFile);
 const requirePi = createRequire(path.join(__dirname, '..', '..', 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'));
 
 function textResult(text, details) {
   return { content: [{ type: 'text', text }], details };
+}
+
+function markTask(workspace, { product, sourceFile, task, step, action, note }) {
+  if (!workspace || !step) return null;
+  return updateCheckpoint(workspace, { product, sourceFile, action, task, step, note });
+}
+
+let activeWorkspace = null;
+
+function showProgress(ctx, workspace, readProgress) {
+  const ui = ctx && ctx.ui;
+  if (!ui || !ctx.hasUI) return;
+  if (workspace) activeWorkspace = workspace;
+  const target = workspace || activeWorkspace;
+  let state = null;
+  if (target && fs.existsSync(path.join(target, 'tasks', 'checkpoint.json'))) state = loadState(target);
+  const lines = progressLines(state, readProgress);
+  if (typeof ui.setWidget === 'function') ui.setWidget('opentest-progress', lines, { placement: 'aboveEditor' });
+  if (typeof ui.setStatus === 'function') ui.setStatus('opentest', lines[0]);
+  if (typeof ui.setWorkingMessage === 'function') ui.setWorkingMessage(lines[0]);
 }
 
 function visibleWorkspace(requirementDir, productName) {
@@ -46,8 +68,50 @@ module.exports = async function opentestExtension(pi) {
   installDocumentAutocomplete(pi);
   if (typeof pi.on === 'function') {
     pi.on('tool_call', (event, ctx) => blockBuiltinPromptEdit(event, ctx && ctx.cwd));
+    pi.on('turn_start', (_event, ctx) => showProgress(ctx, activeWorkspace));
+    pi.on('tool_execution_start', (event, ctx) => {
+      const args = event.args || {};
+      if (event.toolName === 'read' && args.path) {
+        const readProgress = noteDocumentRead(args.path, args, ctx && ctx.cwd);
+        showProgress(ctx, workspaceForFile(args.path, ctx && ctx.cwd) || activeWorkspace, readProgress);
+        return;
+      }
+      showProgress(ctx, activeWorkspace);
+    });
   }
   const { Type } = await import(requirePi.resolve('typebox'));
+
+  pi.registerTool({
+    name: 'task_checkpoint',
+    label: 'Task checkpoint',
+    description: '查看或更新产品任务断点。分析、测试点、用例、录制、自愈、缺陷、简报、签字和变更影响都用这一份进度。',
+    promptSnippet: 'Resume every task from the shared checkpoint',
+    promptGuidelines: ['Call task_checkpoint with action status before any task. Do not redo steps already marked done. Plan steps once, then complete or fail the current step.'],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
+      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      sourceFile: Type.Optional(Type.String({ description: 'Requirement file path' })),
+      action: Type.Optional(Type.String({ description: 'status, plan, complete, or fail' })),
+      task: Type.Optional(Type.String({ description: 'analysis, test-points, cases, record, heal, defects, report, signoff, or git-diff' })),
+      steps: Type.Optional(Type.String({ description: 'Step ids for plan, one per line' })),
+      step: Type.Optional(Type.String({ description: 'Step id for complete or fail' })),
+      note: Type.Optional(Type.String({ description: 'Failure note or a short result' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = updateCheckpoint(workspace, {
+        product: params.productName,
+        sourceFile: params.sourceFile,
+        action: params.action || 'status',
+        task: params.task,
+        steps: params.steps,
+        step: params.step,
+        note: params.note,
+      });
+      showProgress(ctx, workspace);
+      return textResult(result.text, result);
+    },
+  });
 
   pi.registerTool({
     name: 'run_playwright_test',
@@ -98,6 +162,16 @@ module.exports = async function opentestExtension(pi) {
           return ctx.ui.confirm('录制沙箱场景', summary);
         },
       });
+      if (result.recorded && result.matches.length) {
+        result.matches.forEach((item) => markTask(workspace, {
+          product: params.productName, task: 'record', step: item.id, action: 'complete',
+        }));
+      } else if (result.recorded && params.caseId) {
+        markTask(workspace, {
+          product: params.productName, task: 'record', step: params.caseId, action: 'fail', note: result.message,
+        });
+      }
+      showProgress(ctx, workspace);
       return textResult(result.message, result);
     },
   });
@@ -113,11 +187,15 @@ module.exports = async function opentestExtension(pi) {
       filePath: Type.String({ description: 'Test file inside the project' }),
       oldSelector: Type.String({ description: 'Selector to replace' }),
       newSelector: Type.String({ description: 'Replacement selector' }),
+      requirementDir: Type.Optional(Type.String({ description: 'Directory containing the requirement document' })),
+      productName: Type.Optional(Type.String({ description: 'Visible product name, such as 筑安通' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const result = await healSelector({
         cwd: ctx.cwd,
-        ...params,
+        filePath: params.filePath,
+        oldSelector: params.oldSelector,
+        newSelector: params.newSelector,
         readFile: fs.promises.readFile,
         writeFile: fs.promises.writeFile,
         confirm: async ({ filePath, oldSelector, newSelector }) => {
@@ -125,6 +203,17 @@ module.exports = async function opentestExtension(pi) {
           return ctx.ui.confirm('自愈选择器', `${filePath}\n${oldSelector}\n→ ${newSelector}`);
         },
       });
+      if (params.requirementDir && params.productName && result.message !== '已取消，文件未修改。') {
+        const workspace = visibleWorkspace(params.requirementDir, params.productName);
+        markTask(workspace, {
+          product: params.productName,
+          task: 'heal',
+          step: `${path.basename(params.filePath)}:${params.oldSelector}`,
+          action: result.success ? 'complete' : 'fail',
+          note: result.message,
+        });
+        showProgress(ctx, workspace);
+      }
       return textResult(result.message, result);
     },
   });
@@ -140,7 +229,7 @@ module.exports = async function opentestExtension(pi) {
       productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
       source: Type.Optional(Type.String({ description: 'auto, zentao, or jira' })),
     }),
-    async execute(_id, params, _signal, _onUpdate, _ctx) {
+    async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       const result = await fetchDefects({ source: params.source || 'auto' });
       if (result.configured) {
@@ -148,6 +237,14 @@ module.exports = async function opentestExtension(pi) {
         await fs.promises.mkdir(path.dirname(file), { recursive: true });
         await fs.promises.writeFile(file, renderDefects(result.bugs));
       }
+      markTask(workspace, {
+        product: params.productName,
+        task: 'defects',
+        step: 'fetch',
+        action: result.configured ? 'complete' : 'fail',
+        note: result.message,
+      });
+      showProgress(ctx, workspace);
       return textResult(`${result.message}\n${renderDefects(result.bugs)}`, { ...result, workspace });
     },
   });
@@ -163,13 +260,17 @@ module.exports = async function opentestExtension(pi) {
       productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
       name: Type.Optional(Type.String({ description: 'Report file name without a directory' })),
     }),
-    async execute(_id, params, _signal, _onUpdate, _ctx) {
+    async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       const report = buildReport(workspace);
       const safeName = path.basename(params.name || 'brief.md').replace(/[^\w.\-\u4e00-\u9fff]/g, '');
       const file = path.join(workspace, 'reports', safeName.endsWith('.md') ? safeName : `${safeName || 'brief'}.md`);
       await fs.promises.mkdir(path.dirname(file), { recursive: true });
       await fs.promises.writeFile(file, report.text);
+      markTask(workspace, {
+        product: params.productName, task: 'report', step: path.basename(file), action: 'complete',
+      });
+      showProgress(ctx, workspace);
       return textResult(`${report.text}\n写入 ${file}`, { ...report, path: file });
     },
   });
@@ -201,6 +302,12 @@ module.exports = async function opentestExtension(pi) {
           return ctx.ui.confirm('发版签字', summary);
         },
       });
+      if (result.signed) {
+        markTask(workspace, {
+          product: params.productName, task: 'signoff', step: 'sign', action: 'complete', note: result.message,
+        });
+      }
+      showProgress(ctx, workspace);
       return textResult(result.message, result);
     },
   });
@@ -222,6 +329,10 @@ module.exports = async function opentestExtension(pi) {
         workspace,
         execFileSync: require('child_process').execFileSync,
       });
+      markTask(workspace, {
+        product: params.productName, task: 'git-diff', step: 'diff', action: 'complete', note: result.message,
+      });
+      showProgress(ctx, workspace);
       return textResult(`${result.message}\n${result.files.join('\n')}`, result);
     },
   });
@@ -231,7 +342,7 @@ module.exports = async function opentestExtension(pi) {
     label: 'Requirement graph',
     description: '把需求分析得到的功能、场景、规则和关系写成产品图谱。图太大时分批调用，后续批次用 append。',
     promptSnippet: 'Store a requirement graph in batches',
-    promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Do not draft the whole graph in the reply.'],
+    promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Pass taskStep only on the last batch of that section. Do not draft the whole graph in the reply.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
@@ -239,21 +350,43 @@ module.exports = async function opentestExtension(pi) {
       graph: Type.Optional(Type.String({ description: 'One JSON batch. Do not put the entire graph in one call.' })),
       graphPath: Type.Optional(Type.String({ description: 'JSON file inside the product workspace, used instead of graph' })),
       mode: Type.Optional(Type.String({ description: 'replace or append. Use append for later batches.' })),
+      taskStep: Type.Optional(Type.String({ description: 'Section title. Pass it only on the last batch of that section.' })),
     }),
-    async execute(_id, params, _signal, _onUpdate, _ctx) {
+    async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
-      const result = await storeRequirementGraph({
-        workspace,
-        product: params.productName,
-        sourceFile: params.sourceFile,
-        graph: params.graph,
-        graphPath: params.graphPath,
-        mode: params.mode || 'replace',
-        cwd: workspace,
-        env: process.env,
-      });
-      const skipped = result.excluded.length ? `跳过未确认 ${result.excluded.length} 项。` : '';
-      return textResult(`${result.neo4j.message}\n节点 ${result.nodeCount}，关系 ${result.edgeCount}。${skipped}\n${result.dir}`, result);
+      try {
+        const result = await storeRequirementGraph({
+          workspace,
+          product: params.productName,
+          sourceFile: params.sourceFile,
+          graph: params.graph,
+          graphPath: params.graphPath,
+          mode: params.mode || 'replace',
+          cwd: workspace,
+          env: process.env,
+        });
+        markTask(workspace, {
+          product: params.productName,
+          sourceFile: params.sourceFile,
+          task: 'analysis',
+          step: params.taskStep,
+          action: 'complete',
+        });
+        showProgress(ctx, workspace);
+        const skipped = result.excluded.length ? `跳过未确认 ${result.excluded.length} 项。` : '';
+        return textResult(`${result.neo4j.message}\n节点 ${result.nodeCount}，关系 ${result.edgeCount}。${skipped}\n${result.dir}`, result);
+      } catch (error) {
+        markTask(workspace, {
+          product: params.productName,
+          sourceFile: params.sourceFile,
+          task: 'analysis',
+          step: params.taskStep,
+          action: 'fail',
+          note: error.message,
+        });
+        showProgress(ctx, workspace);
+        throw error;
+      }
     },
   });
 

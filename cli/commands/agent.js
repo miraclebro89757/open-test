@@ -3,6 +3,8 @@
 const { isUsableConfig, maskKey, resolveLLMConfig } = require('../llm/config-store');
 const { launchAgent } = require('../agent/launch');
 const { DEFAULT_ANALYSIS_PROMPT } = require('../agent/prompts');
+const { prepareGraphService } = require('../services/local');
+const readline = require('readline');
 
 function runtimeContext() {
   const context = { env: process.env };
@@ -11,7 +13,18 @@ function runtimeContext() {
   return context;
 }
 
-function startAgent(prompt, options = {}) {
+function ask(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (answer) => {
+      rl.close();
+      const text = String(answer || '').trim();
+      resolve(text === 'y' || text === 'Y' || text === '是');
+    });
+  });
+}
+
+async function startAgent(prompt, options = {}) {
   const words = prompt || [];
   if (!process.stdout.isTTY && words.length === 0) {
     console.error('Pass a message, or run this in a terminal: npx open-test @requirements.md');
@@ -32,7 +45,15 @@ function startAgent(prompt, options = {}) {
     process.exitCode = 1;
     return;
   }
+  const homeDir = process.env.OPENTEST_HOME || undefined;
+  const graph = await prepareGraphService({
+    env: process.env,
+    homeDir,
+    interactive: Boolean(process.stdout.isTTY && !options.print),
+    confirm: ask,
+  });
   console.log(`${config.profile} · ${config.provider} · ${config.model} · ${maskKey(config.apiKey)}`);
+  console.log(graph.message);
   console.log('在任意目录打开。输入 @ 后接需求文档路径，例如 @/Users/you/docs/requirements.md');
   console.log(`需求分析默认 /${DEFAULT_ANALYSIS_PROMPT}，这个版本只读。输入 / 选择其他版本。自定义模板放在 ~/.opentest/pi-agent/prompts/。`);
   console.log('Ctrl+C 退出。产物写在需求文档旁边、以产品名命名的可见目录，例如 ~/Desktop/易训/筑安通/。');
@@ -43,7 +64,7 @@ function startAgent(prompt, options = {}) {
       words,
       print: Boolean(options.print),
       cwd: process.cwd(),
-      env: process.env,
+      env: graph.env,
     });
   } catch (error) {
     console.error(error.message);
@@ -65,8 +86,8 @@ function registerAgentCommand(program) {
     .description('Open the test agent. Point at a requirement with @path.')
     .argument('[prompt...]', 'First message. Prefix a document with @.')
     .option('--print', 'Run one turn and exit')
-    .action((prompt, options) => {
-      startAgent(prompt, options);
+    .action(async (prompt, options) => {
+      await startAgent(prompt, options);
     });
 }
 
