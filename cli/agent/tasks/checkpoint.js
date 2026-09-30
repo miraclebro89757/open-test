@@ -11,8 +11,6 @@ const TASKS = [
   ['heal', '选择器自愈'],
   ['defects', '缺陷'],
   ['report', '测试简报'],
-  ['signoff', '发版签字'],
-  ['git-diff', '变更影响'],
 ];
 
 function checkpointDir(workspace) {
@@ -181,8 +179,12 @@ function updateCheckpoint(workspace, { product, sourceFile, action = 'status', t
     setStep(taskOf(state, task), step, 'done', note);
   } else if (action === 'fail') {
     setStep(taskOf(state, task), step, 'failed', note);
+  } else if (action === 'drop') {
+    const current = taskOf(state, task);
+    current.steps = current.steps.filter((item) => item.id !== String(step || '').trim());
+    refresh(current);
   } else if (action !== 'status') {
-    throw new Error('action 必须是 status、plan、complete 或 fail');
+    throw new Error('action 必须是 status、plan、complete、fail 或 drop');
   }
   if (action !== 'status' && TASKS.some(([id]) => state.tasks[id].steps.length) && !state.startedAt) {
     state.startedAt = new Date().toISOString();

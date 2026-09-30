@@ -16,32 +16,22 @@ const { atToken, createDocumentAutocomplete, documentSuggestions, parentToken, p
 const { blockBuiltinPromptEdit } = require('./extension');
 const { analysisPromptFile } = require('./prompts');
 
-test('heal selector waits for confirmation and can be declined', async () => {
+test('heal selector writes immediately and keeps the previous text', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-heal-'));
   const file = path.join(dir, 'login.spec.ts');
   fs.writeFileSync(file, "page.locator('#old')");
-  const declined = await healSelector({
+  const healed = await healSelector({
     cwd: dir,
     filePath: 'login.spec.ts',
     oldSelector: '#old',
     newSelector: '#new',
-    confirm: async () => false,
     readFile: fs.promises.readFile,
     writeFile: fs.promises.writeFile,
+    now: () => 1,
   });
-  assert.equal(declined.changed, false);
-  assert.equal(fs.readFileSync(file, 'utf8'), "page.locator('#old')");
-  const accepted = await healSelector({
-    cwd: dir,
-    filePath: 'login.spec.ts',
-    oldSelector: '#old',
-    newSelector: '#new',
-    confirm: async () => true,
-    readFile: fs.promises.readFile,
-    writeFile: fs.promises.writeFile,
-  });
-  assert.equal(accepted.changed, true);
+  assert.equal(healed.changed, true);
   assert.equal(fs.readFileSync(file, 'utf8'), "page.locator('#new')");
+  assert.equal(fs.readFileSync(healed.before, 'utf8'), "page.locator('#old')");
 });
 
 test('heal selector rejects a path outside the project', async () => {
@@ -50,7 +40,6 @@ test('heal selector rejects a path outside the project', async () => {
     filePath: '../secret.spec.ts',
     oldSelector: 'a',
     newSelector: 'b',
-    confirm: async () => true,
     readFile: async () => 'a',
     writeFile: async () => {},
   }), /outside/);
@@ -178,7 +167,13 @@ test('builtin analysis prompt cannot be overwritten', () => {
 test('extension registers the terminal tools', async () => {
   const extension = require('./extension');
   const names = [];
-  await extension({ registerTool(tool) { names.push(tool.name); } });
+  const commands = [];
+  await extension({
+    registerTool(tool) { names.push(tool.name); },
+    registerCommand(name) { commands.push(name); },
+    registerShortcut() {},
+    on() {},
+  });
   assert.deepEqual(names, [
     'task_checkpoint',
     'run_playwright_test',
@@ -186,10 +181,11 @@ test('extension registers the terminal tools', async () => {
     'heal_selector',
     'fetch_zentao_jira',
     'write_executive_report',
-    'sign_release',
-    'git_diff_impact',
     'store_requirement_graph',
     'query_requirement_graph',
+  ]);
+  assert.deepEqual(commands, [
+    'project', 'status', 'analyze', 'points', 'cases', 'record', 'run', 'heal', 'defects', 'report',
   ]);
 });
 

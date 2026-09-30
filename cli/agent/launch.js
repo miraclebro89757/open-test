@@ -15,7 +15,7 @@ const {
 const TOOLS = [
   'read', 'grep', 'find', 'ls', 'write', 'edit',
   'run_playwright_test', 'heal_selector', 'fetch_zentao_jira',
-  'write_executive_report', 'sign_release', 'git_diff_impact',
+  'write_executive_report',
   'store_requirement_graph', 'query_requirement_graph',
   'record_playwright_scenario', 'task_checkpoint',
 ].join(',');

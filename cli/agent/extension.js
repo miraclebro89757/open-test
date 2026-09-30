@@ -8,16 +8,17 @@ const { promisify } = require('util');
 const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
 const { recordScenario } = require('./tools/record');
-const { healSelector } = require('./tools/heal');
+const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
 const { fetchDefects, renderDefects } = require('./tools/defects');
-const { buildReport, signRelease } = require('./tools/report');
-const { gitDiffImpact } = require('./tools/git-diff');
+const { buildReport } = require('./tools/report');
 const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
 const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
 const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
+const { readProject, setProject } = require('./project');
+const { STEPS, CHOICES, prepareStep, confirmPoints } = require('./commands');
 
 const execFileAsync = promisify(execFile);
 const requirePi = createRequire(path.join(__dirname, '..', '..', 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'));
@@ -54,6 +55,104 @@ function visibleWorkspace(requirementDir, productName) {
   return workspace;
 }
 
+function agentHome() {
+  return process.env.OPENTEST_HOME || os.homedir();
+}
+
+async function reviewHeals(ctx, project) {
+  const pending = pendingInProject(project);
+  if (!pending.length) {
+    ctx.ui.notify('没有待确认的自愈版本', 'info');
+    return;
+  }
+  for (const entry of pending) {
+    const choice = await ctx.ui.select(`${path.basename(entry.file)} 保留哪一版`, ['保留自愈后', '恢复自愈前']);
+    if (!choice) return;
+    keepHealVersion(entry, choice === '恢复自愈前' ? 'before' : 'after');
+  }
+  ctx.ui.notify('已按选择保留自愈版本', 'info');
+}
+
+async function runStep(pi, name, ctx) {
+  const project = readProject(agentHome()).current;
+  if (!project) {
+    ctx.ui.notify('先用 /project 选择项目目录', 'warning');
+    return;
+  }
+  const choice = await ctx.ui.select('这一步要做什么', CHOICES);
+  if (!choice) return;
+  const result = prepareStep({ name, choice, project });
+  if (result.action === 'blocked') {
+    ctx.ui.notify(result.message, 'warning');
+    return;
+  }
+  if (result.action === 'view') {
+    pi.sendUserMessage(`当前项目 ${project}。用户要查看已有的${result.step.title}，不要创建或修改文件。\n${result.files.join('\n')}`);
+    if (name === 'points') {
+      const ok = await ctx.ui.confirm('确认这些测试点？', '确认后才可以生成用例');
+      if (ok) confirmPoints(project);
+    }
+    if (name === 'heal') await reviewHeals(ctx, project);
+    return;
+  }
+  if (result.action !== 'create') return;
+  pi.sendUserMessage(result.message);
+  if (name === 'points' && typeof ctx.waitForIdle === 'function') {
+    await ctx.waitForIdle();
+    const ok = await ctx.ui.confirm('确认这些测试点？', '确认后才可以生成用例');
+    if (ok) confirmPoints(project);
+  }
+  if (name === 'run' && typeof ctx.waitForIdle === 'function') {
+    await ctx.waitForIdle();
+    await reviewHeals(ctx, project);
+  }
+  if (name === 'heal') await reviewHeals(ctx, project);
+}
+
+async function switchProject(ctx, args) {
+  let target = String(args || '').trim();
+  if (!target) {
+    const recent = readProject(agentHome()).recent;
+    const picked = await ctx.ui.select('切换项目', recent.length ? [...recent, '输入路径'] : ['输入路径']);
+    if (!picked) return;
+    target = picked === '输入路径' ? await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通') : picked;
+  }
+  if (!target) return;
+  try {
+    const saved = setProject(target, agentHome());
+    if (typeof ctx.ui.setStatus === 'function') ctx.ui.setStatus('opentest-project', path.basename(saved.current));
+    ctx.ui.notify(`当前项目 ${saved.current}`, 'info');
+  } catch (error) {
+    ctx.ui.notify(error.message, 'error');
+  }
+}
+
+function registerWorkflow(pi) {
+  if (typeof pi.registerCommand !== 'function') return;
+  pi.registerCommand('project', {
+    description: '切换当前项目，之后的步骤都在这个目录里',
+    handler: (args, ctx) => switchProject(ctx, args),
+  });
+  STEPS.forEach(([name, shortcut, title]) => {
+    pi.registerCommand(name, {
+      description: title,
+      handler: (_args, ctx) => runStep(pi, name, ctx),
+    });
+    if (typeof pi.registerShortcut === 'function') {
+      pi.registerShortcut(shortcut, {
+        description: title,
+        handler: (ctx) => runStep(pi, name, ctx),
+      });
+    }
+  });
+  if (typeof pi.registerShortcut === 'function') {
+    pi.registerShortcut('ctrl+shift+9', {
+      description: '切换项目',
+      handler: (ctx) => switchProject(ctx, ''),
+    });
+  }
+}
+
 function blockBuiltinPromptEdit(event, cwd) {
   if (!event || (event.toolName !== 'write' && event.toolName !== 'edit')) return null;
   const filePath = event.input && (event.input.path || event.input.filePath);
@@ -84,7 +183,7 @@ module.exports = async function opentestExtension(pi) {
   pi.registerTool({
     name: 'task_checkpoint',
     label: 'Task checkpoint',
-    description: '查看或更新产品任务断点。分析、测试点、用例、录制、自愈、缺陷、简报、签字和变更影响都用这一份进度。',
+    description: '查看或更新产品任务断点。分析、测试点、用例、录制、自愈、缺陷和简报都用这一份进度。',
     promptSnippet: 'Resume every task from the shared checkpoint',
     promptGuidelines: ['Call task_checkpoint with action status before any task. Do not redo steps already marked done. Plan steps once, then complete or fail the current step.'],
     parameters: Type.Object({
@@ -179,9 +278,9 @@ module.exports = async function opentestExtension(pi) {
   pi.registerTool({
     name: 'heal_selector',
     label: 'Heal selector',
-    description: '替换用例文件中的一个失效选择器。写入前必须在终端得到用户确认。',
-    promptSnippet: 'Replace one failed selector after terminal confirmation',
-    promptGuidelines: ['Use heal_selector instead of edit when replacing a failed DOM selector. The terminal asks the user before writing.'],
+    description: '跑自动化时自动替换失效选择器，并留下替换前和替换后两个版本。',
+    promptSnippet: 'Replace a failed selector immediately and keep both versions',
+    promptGuidelines: ['Call heal_selector as soon as a selector fails during a run. Do not ask the user first. The user chooses which version to keep with /heal.'],
     executionMode: 'sequential',
     parameters: Type.Object({
       filePath: Type.String({ description: 'Test file inside the project' }),
@@ -198,12 +297,8 @@ module.exports = async function opentestExtension(pi) {
         newSelector: params.newSelector,
         readFile: fs.promises.readFile,
         writeFile: fs.promises.writeFile,
-        confirm: async ({ filePath, oldSelector, newSelector }) => {
-          if (!ctx.hasUI) return false;
-          return ctx.ui.confirm('自愈选择器', `${filePath}\n${oldSelector}\n→ ${newSelector}`);
-        },
       });
-      if (params.requirementDir && params.productName && result.message !== '已取消，文件未修改。') {
+      if (params.requirementDir && params.productName && result.changed) {
         const workspace = visibleWorkspace(params.requirementDir, params.productName);
         markTask(workspace, {
           product: params.productName,
@@ -272,68 +367,6 @@ module.exports = async function opentestExtension(pi) {
       });
       showProgress(ctx, workspace);
       return textResult(`${report.text}\n写入 ${file}`, { ...report, path: file });
-    },
-  });
-
-  pi.registerTool({
-    name: 'sign_release',
-    label: 'Sign release',
-    description: '在终端确认后，把发版签字写到该产品工作目录的 reports/signoff.md。',
-    promptSnippet: 'Ask in the terminal before saving a release sign-off',
-    promptGuidelines: ['Use sign_release only when the user asks to approve a release. Pass the visible product workspace. The terminal confirmation is required.'],
-    executionMode: 'sequential',
-    parameters: Type.Object({
-      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
-      summary: Type.String({ description: 'Decision text shown in the terminal confirmation' }),
-    }),
-    async execute(_id, params, _signal, _onUpdate, ctx) {
-      const workspace = visibleWorkspace(params.requirementDir, params.productName);
-      const result = await signRelease({
-        workspace,
-        summary: params.summary,
-        username: os.userInfo().username,
-        writeFile: async (file, body) => {
-          await fs.promises.mkdir(path.dirname(file), { recursive: true });
-          await fs.promises.writeFile(file, body);
-        },
-        confirm: async (summary) => {
-          if (!ctx.hasUI) return false;
-          return ctx.ui.confirm('发版签字', summary);
-        },
-      });
-      if (result.signed) {
-        markTask(workspace, {
-          product: params.productName, task: 'signoff', step: 'sign', action: 'complete', note: result.message,
-        });
-      }
-      showProgress(ctx, workspace);
-      return textResult(result.message, result);
-    },
-  });
-
-  pi.registerTool({
-    name: 'git_diff_impact',
-    label: 'Diff impact',
-    description: '查看当前 git 变更，并指出该产品 cases 目录里提到这些文件的用例。',
-    promptSnippet: 'List changed files and matching cases in the product workspace',
-    promptGuidelines: ['Use git_diff_impact when the user asks which cases are affected by the current change. Pass the visible product workspace.'],
-    parameters: Type.Object({
-      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
-    }),
-    async execute(_id, params, _signal, _onUpdate, ctx) {
-      const workspace = visibleWorkspace(params.requirementDir, params.productName);
-      const result = gitDiffImpact({
-        cwd: ctx.cwd,
-        workspace,
-        execFileSync: require('child_process').execFileSync,
-      });
-      markTask(workspace, {
-        product: params.productName, task: 'git-diff', step: 'diff', action: 'complete', note: result.message,
-      });
-      showProgress(ctx, workspace);
-      return textResult(`${result.message}\n${result.files.join('\n')}`, result);
     },
   });
 
@@ -416,6 +449,8 @@ module.exports = async function opentestExtension(pi) {
       return textResult(text, result);
     },
   });
+
+  registerWorkflow(pi);
 };
 
 module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;
