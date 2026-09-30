@@ -5,6 +5,13 @@ const os = require('os');
 const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 
+const {
+  DEFAULT_ANALYSIS_PROMPT,
+  analysisPromptFile,
+  bundledPromptsDir,
+  userPromptsDir,
+} = require('./prompts');
+
 const TOOLS = [
   'read', 'grep', 'find', 'ls', 'write', 'edit',
   'run_playwright_test', 'heal_selector', 'fetch_zentao_jira',
@@ -64,6 +71,7 @@ function modelsDocument(config) {
 
 function writePiHome(config, dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(userPromptsDir(dir), { recursive: true, mode: 0o700 });
   const file = path.join(dir, 'models.json');
   const body = `${JSON.stringify(modelsDocument(config), null, 2)}\n`;
   fs.writeFileSync(file, body, { mode: 0o600 });
@@ -106,7 +114,15 @@ function expandAttachments(words, { cwd, tmpDir, extract = extractDocx, exists =
   });
 }
 
-function buildPiArgs({ config, words, print, skill, extension, prompt }) {
+function composeSystemPrompt(base, { version, promptFile, promptsDir }) {
+  return [
+    String(base || '').trim(),
+    `默认需求分析 prompt 是 /${version}，规则文件 ${promptFile} 只读，不要修改。`,
+    `用户在输入框用 / 选择其他版本或自定义模板。自定义模板放在 ${promptsDir}，文件名去掉 .md 就是命令名。与 /${version} 同名不会替换内置版本。`,
+  ].filter(Boolean).join('\n');
+}
+
+function buildPiArgs({ config, words, print, skill, extension, prompt, promptTemplate }) {
   const args = [
     '--provider', providerId(config.baseUrl),
     '--model', config.model,
@@ -115,7 +131,7 @@ function buildPiArgs({ config, words, print, skill, extension, prompt }) {
     '--extension', extension,
     '--no-skills',
     '--skill', skill,
-    '--no-prompt-templates',
+    '--prompt-template', promptTemplate,
     '--no-context-files',
     '--no-approve',
     '--append-system-prompt', prompt,
@@ -144,12 +160,17 @@ function launchAgent({
 } = {}) {
   const home = piHome(homeDir);
   writePiHome(config, home);
-  const prompt = fs.readFileSync(systemPromptPath(), 'utf8').trim();
+  const prompt = composeSystemPrompt(fs.readFileSync(systemPromptPath(), 'utf8'), {
+    version: DEFAULT_ANALYSIS_PROMPT,
+    promptFile: analysisPromptFile(),
+    promptsDir: userPromptsDir(home),
+  });
   const skill = skillDir();
   const extension = extensionPath();
+  const promptTemplate = bundledPromptsDir();
   const tmpDir = path.join(os.tmpdir(), 'opentest-docs');
   const expanded = expandAttachments(words, { cwd, tmpDir });
-  const args = buildPiArgs({ config, words: expanded, print, skill, extension, prompt });
+  const args = buildPiArgs({ config, words: expanded, print, skill, extension, prompt, promptTemplate });
   assertNoSecret(args, config.apiKey);
   const bin = piBin();
   if (!exists(bin)) {
@@ -171,6 +192,7 @@ module.exports = {
   modelsDocument,
   writePiHome,
   expandAttachments,
+  composeSystemPrompt,
   buildPiArgs,
   launchAgent,
   piHome,

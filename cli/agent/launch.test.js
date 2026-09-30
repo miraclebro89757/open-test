@@ -5,7 +5,8 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPiArgs, expandAttachments, modelsDocument, providerId, writePiHome } = require('./launch');
+const { buildPiArgs, composeSystemPrompt, expandAttachments, modelsDocument, providerId, writePiHome } = require('./launch');
+const { DEFAULT_ANALYSIS_PROMPT, bundledPromptsDir } = require('./prompts');
 
 const SECRET = 'sk-or-v1-test-secret-value';
 
@@ -40,6 +41,7 @@ test('pi arguments keep @ files and never include the key', () => {
     skill: '/skills/opentest-qa',
     extension: '/extensions/opentest.js',
     prompt: '只做测试',
+    promptTemplate: '/prompts',
   });
   assert.equal(args.includes(SECRET), false);
   assert.equal(args.includes('@/tmp/req.md'), true);
@@ -47,6 +49,9 @@ test('pi arguments keep @ files and never include the key', () => {
   assert.equal(args.includes('--no-approve'), true);
   assert.equal(args.includes('--skill'), true);
   assert.equal(args.includes('--extension'), true);
+  assert.equal(args.includes('--prompt-template'), true);
+  assert.equal(args.includes('/prompts'), true);
+  assert.equal(args.includes('--no-prompt-templates'), false);
   assert.equal(args.includes('/extensions/opentest.js'), true);
   assert.equal(args.includes('run_playwright_test'), false);
   assert.match(args.find((arg) => arg.includes('run_playwright_test')), /heal_selector/);
@@ -78,4 +83,23 @@ test('written models file does not contain the key', () => {
   const text = fs.readFileSync(file, 'utf8');
   assert.equal(text.includes(SECRET), false);
   assert.match(text, /\$OPENTEST_API_KEY/);
+  assert.equal(fs.existsSync(path.join(dir, 'prompts')), true);
+});
+
+test('default analysis prompt is a read-only version selected with /', () => {
+  const file = path.join(bundledPromptsDir(), `${DEFAULT_ANALYSIS_PROMPT}.md`);
+  const text = fs.readFileSync(file, 'utf8');
+  const skill = fs.readFileSync(path.join(__dirname, '..', '..', '.pi', 'skills', 'opentest-qa', 'SKILL.md'), 'utf8');
+  assert.match(text, /ISO 29148/);
+  assert.match(text, /六流/);
+  assert.match(text, /只读/);
+  assert.equal(text.includes('$1'), false);
+  assert.match(skill, /~\/\.opentest\/pi-agent\/prompts/);
+  const prompt = composeSystemPrompt('只做测试', {
+    version: DEFAULT_ANALYSIS_PROMPT,
+    promptFile: file,
+    promptsDir: '/tmp/prompts',
+  });
+  assert.match(prompt, new RegExp(`/${DEFAULT_ANALYSIS_PROMPT}`));
+  assert.match(prompt, /只读/);
 });

@@ -12,6 +12,7 @@ const { fetchDefects, renderDefects } = require('./tools/defects');
 const { buildReport, signRelease } = require('./tools/report');
 const { gitDiffImpact } = require('./tools/git-diff');
 const { productWorkspace } = require('./tools/workspace');
+const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
 
 const execFileAsync = promisify(execFile);
@@ -29,8 +30,21 @@ function visibleWorkspace(requirementDir, productName) {
   return workspace;
 }
 
+function blockBuiltinPromptEdit(event, cwd) {
+  if (!event || (event.toolName !== 'write' && event.toolName !== 'edit')) return null;
+  const filePath = event.input && (event.input.path || event.input.filePath);
+  if (!isBuiltinAnalysisPrompt(filePath, bundledPromptsDir(), cwd)) return null;
+  return {
+    block: true,
+    reason: '内置需求分析 prompt 只读。在输入框用 / 选择其他版本，或在用户 prompts 目录新建模板。',
+  };
+}
+
 module.exports = async function opentestExtension(pi) {
   installDocumentAutocomplete(pi);
+  if (typeof pi.on === 'function') {
+    pi.on('tool_call', (event, ctx) => blockBuiltinPromptEdit(event, ctx && ctx.cwd));
+  }
   const { Type } = await import(requirePi.resolve('typebox'));
 
   pi.registerTool({
@@ -181,3 +195,5 @@ module.exports = async function opentestExtension(pi) {
     },
   });
 };
+
+module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;

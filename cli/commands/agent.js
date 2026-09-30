@@ -2,6 +2,7 @@
 
 const { isUsableConfig, maskKey, resolveLLMConfig } = require('../llm/config-store');
 const { launchAgent } = require('../agent/launch');
+const { DEFAULT_ANALYSIS_PROMPT } = require('../agent/prompts');
 
 function runtimeContext() {
   const context = { env: process.env };
@@ -33,6 +34,7 @@ function startAgent(prompt, options = {}) {
   }
   console.log(`${config.profile} · ${config.provider} · ${config.model} · ${maskKey(config.apiKey)}`);
   console.log('在任意目录打开。输入 @ 后接需求文档路径，例如 @/Users/you/docs/requirements.md');
+  console.log(`需求分析默认 /${DEFAULT_ANALYSIS_PROMPT}，这个版本只读。输入 / 选择其他版本。自定义模板放在 ~/.opentest/pi-agent/prompts/。`);
   console.log('Ctrl+C 退出。产物写在需求文档旁边、以产品名命名的可见目录，例如 ~/Desktop/易训/筑安通/。');
   let child;
   try {

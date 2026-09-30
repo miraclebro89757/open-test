@@ -12,6 +12,8 @@ const { buildReport, signRelease } = require('./tools/report');
 const { gitDiffImpact } = require('./tools/git-diff');
 const { productWorkspace, sanitizeProductName } = require('./tools/workspace');
 const { atToken, createDocumentAutocomplete, documentSuggestions, parentToken, pathSuggestions, mergeSuggestions } = require('./document-complete');
+const { blockBuiltinPromptEdit } = require('./extension');
+const { analysisPromptFile } = require('./prompts');
 
 test('heal selector waits for confirmation and can be declined', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-heal-'));
@@ -118,6 +120,17 @@ test('git diff impact matches case files by changed basename', () => {
     readCases: () => [{ name: 'login.md', text: 'covers login.ts' }, { name: 'pay.md', text: 'covers pay.ts' }],
   });
   assert.deepEqual(result.cases, ['login.md']);
+});
+
+test('builtin analysis prompt cannot be overwritten', () => {
+  const builtin = analysisPromptFile();
+  const blocked = blockBuiltinPromptEdit({ toolName: 'edit', input: { path: builtin } }, '/work');
+  assert.equal(blocked.block, true);
+  const custom = blockBuiltinPromptEdit({
+    toolName: 'write',
+    input: { path: '/Users/me/.opentest/pi-agent/prompts/my-review.md' },
+  }, '/work');
+  assert.equal(custom, null);
 });
 
 test('extension registers the terminal tools', async () => {
