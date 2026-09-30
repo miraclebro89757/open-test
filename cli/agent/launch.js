@@ -120,7 +120,7 @@ function composeSystemPrompt(base, { version, promptFile, promptsDir }) {
   return [
     String(base || '').trim(),
     `默认需求分析 prompt 是 /${version}，规则文件 ${promptFile} 只读，不要修改。`,
-    `用户在输入框用 / 选择其他版本或自定义模板。自定义模板放在 ${promptsDir}，文件名去掉 .md 就是命令名。与 /${version} 同名不会替换内置版本。`,
+    `内置需求分析只有 /${version}。自定义模板放在 ${promptsDir}，文件名去掉 .md 就是命令名。与 /${version} 同名不会替换内置模板。`,
   ].filter(Boolean).join('\n');
 }
 

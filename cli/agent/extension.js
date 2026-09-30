@@ -159,7 +159,7 @@ function blockBuiltinPromptEdit(event, cwd) {
   if (!isBuiltinAnalysisPrompt(filePath, bundledPromptsDir(), cwd)) return null;
   return {
     block: true,
-    reason: '内置需求分析 prompt 只读。在输入框用 / 选择其他版本，或在用户 prompts 目录新建模板。',
+    reason: '内置需求分析 prompt 只读。要换规则，在用户 prompts 目录新建模板。',
   };
 }
 

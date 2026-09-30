@@ -14,18 +14,40 @@ test('starting the packaged neo4j does not print or pass the password on docker 
     homeDir: home,
     probe: async () => calls.length > 0,
     execFile(file, args, options) {
-      calls.push({ file, args, auth: options.env.NEO4J_AUTH });
+      calls.push({ file, args, auth: options && options.env && options.env.NEO4J_AUTH });
     },
   });
-  assert.equal(calls[0].file, 'docker');
-  assert.deepEqual(calls[0].args.slice(0, 3), ['compose', '-f', composeFile()]);
-  assert.equal(calls[0].args.includes('up'), true);
-  assert.equal(calls[0].args.includes('neo4j'), true);
-  assert.equal(calls[0].args.some((arg) => String(arg).includes(started.password)), false);
+  const up = calls.find((call) => call.args.includes('up'));
+  assert.equal(up.file, 'docker');
+  assert.deepEqual(up.args.slice(0, 3), ['compose', '-f', composeFile()]);
+  assert.equal(calls.some((call) => call.args[0] === 'image' && call.args[1] === 'inspect'), true);
+  assert.equal(calls.some((call) => call.args.some((arg) => String(arg).includes(started.password))), false);
   assert.equal(started.message.includes(started.password), false);
   assert.equal(fs.readFileSync(servicesFile(home), 'utf8').includes(started.password), true);
   assert.equal(graphEnv(home, {}).NEO4J_URI, 'bolt://127.0.0.1:7687');
   assert.deepEqual(graphEnv(home, { NEO4J_URI: 'bolt://example:7687', NEO4J_USER: 'a', NEO4J_PASSWORD: 'b' }), {});
+});
+
+test('a Docker Hub timeout retries the image from the mirror', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-services-'));
+  const calls = [];
+  await startGraphService({
+    homeDir: home,
+    probe: async () => calls.some((call) => call.args.includes('up')),
+    execFile(file, args) {
+      calls.push({ file, args });
+      if (args[0] === 'image') {
+        const error = new Error('failed');
+        throw error;
+      }
+      if (args[0] === 'pull' && args[1] === 'neo4j:5.24-community') {
+        const error = new Error('Head "https://registry-1.docker.io/v2/library/neo4j/manifests/5.24-community": context deadline exceeded');
+        throw error;
+      }
+    },
+  });
+  assert.equal(calls.some((call) => call.args[1] === 'm.daocloud.io/docker.io/library/neo4j:5.24-community'), true);
+  assert.equal(calls.filter((call) => call.args.includes('up')).length, 1);
 });
 
 test('opening the agent asks once and then carries the saved connection', async () => {

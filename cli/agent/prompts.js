@@ -2,7 +2,7 @@
 
 const path = require('path');
 
-const DEFAULT_ANALYSIS_PROMPT = 'prd-analysis-1.4.0';
+const DEFAULT_ANALYSIS_PROMPT = 'prd-analysis';
 
 function bundledPromptsDir() {
   return path.join(__dirname, 'prompts');

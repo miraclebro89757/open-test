@@ -3,6 +3,7 @@ name: opentest
 services:
   neo4j:
     image: neo4j:5.24-community
+    pull_policy: missing
     container_name: open-test-neo4j
     environment:
       NEO4J_AUTH: ${NEO4J_AUTH}

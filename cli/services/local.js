@@ -8,6 +8,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const BOLT_PORT = 7687;
+const NEO4J_IMAGE = 'neo4j:5.24-community';
+const NEO4J_MIRROR = 'm.daocloud.io/docker.io/library/neo4j:5.24-community';
 
 function servicesDir(homeDir) {
   return path.join(homeDir || os.homedir(), '.opentest');
@@ -67,6 +69,35 @@ function composeArgs() {
   return ['compose', '-f', composeFile(), '-p', 'opentest'];
 }
 
+function commandFailed(error) {
+  return `${error.message || ''}\n${error.stderr || ''}`;
+}
+
+function registryFailed(error) {
+  return /deadline exceeded|failed to resolve|registry-1\.docker\.io|TLS handshake|i\/o timeout|connection reset|no such host|context deadline/i.test(commandFailed(error));
+}
+
+function imagePresent(execFile) {
+  try {
+    execFile('docker', ['image', 'inspect', NEO4J_IMAGE], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ensureNeo4jImage(execFile) {
+  if (imagePresent(execFile)) return;
+  try {
+    execFile('docker', ['pull', NEO4J_IMAGE], { stdio: 'inherit' });
+  } catch (error) {
+    if (error.code === 'ENOENT') throw error;
+    if (!registryFailed(error)) throw error;
+    execFile('docker', ['pull', NEO4J_MIRROR], { stdio: 'inherit' });
+    execFile('docker', ['tag', NEO4J_MIRROR, NEO4J_IMAGE], { stdio: 'inherit' });
+  }
+}
+
 function publicMessage(neo4j, started) {
   const state = started ? 'Neo4j 已启动。' : 'Neo4j 已在运行。';
   return `${state}\n浏览器 ${neo4j.browser || 'http://127.0.0.1:7474'}\nBolt ${neo4j.uri}\n账号 ${neo4j.user}\n连接写在 ~/.opentest/services.json，打开 agent 时会自动带上。`;
@@ -94,13 +125,20 @@ async function startGraphService({
   }
   const neo4j = readService(homeDir) || createService(homeDir);
   try {
+    ensureNeo4jImage(execFile);
     execFile('docker', [...composeArgs(), 'up', '-d', 'neo4j'], {
       env: { ...process.env, NEO4J_AUTH: `${neo4j.user}/${neo4j.password}` },
       stdio: 'inherit',
     });
   } catch (error) {
     if (error.code === 'ENOENT') throw new Error('没有找到 Docker。安装并打开 Docker 后运行：npx open-test services');
-    throw error;
+    if (!registryFailed(error)) throw error;
+    execFile('docker', ['pull', NEO4J_MIRROR], { stdio: 'inherit' });
+    execFile('docker', ['tag', NEO4J_MIRROR, NEO4J_IMAGE], { stdio: 'inherit' });
+    execFile('docker', [...composeArgs(), 'up', '-d', 'neo4j'], {
+      env: { ...process.env, NEO4J_AUTH: `${neo4j.user}/${neo4j.password}` },
+      stdio: 'inherit',
+    });
   }
   await waitForBolt(probe);
   return { ...neo4j, started: true, message: publicMessage(neo4j, true) };
