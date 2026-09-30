@@ -11,7 +11,7 @@
     "start": "node cli/index.js run",
     "install:deps": "node cli/install.js",
     "test": "cd tests && cargo test --all -- --nocapture",
-    "test:llm": "node --test cli/llm/config-store.test.js cli/llm/adapter.test.js cli/agent/launch.test.js cli/agent/tools.test.js && python3 -m unittest agent.llm.test_config agent.llm.test_adapter",
+    "test:llm": "node --test cli/llm/config-store.test.js cli/llm/adapter.test.js cli/agent/launch.test.js cli/agent/tools.test.js cli/agent/graph.test.js && python3 -m unittest agent.llm.test_config agent.llm.test_adapter",
     "dev": "docker compose up",
     "build": "docker compose build",
     "postinstall": "node cli/postinstall.js"
@@ -42,6 +42,7 @@
     "commander": "^11.0.0",
     "figlet": "^1.6.0",
     "inquirer": "^8.2.5",
+    "neo4j-driver": "^5.28.3",
     "ora": "^5.4.1",
     "semver": "^7.5.4"
   },

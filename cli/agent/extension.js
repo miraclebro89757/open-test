@@ -7,6 +7,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
+const { recordScenario } = require('./tools/record');
 const { healSelector } = require('./tools/heal');
 const { fetchDefects, renderDefects } = require('./tools/defects');
 const { buildReport, signRelease } = require('./tools/report');
@@ -14,6 +15,7 @@ const { gitDiffImpact } = require('./tools/git-diff');
 const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
+const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
 
 const execFileAsync = promisify(execFile);
 const requirePi = createRequire(path.join(__dirname, '..', '..', 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'));
@@ -68,6 +70,35 @@ module.exports = async function opentestExtension(pi) {
         ),
       });
       return textResult(result.text, result);
+    },
+  });
+
+  pi.registerTool({
+    name: 'record_playwright_scenario',
+    label: 'Record scenario',
+    description: '打开沙箱里的 Playwright 录制窗口，引导用户操作，并把录制对上功能用例的自动化标记。',
+    promptSnippet: 'Record a sandbox scenario with Playwright and tag matching cases',
+    promptGuidelines: ['Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL. The terminal asks the user before opening the browser.'],
+    executionMode: 'sequential',
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
+      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      sandboxUrl: Type.String({ description: 'Sandbox base URL, http or https' }),
+      caseId: Type.Optional(Type.String({ description: 'Functional case id to attach when several cases share the same wording' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = await recordScenario({
+        workspace,
+        sandboxUrl: params.sandboxUrl,
+        caseId: params.caseId,
+        execFile: (file, args, options) => execFileAsync(file, args, options),
+        confirm: async (summary) => {
+          if (!ctx.hasUI) return false;
+          return ctx.ui.confirm('录制沙箱场景', summary);
+        },
+      });
+      return textResult(result.message, result);
     },
   });
 
@@ -192,6 +223,64 @@ module.exports = async function opentestExtension(pi) {
         execFileSync: require('child_process').execFileSync,
       });
       return textResult(`${result.message}\n${result.files.join('\n')}`, result);
+    },
+  });
+
+  pi.registerTool({
+    name: 'store_requirement_graph',
+    label: 'Requirement graph',
+    description: '把需求分析得到的功能、场景、规则和关系写成产品图谱。图太大时分批调用，后续批次用 append。',
+    promptSnippet: 'Store a requirement graph in batches',
+    promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Do not draft the whole graph in the reply.'],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
+      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      sourceFile: Type.String({ description: 'Requirement file path' }),
+      graph: Type.Optional(Type.String({ description: 'One JSON batch. Do not put the entire graph in one call.' })),
+      graphPath: Type.Optional(Type.String({ description: 'JSON file inside the product workspace, used instead of graph' })),
+      mode: Type.Optional(Type.String({ description: 'replace or append. Use append for later batches.' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, _ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = await storeRequirementGraph({
+        workspace,
+        product: params.productName,
+        sourceFile: params.sourceFile,
+        graph: params.graph,
+        graphPath: params.graphPath,
+        mode: params.mode || 'replace',
+        cwd: workspace,
+        env: process.env,
+      });
+      const skipped = result.excluded.length ? `跳过未确认 ${result.excluded.length} 项。` : '';
+      return textResult(`${result.neo4j.message}\n节点 ${result.nodeCount}，关系 ${result.edgeCount}。${skipped}\n${result.dir}`, result);
+    },
+  });
+
+  pi.registerTool({
+    name: 'query_requirement_graph',
+    label: 'Query graph',
+    description: '从产品图谱查询一个功能的影响面，或一个场景的前置条件、规则和状态。',
+    promptSnippet: 'Query impact or scenario context from the product graph',
+    promptGuidelines: ['Use query_requirement_graph before writing cases. Do not add rules that are absent from the result.'],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
+      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      featureId: Type.Optional(Type.String({ description: 'Feature id for impact' })),
+      featureName: Type.Optional(Type.String({ description: 'Feature name when the id is unknown' })),
+      scenarioId: Type.Optional(Type.String({ description: 'Scenario id for case-writing context' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, _ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const graph = readGraph(workspace);
+      const result = queryRequirementGraph(graph, params);
+      const text = result.text || result.message || JSON.stringify({
+        featureName: result.featureName,
+        affectedScenarios: result.affectedScenarios,
+        activeRules: result.activeRules,
+        affectedTestSpecs: result.affectedTestSpecs,
+      }, null, 2);
+      return textResult(text, result);
     },
   });
 };

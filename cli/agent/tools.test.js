@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { healSelector } = require('./tools/heal');
 const { runPlaywright } = require('./tools/playwright');
+const { recordScenario } = require('./tools/record');
 const { fetchDefects } = require('./tools/defects');
 const { buildReport, signRelease } = require('./tools/report');
 const { gitDiffImpact } = require('./tools/git-diff');
@@ -75,6 +76,47 @@ test('playwright tool returns parsed stats', async () => {
   assert.match(result.text, /"unexpected":1/);
 });
 
+test('recording maps the sandbox script onto the matching functional case', async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-record-'));
+  fs.mkdirSync(path.join(workspace, 'cases'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'cases', 'login.md'), [
+    '### WEB-INSP-001 存在巡检管理菜单',
+    '- 步骤：展开【项目】后点击【巡检管理】',
+    '',
+    '### WEB-INSP-002 未创建项目时展示缺省页',
+    '- 步骤：查看缺省页',
+    '',
+  ].join('\n'));
+  const result = await recordScenario({
+    workspace,
+    sandboxUrl: 'https://sandbox.example/app',
+    confirm: async () => true,
+    now: () => 1,
+    execFile: async (_file, args) => {
+      const output = args[args.indexOf('-o') + 1];
+      fs.writeFileSync(output, "page.getByRole('link', { name: '巡检管理' }).click();\n");
+    },
+  });
+  const saved = fs.readFileSync(path.join(workspace, 'cases', 'login.md'), 'utf8');
+  assert.equal(result.recorded, true);
+  assert.deepEqual(result.matches.map((item) => item.id), ['WEB-INSP-001']);
+  assert.match(saved, /WEB-INSP-001[\s\S]*- 自动化：是/);
+  assert.match(saved, /automation\/record-1\.spec\.ts/);
+  assert.match(saved, /WEB-INSP-002[\s\S]*- 自动化：否/);
+});
+
+test('recording does not open the sandbox when confirmation is declined', async () => {
+  let opened = false;
+  const result = await recordScenario({
+    workspace: fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-record-no-')),
+    sandboxUrl: 'https://sandbox.example/app',
+    confirm: async () => false,
+    execFile: async () => { opened = true; },
+  });
+  assert.equal(result.recorded, false);
+  assert.equal(opened, false);
+});
+
 test('defect fetch does not invent bugs without credentials', async () => {
   const result = await fetchDefects({ env: {}, fetchImpl: async () => { throw new Error('network'); } });
   assert.equal(result.configured, false);
@@ -139,11 +181,14 @@ test('extension registers the terminal tools', async () => {
   await extension({ registerTool(tool) { names.push(tool.name); } });
   assert.deepEqual(names, [
     'run_playwright_test',
+    'record_playwright_scenario',
     'heal_selector',
     'fetch_zentao_jira',
     'write_executive_report',
     'sign_release',
     'git_diff_impact',
+    'store_requirement_graph',
+    'query_requirement_graph',
   ]);
 });
 
