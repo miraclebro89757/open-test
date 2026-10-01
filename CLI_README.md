@@ -516,10 +516,10 @@ npx open-test test --verbose
 
 ## 🔗 Links
 
-- **GitHub**: https://github.com/yourusername/open-test
+- **GitHub**: https://github.com/miraclebro89757/open-test
 - **NPM**: https://www.npmjs.com/package/open-test
-- **Documentation**: https://github.com/yourusername/open-test/docs
-- **Issues**: https://github.com/yourusername/open-test/issues
+- **Documentation**: https://github.com/miraclebro89757/open-test/docs
+- **Issues**: https://github.com/miraclebro89757/open-test/issues
 
 ## 📝 License
 

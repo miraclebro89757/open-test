@@ -185,7 +185,7 @@ npx open-test@latest init my-project
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/open-test.git"
+    "url": "https://github.com/miraclebro89757/open-test.git"
   },
   "preferGlobal": true
 }

@@ -152,9 +152,9 @@ npx open-test config ping
 
 ## Documentation
 
-- [OpenTest Docs](https://github.com/yourusername/open-test)
-- [API Reference](https://github.com/yourusername/open-test/docs/api)
-- [Best Practices](https://github.com/yourusername/open-test/docs/best-practices)
+- [OpenTest Docs](https://github.com/miraclebro89757/open-test)
+- [API Reference](https://github.com/miraclebro89757/open-test/docs/api)
+- [Best Practices](https://github.com/miraclebro89757/open-test/docs/best-practices)
 `;
 
     fs.writeFileSync(
@@ -183,7 +183,7 @@ logs/
     console.log(chalk.cyan(`  cd ${projectName}`));
     console.log(chalk.cyan('  npx open-test run'));
     console.log();
-    console.log(chalk.gray('📚 Documentation: https://github.com/yourusername/open-test'));
+    console.log(chalk.gray('📚 Documentation: https://github.com/miraclebro89757/open-test'));
     console.log();
 
   } catch (error) {

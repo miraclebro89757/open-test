@@ -104,7 +104,7 @@ npm view open-test versions   # 所有版本
 npx open-test changelog
 
 # 或访问 GitHub
-# https://github.com/yourusername/open-test/releases
+# https://github.com/miraclebro89757/open-test/releases
 
 # 或访问 npm
 # https://www.npmjs.com/package/open-test?activeTab=versions
@@ -344,7 +344,7 @@ npx open-test@latest run
 
 ```bash
 # 访问 GitHub 仓库
-https://github.com/yourusername/open-test
+https://github.com/miraclebro89757/open-test
 
 # 点击 "Watch" → "Custom" → "Releases"
 ```
@@ -360,7 +360,7 @@ npm star open-test
 
 ```bash
 # GitHub Releases RSS
-https://github.com/yourusername/open-test/releases.atom
+https://github.com/miraclebro89757/open-test/releases.atom
 ```
 
 ### 方式 4: CLI 自动检查
@@ -375,10 +375,10 @@ open-test run --no-update-check
 
 ## 🔗 相关资源
 
-- [版本历史](https://github.com/yourusername/open-test/releases)
-- [更新日志](https://github.com/yourusername/open-test/blob/main/CHANGELOG.md)
-- [迁移指南](https://github.com/yourusername/open-test/wiki/Migration)
-- [问题反馈](https://github.com/yourusername/open-test/issues)
+- [版本历史](https://github.com/miraclebro89757/open-test/releases)
+- [更新日志](https://github.com/miraclebro89757/open-test/blob/main/CHANGELOG.md)
+- [迁移指南](https://github.com/miraclebro89757/open-test/wiki/Migration)
+- [问题反馈](https://github.com/miraclebro89757/open-test/issues)
 
 ## 📊 版本对照表
 

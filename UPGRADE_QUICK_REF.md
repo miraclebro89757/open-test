@@ -222,7 +222,7 @@ npx open-test@latest run
 
 - **完整升级指南**: [UPGRADE_GUIDE.md](./UPGRADE_GUIDE.md)
 - **CLI 文档**: [CLI_README.md](./CLI_README.md)
-- **发布历史**: https://github.com/yourusername/open-test/releases
+- **发布历史**: https://github.com/miraclebro89757/open-test/releases
 - **npm 页面**: https://www.npmjs.com/package/open-test
 
 ---

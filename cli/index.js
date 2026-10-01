@@ -33,7 +33,7 @@ function showBanner() {
 // Main CLI setup
 program
   .name('open-test')
-  .description('AI-powered test automation platform')
+  .description('Terminal test agent: requirements to test cases to recorded automation')
   .version(pkg.version);
 
 // Command: run - Quick start (one-click setup and run)
@@ -206,7 +206,7 @@ program
   .action(() => {
     console.log(chalk.cyan('\n📋 OpenTest Changelog\n'));
     console.log(chalk.gray('View full changelog at:'));
-    console.log(chalk.blue('https://github.com/yourusername/open-test/releases\n'));
+    console.log(chalk.blue('https://github.com/miraclebro89757/open-test/releases\n'));
     console.log(chalk.gray('Or read UPGRADE_GUIDE.md for migration instructions.'));
     console.log();
   });
