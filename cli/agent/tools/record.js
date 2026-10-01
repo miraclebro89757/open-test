@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { playwrightInvoke } = require('./playwright-cli');
 
 function parseCases(markdown) {
   const matches = [...String(markdown || '').matchAll(/^###\s+(\S+)\s+(.+)$/gm)];
@@ -120,7 +121,8 @@ async function recordScenario({
   await fs.promises.mkdir(dir, { recursive: true });
   const specName = `${caseId || 'record'}-${now()}.spec.ts`;
   const specFile = path.join(dir, specName);
-  await execFile('npx', ['playwright', 'codegen', '--target', 'javascript', '-o', specFile, url], {
+  const command = playwrightInvoke(['codegen', '--target', 'javascript', '-o', specFile, url]);
+  await execFile(command.file, command.args, {
     cwd: workspace,
     timeout: 15 * 60 * 1000,
   });

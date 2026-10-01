@@ -44,6 +44,7 @@
     "inquirer": "^8.2.5",
     "neo4j-driver": "^5.28.3",
     "ora": "^5.4.1",
+    "playwright": "1.63.0",
     "semver": "^7.5.4"
   },
   "preferGlobal": true,

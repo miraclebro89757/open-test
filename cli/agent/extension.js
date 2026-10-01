@@ -7,6 +7,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
+const { playwrightInvoke } = require('./tools/playwright-cli');
 const { recordScenario } = require('./tools/record');
 const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
 const { fetchDefects, renderDefects } = require('./tools/defects');
@@ -45,6 +46,14 @@ function showProgress(ctx, workspace, readProgress) {
   if (typeof ui.setWidget === 'function') ui.setWidget('opentest-progress', lines, { placement: 'aboveEditor' });
   if (typeof ui.setStatus === 'function') ui.setStatus('opentest', lines[0]);
   if (typeof ui.setWorkingMessage === 'function') ui.setWorkingMessage(lines[0]);
+}
+
+async function ensureChromium() {
+  const command = playwrightInvoke(['install', 'chromium']);
+  await execFileAsync(command.file, command.args, {
+    cwd: path.join(__dirname, '..', '..'),
+    timeout: 10 * 60 * 1000,
+  });
 }
 
 function visibleWorkspace(requirementDir, productName) {
@@ -223,6 +232,7 @@ module.exports = async function opentestExtension(pi) {
       headed: Type.Optional(Type.Boolean({ description: 'Open a visible browser window' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
+      await ensureChromium();
       const result = await runPlaywright({
         cwd: ctx.cwd,
         specFile: params.specFile,
@@ -251,6 +261,7 @@ module.exports = async function opentestExtension(pi) {
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      await ensureChromium();
       const result = await recordScenario({
         workspace,
         sandboxUrl: params.sandboxUrl,

@@ -2,6 +2,7 @@
 
 const path = require('path');
 const { resolveInside } = require('./paths');
+const { playwrightInvoke } = require('./playwright-cli');
 
 const SPEC = /\.(spec|test)\.(js|mjs|cjs|ts|tsx)$/;
 
@@ -10,9 +11,10 @@ async function runPlaywright({ cwd, specFile, headed = false, execFile }) {
   if (!SPEC.test(abs)) {
     throw new Error('specFile must be a Playwright spec, such as tests/login.spec.ts');
   }
-  const args = ['playwright', 'test', abs, '--reporter=json'];
+  const args = ['test', abs, '--reporter=json'];
   if (headed === true) args.push('--headed');
-  return execFile('npx', args, {
+  const command = playwrightInvoke(args);
+  return execFile(command.file, command.args, {
     cwd,
     timeout: 120000,
     maxBuffer: 8 * 1024 * 1024,
