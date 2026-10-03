@@ -68,58 +68,6 @@ function agentHome() {
   return process.env.OPENTEST_HOME || os.homedir();
 }
 
-/**
- * Show folder picker dialog with fallback to manual input
- * Uses VSCode/Kiro native file system browser
- * @param {object} ctx - Context with UI methods
- * @param {string} title - Dialog title
- * @param {string} placeholder - Default path for manual input fallback
- * @returns {Promise<string|null>} Selected folder path or null if cancelled
- */
-async function selectFolder(ctx, title = '选择文件夹', placeholder = '~/Desktop') {
-  // Method 1: Try VSCode-style showOpenDialog (Kiro IDE standard)
-  if (typeof ctx.ui.showOpenDialog === 'function') {
-    try {
-      const uris = await ctx.ui.showOpenDialog({
-        title,
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: '选择',
-      });
-      if (uris && uris.length > 0) {
-        // Return the file path (uris[0] could be a URI object or string)
-        return typeof uris[0] === 'string' ? uris[0] : (uris[0].fsPath || uris[0].path);
-      }
-    } catch (error) {
-      console.warn('showOpenDialog failed:', error.message);
-    }
-  }
-  
-  // Method 2: Try direct folder selection API
-  if (typeof ctx.ui.selectFolder === 'function') {
-    try {
-      const result = await ctx.ui.selectFolder(title);
-      if (result) return result;
-    } catch (error) {
-      console.warn('selectFolder failed:', error.message);
-    }
-  }
-  
-  // Method 3: Try alternate folder picker
-  if (typeof ctx.ui.pickFolder === 'function') {
-    try {
-      const result = await ctx.ui.pickFolder({ title });
-      if (result) return result;
-    } catch (error) {
-      console.warn('pickFolder failed:', error.message);
-    }
-  }
-  
-  // Fallback: Manual input (all pickers failed or returned null)
-  return await ctx.ui.input(title, placeholder);
-}
-
 async function reviewHeals(ctx, project) {
   const pending = pendingInProject(project);
   if (!pending.length) {
@@ -174,29 +122,42 @@ async function switchProject(ctx, args) {
   let target = String(args || '').trim();
   if (!target) {
     const recent = readProject(agentHome()).recent;
-    const options = recent.length ? [...recent, '浏览文件夹...', '手动输入路径'] : ['浏览文件夹...', '手动输入路径'];
+    
+    // Simplified options - remove folder browser since it's not working in current environment
+    const options = recent.length 
+      ? [...recent, '输入新路径...'] 
+      : ['输入新路径...'];
+    
     const picked = await ctx.ui.select('切换项目', options);
     if (!picked) return;
     
-    if (picked === '浏览文件夹...') {
-      target = await selectFolder(ctx, '选择项目目录', '~/Desktop/易训/筑安通');
-      // If selectFolder returned empty/null, fallback to manual input
-      if (!target || target.trim() === '') {
-        target = await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通');
-      }
-    } else if (picked === '手动输入路径') {
-      target = await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通');
+    if (picked === '输入新路径...') {
+      // Show helpful message with example paths
+      const homeDir = os.homedir();
+      const examplePath = path.join(homeDir, 'Desktop', '项目名');
+      
+      ctx.ui.notify(
+        `💡 提示：\n` +
+        `• 使用完整路径，例如：${examplePath}\n` +
+        `• 可以使用 ~ 代表用户目录：~/Desktop/项目名\n` +
+        `• 可以拖拽文件夹到终端获取路径`,
+        'info'
+      );
+      
+      target = await ctx.ui.input('项目目录（完整路径）', examplePath);
     } else {
       target = picked; // Use recent project
     }
   }
-  if (!target) return;
+  
+  if (!target || target.trim() === '') return;
+  
   try {
     const saved = setProject(target, agentHome());
     if (typeof ctx.ui.setStatus === 'function') ctx.ui.setStatus('opentest-project', path.basename(saved.current));
-    ctx.ui.notify(`当前项目 ${saved.current}`, 'info');
+    ctx.ui.notify(`✅ 当前项目：${saved.current}`, 'info');
   } catch (error) {
-    ctx.ui.notify(error.message, 'error');
+    ctx.ui.notify(`❌ ${error.message}`, 'error');
   }
 }
 
@@ -545,4 +506,3 @@ module.exports = async function opentestExtension(pi) {
 };
 
 module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;
-module.exports.selectFolder = selectFolder;
