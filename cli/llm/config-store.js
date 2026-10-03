@@ -42,6 +42,47 @@ function maskKey(key) {
   return `${text.slice(0, 6)}…${text.slice(-4)}`;
 }
 
+/**
+ * Clean up what a user actually pastes. People copy keys out of a web page, a
+ * curl command, or a JSON file, so the raw value often carries a `Bearer `
+ * prefix, surrounding quotes, or stray whitespace. Storing that verbatim
+ * produces an auth failure that is painful to diagnose, so normalize here.
+ */
+function sanitizeApiKey(raw) {
+  let text = String(raw === undefined || raw === null ? '' : raw).trim();
+  if (!text) return '';
+  text = text.replace(/^Bearer\s+/i, '');
+  // Strip one layer of matching quotes, e.g. "sk-xxx" or 'sk-xxx'.
+  const quoted = text.match(/^(['"])([\s\S]*)\1$/);
+  if (quoted) text = quoted[2].trim();
+  return text;
+}
+
+/**
+ * Validate a pasted key before it is written to disk.
+ * @returns {true|string} true when acceptable, otherwise a message shown
+ *   directly under the input box.
+ */
+function validateApiKeyInput(raw) {
+  const key = sanitizeApiKey(raw);
+  if (!key) {
+    return '请填写 API key（不想填 key 就选「Ollama 本地模型」）';
+  }
+  if (/[<>"'{}[\]]/.test(key)) {
+    return 'key 里不该有引号或括号，你可能粘贴了整段 JSON 或 curl 命令';
+  }
+  if (/[\s]/.test(key)) {
+    return 'key 里出现了空格，多半是复制多了，只保留中间那一串字符';
+  }
+  if (isPlaceholderKey(key)) {
+    return '这看起来是文档里的示例占位符，请填自己账号里真实的 key';
+  }
+  if (key.length < 20) {
+    return `只有 ${key.length} 位，真实 key 通常 30 位以上，请确认复制完整`;
+  }
+  return true;
+}
+
 function expandEnvRef(value, env) {
   if (typeof value !== 'string') return value;
   const braced = value.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/);
@@ -269,6 +310,15 @@ function resolveLLMConfig({
     config: resolvedProfiles[name],
   }));
 
+  // Failover names that no config file actually contains are still listed (the
+  // chain is useful to see), but they are not switchable. Flag them so callers
+  // that write or activate profiles only ever touch real ones.
+  const storedNames = new Set([
+    ...Object.keys(project.doc?.profiles || {}),
+    ...Object.keys(user.doc?.profiles || {}),
+  ]);
+  if (active.source === 'env' || active.source === 'cli') storedNames.add(active.name);
+
   const profiles = names.map((name) => ({
     name,
     provider: resolvedProfiles[name].provider,
@@ -276,6 +326,7 @@ function resolveLLMConfig({
     baseUrl: resolvedProfiles[name].baseUrl,
     maskedKey: maskKey(resolvedProfiles[name].apiKey),
     usable: isUsableConfig(resolvedProfiles[name]),
+    saved: storedNames.has(name),
   }));
 
   return {
@@ -285,6 +336,7 @@ function resolveLLMConfig({
     chain,
     failoverOrder,
     profiles,
+    taskModels: readTaskModels({ ...resolvePaths({ cwd, homeDir, env }), projectDoc: project.doc, userDoc: user.doc }),
     projectPath: paths.project,
     userPath: paths.user,
     projectExists: project.exists,
@@ -442,21 +494,144 @@ function formatConfigList(resolved) {
   return lines.join('\n');
 }
 
+/**
+ * Read one stored profile in full, including its real API key.
+ *
+ * Callers must never print the returned key — use `formatProfileChoice` to show
+ * a profile to a human. Reading it locally is what lets "replace" reuse a key
+ * the user already stored instead of making them paste it again.
+ */
+function readProfile({ cwd, homeDir, env = process.env, profileName }) {
+  const paths = resolvePaths({ cwd, homeDir, env });
+  for (const filePath of [paths.project, paths.user]) {
+    const doc = readDocument(filePath).doc;
+    const found = doc && doc.profiles && doc.profiles[profileName];
+    if (found) return { ...found, name: profileName, filePath };
+  }
+  return null;
+}
+
+/**
+ * One-line, masked label for an interactive profile picker. The raw key is
+ * never part of this string, so it is safe to render in a TUI or send to a model.
+ */
+function formatProfileChoice(item, isActive = false) {
+  const mark = isActive ? '✅' : '  ';
+  const unusable = item.usable ? '' : '  (key 不可用)';
+  return `${mark} ${item.name} · ${item.provider} · ${item.model || '(无模型)'} · ${item.maskedKey}${unusable}`;
+}
+
+/**
+ * Testing tasks that can be routed to a different model.
+ *
+ * Reasoning-heavy work (requirement analysis, bug analysis) wants a strong
+ * model; bulk structured output (case generation, reports) does not. Keeping
+ * the mapping here — rather than hardcoding it in the agent — means the user
+ * can retune it without touching code.
+ */
+const TASK_MODELS = [
+  { id: 'requirementAnalysis', label: '需求分析', steps: ['analyze'] },
+  { id: 'testCaseGeneration', label: '用例生成', steps: ['points', 'cases'] },
+  { id: 'codeGeneration', label: '自动化代码', steps: ['record', 'heal'] },
+  { id: 'bugAnalysis', label: '缺陷分析', steps: ['defects'] },
+  { id: 'reportGeneration', label: '测试报告', steps: ['report'] },
+];
+
+const TASK_MODEL_IDS = TASK_MODELS.map((task) => task.id);
+
+/**
+ * Natural things people actually type for a task. Matching only the exact id or
+ * label made `config routing 报告生成` fail on a label of `测试报告`, which is
+ * the kind of near-miss that should just work.
+ */
+const TASK_ALIASES = {
+  requirementAnalysis: ['requirement', 'requirements', '需求', '需求分析', '分析'],
+  testCaseGeneration: ['testcase', 'testcases', 'case', 'cases', 'point', 'points', '用例', '用例生成', '测试点', '测试点生成'],
+  codeGeneration: ['code', 'codegen', '代码', '代码生成', '录制', '自愈', '自动化'],
+  bugAnalysis: ['bug', 'bugs', 'defect', 'defects', 'issue', '缺陷', '缺陷分析'],
+  reportGeneration: ['report', 'summary', '报告', '报告生成', '测试报告', '简报'],
+};
+
+/** Which task a step command belongs to, if any. */
+function taskForStep(step) {
+  return TASK_MODELS.find((task) => task.steps.includes(String(step || ''))) || null;
+}
+
+function normalizeTaskId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const lower = raw.toLowerCase().replace(/[\s_-]+/g, '');
+  const exact = TASK_MODELS.find(
+    (task) => task.id.toLowerCase() === lower || task.label === raw
+  );
+  if (exact) return exact.id;
+  return TASK_MODELS.find((task) =>
+    (TASK_ALIASES[task.id] || []).some((alias) => alias.replace(/[\s_-]+/g, '') === lower)
+  )?.id || '';
+}
+
+/** Merged task -> profile mapping; project config wins over user config. */
+function readTaskModels({ cwd, homeDir, env = process.env, projectDoc, userDoc } = {}) {
+  const paths = resolvePaths({ cwd, homeDir, env });
+  const project = projectDoc === undefined ? readDocument(paths.project).doc : projectDoc;
+  const user = userDoc === undefined ? readDocument(paths.user).doc : userDoc;
+  const merged = { ...(user?.task_models || {}), ...(project?.task_models || {}) };
+  const clean = {};
+  for (const task of TASK_MODEL_IDS) {
+    const value = merged[task];
+    if (typeof value === 'string' && value.trim()) clean[task] = value.trim();
+  }
+  return clean;
+}
+
+/**
+ * Persist one task -> profile mapping. Pass an empty `profileName` to clear it
+ * and fall back to whatever model the session is already using.
+ */
+function writeTaskModel({ cwd, homeDir, env = process.env, scope, task, profileName }) {
+  const taskId = normalizeTaskId(task);
+  if (!taskId) {
+    throw new Error(`Unknown task "${task}". Known tasks: ${TASK_MODEL_IDS.join(', ')}`);
+  }
+  const paths = resolvePaths({ cwd, homeDir, env });
+  const targetScope = scope || defaultScope(paths.cwd);
+  const filePath = targetScope === 'user' ? paths.user : paths.project;
+  const existing = readDocument(filePath).doc || {};
+  const taskModels = { ...(existing.task_models || {}) };
+  const value = String(profileName || '').trim();
+  if (value) taskModels[taskId] = value;
+  else delete taskModels[taskId];
+  const next = { ...existing, task_models: taskModels };
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  return { filePath, scope: targetScope, task: taskId, profileName: value || null };
+}
+
 function buildScaffoldDocument() {
   return require('./presets').exportPresetCatalog();
 }
 
 module.exports = {
   OPENAI_FALLBACK,
+  TASK_MODELS,
+  TASK_MODEL_IDS,
   isBlank,
   isPlaceholderKey,
   isUsableConfig,
   maskKey,
+  sanitizeApiKey,
+  validateApiKeyInput,
+  normalizeTaskId,
+  taskForStep,
+  readTaskModels,
+  writeTaskModel,
   resolvePaths,
   resolveLLMConfig,
   writeProfile,
   useProfile,
   formatConfigList,
+  formatProfileChoice,
+  readProfile,
   buildScaffoldDocument,
   defaultScope,
 };

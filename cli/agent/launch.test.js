@@ -16,17 +16,53 @@ test('openrouter and deepseek map to pi provider ids', () => {
   assert.equal(providerId('http://localhost:11434/v1'), 'opentest');
 });
 
-test('models.json stores an env reference, not the key', () => {
-  const doc = modelsDocument({
-    provider: 'openrouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'stealth/space-bunny-alpha',
-    apiKey: SECRET,
-  });
+test('models.json stores an env reference per profile, not the key', () => {
+  const doc = modelsDocument([
+    {
+      name: 'free-openrouter',
+      provider: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'stealth/space-bunny-alpha',
+      apiKey: SECRET,
+      usable: true,
+    },
+    {
+      name: 'team-deepseek',
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      model: 'deepseek-reasoner',
+      apiKey: 'sk-second-secret',
+      usable: true,
+    },
+  ]);
   const text = JSON.stringify(doc);
-  assert.equal(doc.providers.openrouter.apiKey, '$OPENTEST_API_KEY');
+  // Every profile becomes its own pi provider so pi has something to switch to.
+  assert.equal(doc.providers['opentest-free-openrouter'].apiKey, '$OPENTEST_KEY_FREE_OPENROUTER');
+  assert.equal(doc.providers['opentest-team-deepseek'].apiKey, '$OPENTEST_KEY_TEAM_DEEPSEEK');
+  assert.equal(doc.providers['opentest-free-openrouter'].models[0].id, 'stealth/space-bunny-alpha');
   assert.equal(text.includes(SECRET), false);
-  assert.equal(doc.providers.openrouter.models[0].id, 'stealth/space-bunny-alpha');
+  assert.equal(text.includes('sk-second-secret'), false);
+});
+
+test('the --models scope lets pi cycle between profiles', () => {
+  const args = buildPiArgs({
+    config: { profile: 'free-openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'a', apiKey: SECRET },
+    profiles: [
+      { name: 'free-openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'a', apiKey: SECRET, usable: true },
+      { name: 'team-deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'b', apiKey: 'sk-2', usable: true },
+    ],
+    words: [],
+    skill: '/s',
+    extension: '/e',
+    prompt: 'p',
+    promptTemplate: '/pr',
+  });
+  const scope = args[args.indexOf('--models') + 1];
+  assert.equal(scope, 'opentest-free-openrouter/a,opentest-team-deepseek/b');
+  assert.equal(args.includes(SECRET), false);
+  // Startup still lands on the active profile.
+  assert.equal(args[args.indexOf('--provider') + 1], 'opentest-free-openrouter');
+  assert.equal(args[args.indexOf('--model') + 1], 'a');
 });
 
 test('pi arguments keep @ files and never include the key', () => {
@@ -74,15 +110,19 @@ test('a docx attachment is extracted before pi sees it', () => {
 
 test('written models file does not contain the key', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-pi-'));
-  const file = writePiHome({
-    provider: 'openrouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'demo-model',
-    apiKey: SECRET,
-  }, dir);
+  const file = writePiHome([
+    {
+      name: 'free-openrouter',
+      provider: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'demo-model',
+      apiKey: SECRET,
+      usable: true,
+    },
+  ], dir);
   const text = fs.readFileSync(file, 'utf8');
   assert.equal(text.includes(SECRET), false);
-  assert.match(text, /\$OPENTEST_API_KEY/);
+  assert.match(text, /\$OPENTEST_KEY_FREE_OPENROUTER/);
   assert.equal(fs.existsSync(path.join(dir, 'prompts')), true);
 });
 

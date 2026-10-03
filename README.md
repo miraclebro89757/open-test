@@ -29,7 +29,17 @@ npx open-test run
 > @/path/to/your/requirements.md
 ```
 
-`config` is a wizard. It writes to `./opentest.config.json` (shared with your team) or `~/.opentest/config.json` (yours). To configure without the wizard:
+`config` is a wizard built so you can finish it without looking anything up. It asks one question at a time and tells you what to do at each step:
+
+1. **Pick a provider** — each option says what it costs and who it suits.
+2. **Paste the key** — the wizard prints the exact page to open, the button to click, and what a real key looks like (`sk-or-v1-…`, `sk-…`). Ollama skips this entirely.
+3. **Name, address, model** — pre-filled with the provider's defaults, so pressing Enter is always a valid answer. Only the `custom` provider requires you to type them.
+4. **Where to save** — `~/.opentest/config.json` (yours, never committed) or `./opentest.config.json` (your project, shareable with the team).
+5. **Ping** — an optional live check that tells you what to do if it fails.
+
+Pasted keys are cleaned before they are stored: a leading `Bearer `, surrounding quotes, and stray whitespace are removed, and obvious mistakes (a truncated key, a JSON blob, a documentation placeholder) are rejected at the prompt with an explanation instead of failing later at request time.
+
+To configure without the wizard:
 
 ```bash
 npx open-test config set --provider deepseek --api-key sk-xxxx --model deepseek-chat
@@ -116,6 +126,48 @@ Use `/project` to pin a working directory; after that, steps write there. The se
 
 The picker lists your recent directories first. On macOS it also offers **📁 浏览本机文件夹...**, which opens the native Finder folder chooser and starts at your current project. Closing the dialog without choosing leaves the project unchanged; if the dialog cannot open, it falls back to typed input. Other platforms get recent entries plus typed input.
 
+## 🧠 Switching models
+
+Run `open-test config` more than once and it asks what you mean before touching anything:
+
+- **Add another profile** — existing ones are kept, so you can hold a free tier and a production endpoint side by side.
+- **Replace an existing profile** — pick which one, keep its provider pre-selected, and reuse the key already on disk if you only want to change the model or address. A key rotation only asks for the new key.
+
+Inside the agent, switching is Pi's job, so it behaves like Pi's own controls and keeps the conversation intact:
+
+| | |
+|---|---|
+| `/model` | pick any configured profile from a list |
+| `Ctrl+P` / `Shift+Ctrl+P` | cycle forward / backward |
+| `/task-model` | pin a *kind of task* to a profile (OpenTest's addition) |
+
+No restart, and no lost context — the session carries on with the new model. Adding a profile while the agent is already running is the one exception: a profile written after launch is not in Pi's registry yet, so switch to it after one restart.
+
+### Different models for different tasks
+
+Testing stages have different needs: requirement analysis and bug analysis want reasoning depth, case generation is bulk structured output, reports are summarisation. Pin them separately:
+
+```
+/task-model 需求分析 team-deepseek      # strong model for analysis
+/task-model 用例生成 free-openrouter     # cheap model for volume
+```
+
+Routing is applied automatically before each step runs, and `/task-model 需求分析` with no profile clears the pin. Mappings live under `task_models` in your config file, so they survive restarts.
+
+### Where your key lives
+
+The key is written straight to a local file and never travels through the model:
+
+| | |
+|---|---|
+| Stored in | `~/.opentest/config.json` or `./opentest.config.json`, written with mode `0600` |
+| Passed to Pi as | a per-profile env var (`OPENTEST_KEY_<PROFILE>`), referenced from `models.json` as `$OPENTEST_KEY_<PROFILE>` |
+| Used by | the provider as an HTTP `Authorization` header |
+| Never | placed in the prompt, a message, a tool result, `models.json`, or the process command line |
+| Shown to you as | `sk-3d9…0a2d` — `open-test config list` and every picker render only the mask |
+
+Every configured profile gets its own Pi provider (`opentest-<profile>`) so it can authenticate independently — a free tier and a paid endpoint on the same host stay separately switchable. `open-test config` reads and writes the file directly; it does not ask the model to store anything for you.
+
 ## 🧠 The Requirement Graph
 
 Test points are written against a graph, not against the raw document. The agent stores the graph in batches (max 20 nodes / 20 relationships per call) so long documents stay tractable, and queries it before writing cases:
@@ -172,8 +224,21 @@ Layers merge in this order, each overriding the last: overrides → project `./o
 | `OPENTEST_PROVIDER` | `openrouter` \| `deepseek` \| `cc-switch` \| `ollama` \| `custom` |
 | `OPENTEST_BASE_URL` | OpenAI-compatible base URL |
 | `OPENTEST_MODEL` | Model id |
-| `OPENTEST_API_KEY` | API key (injected into the agent process) |
+| `OPENTEST_API_KEY` | API key (read from config/env by the CLI; the agent process receives it as a per-profile `OPENTEST_KEY_*` var) |
 | `OPENAI_API_KEY` | Legacy fallback — only reached when no preset matches; defaults to `gpt-4o-mini` on `api.openai.com` |
+
+A config file may also carry `task_models`, mapping a task to a profile:
+
+```json
+{
+  "task_models": {
+    "requirementAnalysis": "team-deepseek",
+    "bugAnalysis": "team-deepseek",
+    "testCaseGeneration": "free-openrouter",
+    "reportGeneration": "free-openrouter"
+  }
+}
+```
 
 ### Defect trackers
 

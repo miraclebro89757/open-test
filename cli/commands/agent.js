@@ -1,6 +1,6 @@
 'use strict';
 
-const { isUsableConfig, maskKey, resolveLLMConfig } = require('../llm/config-store');
+const { isUsableConfig, maskKey, readProfile, resolveLLMConfig } = require('../llm/config-store');
 const { launchAgent } = require('../agent/launch');
 const { DEFAULT_ANALYSIS_PROMPT } = require('../agent/prompts');
 const { prepareGraphService } = require('../services/local');
@@ -24,6 +24,31 @@ function ask(question) {
   });
 }
 
+/**
+ * Every usable saved profile, with its real key read from local config.
+ *
+ * Handing all of them to `launchAgent` is what lets Pi switch models mid
+ * session — the keys are read here in the parent process and passed to Pi as
+ * per-profile env vars, never written into `models.json`.
+ */
+function collectProfiles(resolved) {
+  const store = runtimeContext();
+  return resolved.profiles
+    .filter((item) => item.saved && item.usable)
+    .map((item) => {
+      const stored = readProfile({ ...store, profileName: item.name });
+      return {
+        name: item.name,
+        provider: stored?.provider || item.provider,
+        baseUrl: stored?.baseUrl || item.baseUrl,
+        model: stored?.model || item.model,
+        apiKey: stored?.apiKey,
+        usable: true,
+      };
+    })
+    .filter((item) => item.model && item.baseUrl);
+}
+
 async function startAgent(prompt, options = {}) {
   const words = prompt || [];
   if (!process.stdout.isTTY && words.length === 0) {
@@ -45,6 +70,11 @@ async function startAgent(prompt, options = {}) {
     process.exitCode = 1;
     return;
   }
+  const profiles = collectProfiles(resolved);
+  if (profiles.length > 1) {
+    console.log(`已登记 ${profiles.length} 个模型，运行中可用 /model 或 Ctrl+P 直接切换，不用重启：`);
+    for (const item of profiles) console.log(`  · ${item.name} · ${item.model}`);
+  }
   const homeDir = process.env.OPENTEST_HOME || undefined;
   const graph = await prepareGraphService({
     env: process.env,
@@ -56,11 +86,12 @@ async function startAgent(prompt, options = {}) {
   console.log(graph.message);
   console.log('在任意目录打开。输入 @ 后接需求文档路径，例如 @/Users/you/docs/requirements.md');
   console.log(`需求分析用 /${DEFAULT_ANALYSIS_PROMPT}，这个模板只读。自定义模板放在 ~/.opentest/pi-agent/prompts/。`);
-  console.log('Ctrl+C 退出。产物写在需求文档旁边、以产品名命名的可见目录，例如 ~/Desktop/易训/筑安通/。');
+  console.log('切换模型用 /model 或 Ctrl+P，会话上下文保留。Ctrl+C 退出。产物写在需求文档旁边、以产品名命名的可见目录，例如 ~/Desktop/易训/筑安通/。');
   let child;
   try {
     child = launchAgent({
       config,
+      profiles,
       words,
       print: Boolean(options.print),
       cwd: process.cwd(),

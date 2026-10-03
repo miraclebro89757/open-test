@@ -11,6 +11,12 @@ const {
   bundledPromptsDir,
   userPromptsDir,
 } = require('./prompts');
+const {
+  buildModelsDocument,
+  buildModelsScope,
+  buildProfileEnv,
+  piProviderId,
+} = require('./pi-models');
 
 const TOOLS = [
   'read', 'grep', 'find', 'ls', 'write', 'edit',
@@ -57,25 +63,37 @@ function providerId(baseUrl) {
   return 'opentest';
 }
 
-function modelsDocument(config) {
-  const apiKey = config.provider === 'ollama' ? 'ollama' : '$OPENTEST_API_KEY';
-  return {
-    providers: {
-      [providerId(config.baseUrl)]: {
-        baseUrl: config.baseUrl,
-        api: 'openai-completions',
-        apiKey,
-        models: [{ id: config.model }],
-      },
-    },
-  };
+/** Every profile OpenTest knows about, or just the active one. */
+function profileList(config, profiles) {
+  if (Array.isArray(profiles) && profiles.length) return profiles;
+  return [{ ...config, name: config.profile || 'default', usable: true }];
 }
 
-function writePiHome(config, dir) {
+/**
+ * Provider id Pi should start on. Prefer the profile-derived id so the startup
+ * provider matches the entry we registered in models.json; fall back to the
+ * host-derived id for callers that pass a bare config with no profile name.
+ */
+function activeProviderId(config) {
+  return config.profile ? piProviderId(config.profile) : providerId(config.baseUrl);
+}
+
+/**
+ * models.json holding one Pi provider per OpenTest profile.
+ *
+ * Registering all of them is what gives Pi something to switch between: its
+ * built-in `/model` picker, `Ctrl+P` cycling, and `ctx.setModel()` can only
+ * choose among models the registry knows.
+ */
+function modelsDocument(profiles) {
+  return buildModelsDocument(Array.isArray(profiles) ? profiles : profileList(profiles));
+}
+
+function writePiHome(profiles, dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(userPromptsDir(dir), { recursive: true, mode: 0o700 });
   const file = path.join(dir, 'models.json');
-  const body = `${JSON.stringify(modelsDocument(config), null, 2)}\n`;
+  const body = `${JSON.stringify(modelsDocument(profiles), null, 2)}\n`;
   fs.writeFileSync(file, body, { mode: 0o600 });
   try {
     fs.chmodSync(file, 0o600);
@@ -124,9 +142,9 @@ function composeSystemPrompt(base, { version, promptFile, promptsDir }) {
   ].filter(Boolean).join('\n');
 }
 
-function buildPiArgs({ config, words, print, skill, extension, prompt, promptTemplate }) {
+function buildPiArgs({ config, profiles, words, print, skill, extension, prompt, promptTemplate }) {
   const args = [
-    '--provider', providerId(config.baseUrl),
+    '--provider', activeProviderId(config),
     '--model', config.model,
     '--tools', TOOLS,
     '--no-extensions',
@@ -138,6 +156,11 @@ function buildPiArgs({ config, words, print, skill, extension, prompt, promptTem
     '--no-approve',
     '--append-system-prompt', prompt,
   ];
+  // Scope Pi's model picker and Ctrl+P cycling to the profiles we registered.
+  // With one profile this is a no-op; with several it is what makes switching
+  // possible inside a live session instead of only at startup.
+  const scope = buildModelsScope(profileList(config, profiles));
+  if (scope) args.push('--models', scope);
   if (print) args.push('--print');
   args.push(...words);
   return args;
@@ -152,6 +175,7 @@ function assertNoSecret(args, apiKey) {
 
 function launchAgent({
   config,
+  profiles,
   words = [],
   print = false,
   cwd = process.cwd(),
@@ -160,8 +184,9 @@ function launchAgent({
   spawnImpl = spawn,
   exists = fs.existsSync,
 } = {}) {
+  const all = profileList(config, profiles);
   const home = piHome(homeDir);
-  writePiHome(config, home);
+  writePiHome(all, home);
   const prompt = composeSystemPrompt(fs.readFileSync(systemPromptPath(), 'utf8'), {
     version: DEFAULT_ANALYSIS_PROMPT,
     promptFile: analysisPromptFile(),
@@ -172,8 +197,8 @@ function launchAgent({
   const promptTemplate = bundledPromptsDir();
   const tmpDir = path.join(os.tmpdir(), 'opentest-docs');
   const expanded = expandAttachments(words, { cwd, tmpDir });
-  const args = buildPiArgs({ config, words: expanded, print, skill, extension, prompt, promptTemplate });
-  assertNoSecret(args, config.apiKey);
+  const args = buildPiArgs({ config, profiles: all, words: expanded, print, skill, extension, prompt, promptTemplate });
+  for (const profile of all) assertNoSecret(args, profile.apiKey);
   const bin = piBin();
   if (!exists(bin)) {
     throw new Error('Pi is not installed. From the open-test directory run: npm install');
@@ -183,8 +208,10 @@ function launchAgent({
     PI_CODING_AGENT_DIR: home,
     PI_SKIP_VERSION_CHECK: '1',
     PI_TELEMETRY: '0',
+    // One env var per profile, so models.json only ever holds `$NAME` refs and
+    // every registered provider can authenticate on its own.
+    ...buildProfileEnv(all),
   };
-  if (config.provider !== 'ollama') childEnv.OPENTEST_API_KEY = config.apiKey;
   return spawnImpl(bin, args, { cwd, env: childEnv, stdio: 'inherit' });
 }
 

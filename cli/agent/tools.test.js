@@ -185,7 +185,7 @@ test('extension registers the terminal tools', async () => {
     'query_requirement_graph',
   ]);
   assert.deepEqual(commands, [
-    'project', 'status', 'analyze', 'points', 'cases', 'record', 'run', 'heal', 'defects', 'report',
+    'project', 'task-model', 'status', 'analyze', 'points', 'cases', 'record', 'run', 'heal', 'defects', 'report',
   ]);
 });
 
@@ -389,4 +389,234 @@ test('/project still switches from the recent list without touching the picker',
     if (previous === undefined) delete process.env.OPENTEST_HOME;
     else process.env.OPENTEST_HOME = previous;
   }
+});
+
+// --- runtime model switching + the key-never-reaches-the-model guarantee -------
+
+const SECRET = 'sk-3d9a2f7c4b1e8d6a0f5b2c7e4a9d1f3b6c8e0a2d';
+
+function seedProfiles(home, profiles, active) {
+  fs.mkdirSync(path.join(home, '.opentest'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.opentest', 'config.json'),
+    JSON.stringify({ active_profile: active, profiles, failover_order: [] }, null, 2)
+  );
+}
+
+/**
+ * Captures everything the TUI would render, and stands in for Pi's model
+ * registry so we can observe a real `setModel` call rather than a config write.
+ */
+function recordingCtx(answer, { models = [], setModelResult = true } = {}) {
+  const seen = [];
+  const switched = [];
+  return {
+    seen,
+    switched,
+    ui: {
+      async select(title, options) { seen.push(...options); return answer(options); },
+      async input() { throw new Error('input should not be reached'); },
+      notify(message) { seen.push(String(message)); },
+      setStatus() {},
+    },
+    modelRegistry: {
+      find(provider, id) { return models.find((m) => m.provider === provider && m.id === id); },
+    },
+    async setModel(model) { switched.push(model); return setModelResult; },
+  };
+}
+
+function withHome(home, fn) {
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = home;
+  return Promise.resolve(fn()).finally(() => {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  });
+}
+
+const ALPHA = { provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', apiKey: SECRET };
+const BETA = { provider: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-r1:free', apiKey: 'sk-or-v1-1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d' };
+const REGISTRY = [
+  { provider: 'opentest-alpha', id: 'deepseek-chat' },
+  { provider: 'opentest-beta', id: 'deepseek/deepseek-r1:free' },
+];
+
+test('switching models changes the live session instead of only the config', async () => {
+  const { switchModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await switchModel(ctx, 'beta');
+    // The running session is switched, not merely told to restart.
+    assert.equal(ctx.switched.length, 1);
+    assert.equal(ctx.switched[0].provider, 'opentest-beta');
+    assert.equal(ctx.switched[0].id, 'deepseek/deepseek-r1:free');
+    assert.equal(ctx.seen.some((line) => line.includes('重新运行')), false, 'no restart should be demanded');
+    // And it is still persisted so the next launch starts there.
+    const saved = JSON.parse(fs.readFileSync(path.join(home, '.opentest', 'config.json'), 'utf8'));
+    assert.equal(saved.active_profile, 'beta');
+    assert.equal(saved.profiles.alpha.apiKey, SECRET, 'switching must not rewrite stored keys');
+  });
+});
+
+test('the extension does not shadow the built-in /model command', async () => {
+  const extension = require('./extension');
+  const commands = [];
+  await extension({
+    registerTool() {},
+    registerCommand(name) { commands.push(name); },
+    registerShortcut() {},
+    on() {},
+  });
+  // Pi ships its own /model and filters same-named extension commands out of
+  // autocomplete; registering ours would be dead code plus a conflict warning.
+  assert.equal(commands.includes('model'), false);
+  assert.equal(commands.includes('task-model'), true);
+});
+
+test('switching offers every profile with the active one marked', async () => {
+  const { switchModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await switchModel(ctx, '');
+    assert.equal(ctx.seen.length, 2);
+    assert.equal(ctx.seen.some((line) => line.includes('alpha') && line.includes('✅')), true);
+    assert.equal(ctx.seen.some((line) => line.includes('beta') && line.includes('✅')), false);
+  });
+});
+
+test('switching never renders a raw API key, only a mask', async () => {
+  const { switchModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA }, 'alpha');
+
+  await withHome(home, async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await switchModel(ctx, '');
+    const rendered = ctx.seen.join('\n');
+    assert.equal(rendered.includes(SECRET), false, 'raw key must never reach the screen');
+    assert.equal(rendered.includes('sk-3d9…0a2d'), true, 'the mask should be shown instead');
+  });
+});
+
+test('a profile pi has not registered asks for one restart, not a silent failure', async () => {
+  const { switchModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    // Registry knows only alpha — beta was added after this session started.
+    const ctx = recordingCtx(() => undefined, { models: [REGISTRY[0]] });
+    await switchModel(ctx, 'beta');
+    assert.equal(ctx.switched.length, 0);
+    assert.equal(ctx.seen.some((line) => line.includes('重启')), true);
+  });
+});
+
+test('a profile whose key pi rejects is reported as unusable', async () => {
+  const { switchModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY, setModelResult: false });
+    await switchModel(ctx, 'beta');
+    assert.equal(ctx.seen.some((line) => line.includes('key 不可用')), true);
+  });
+});
+
+test('switching points the user at the wizard when nothing is configured', async () => {
+  const { switchModel } = require('./extension');
+  await withHome(projectHome(), async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await switchModel(ctx, '');
+    assert.equal(ctx.seen.some((line) => line.includes('open-test config')), true);
+  });
+});
+
+test('switching rejects an unknown profile instead of writing it', async () => {
+  const { switchModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA }, 'alpha');
+
+  await withHome(home, async () => {
+    const before = fs.readFileSync(path.join(home, '.opentest', 'config.json'), 'utf8');
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await switchModel(ctx, 'does-not-exist');
+    assert.equal(fs.readFileSync(path.join(home, '.opentest', 'config.json'), 'utf8'), before);
+    assert.equal(ctx.seen.some((line) => line.includes('❌')), true);
+  });
+});
+
+test('a mapped task switches the model before the step runs', async () => {
+  const { applyTaskModel } = require('./extension');
+  const { writeTaskModel } = require('../llm/config-store');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    writeTaskModel({ cwd: home, homeDir: home, scope: 'user', task: 'bugAnalysis', profileName: 'beta' });
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    // /defects is bug analysis -> should land on beta.
+    await applyTaskModel(ctx, 'defects');
+    assert.equal(ctx.switched.length, 1);
+    assert.equal(ctx.switched[0].provider, 'opentest-beta');
+  });
+});
+
+test('an unmapped task leaves the model alone and says nothing', async () => {
+  const { applyTaskModel } = require('./extension');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await applyTaskModel(ctx, 'cases');
+    assert.equal(ctx.switched.length, 0, 'no mapping means no switch');
+    assert.equal(ctx.seen.length, 0, 'and no announcement either');
+  });
+});
+
+test('/task-model persists a routing choice', async () => {
+  const { taskModel } = require('./extension');
+  const { readTaskModels } = require('../llm/config-store');
+  const home = projectHome();
+  seedProfiles(home, { alpha: ALPHA, beta: BETA }, 'alpha');
+
+  await withHome(home, async () => {
+    const ctx = recordingCtx(() => undefined, { models: REGISTRY });
+    await taskModel(ctx, '需求分析 beta');
+    assert.deepEqual(readTaskModels({ cwd: home, homeDir: home }), { requirementAnalysis: 'beta' });
+  });
+});
+
+test('model switches are recorded so a report can cite which model ran', () => {
+  const { recordModelChange, modelHistorySnapshot } = require('./extension');
+  recordModelChange({ type: 'model_select', model: { provider: 'opentest-alpha', id: 'm1' }, source: 'set' });
+  recordModelChange({ type: 'model_select', model: { provider: 'opentest-beta', id: 'm2' }, previousModel: { provider: 'opentest-alpha', id: 'm1' }, source: 'set' });
+  const history = modelHistorySnapshot();
+  const last = history[history.length - 1];
+  assert.equal(last.label, 'opentest-beta/m2');
+  assert.equal(last.previous, 'opentest-alpha/m1');
+});
+
+test('no profile label the agent can read contains a raw key', () => {
+  const { formatProfileChoice } = require('../llm/config-store');
+  const label = formatProfileChoice({
+    name: 'alpha',
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    maskedKey: 'sk-3d9…0a2d',
+    usable: true,
+  }, true);
+  assert.equal(label.includes(SECRET), false);
+  assert.match(label, /deepseek-chat/);
+  assert.match(label, /✅/);
+  assert.match(formatProfileChoice({ name: 'x', provider: 'p', model: '', maskedKey: '(empty)', usable: false }), /key 不可用/);
 });
