@@ -22,12 +22,25 @@ It is a terminal agent, not a web dashboard. You stay in your editor and your te
 # 1. Configure a model (one-time)
 npx open-test config
 
-# 2. Open the agent anywhere
+# 2. Configure browser environment (one-time)
+npx open-test browser setup
+
+# 3. Open the agent anywhere
 npx open-test run
 
-# 3. Point it at a requirement document
+# 4. Point it at a requirement document
 > @/path/to/your/requirements.md
 ```
+
+### Browser Setup
+
+On first run, OpenTest will guide you through browser environment setup for recording functionality. You have three options:
+
+1. **Use system browser** (recommended) — Use your installed Chrome/Edge/Chromium, no download required
+2. **Install Playwright Chromium** — Download a dedicated test browser (~120MB)
+3. **Skip for now** — Use other features without recording
+
+See [BROWSER_SETUP.md](BROWSER_SETUP.md) for detailed configuration guide.
 
 `config` is a wizard built so you can finish it without looking anything up. It asks one question at a time and tells you what to do at each step:
 
@@ -191,6 +204,14 @@ This writes a random password to `~/.opentest/services.json` (mode `0600`) and b
 open-test run [prompt...]        Open the agent (same as `agent`)
 open-test agent [prompt...]      Open the agent
   --print                        Run one turn and exit (for scripting)
+  --skip-browser-setup           Skip browser setup check
+
+open-test browser setup          Configure browser environment
+  --force                        Force reconfiguration
+open-test browser status         Show browser configuration
+open-test browser verify         Verify browser works
+open-test browser detect         Detect available browsers
+open-test browser reset          Reset browser configuration
 
 open-test config                 Interactive provider wizard
 open-test config set             Write one provider profile

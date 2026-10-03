@@ -81,6 +81,7 @@ test('recording maps the sandbox script onto the matching functional case', asyn
     sandboxUrl: 'https://sandbox.example/app',
     confirm: async () => true,
     now: () => 1,
+    skipBrowserCheck: true, // skip browser check in tests
     execFile: async (_file, args) => {
       const output = args[args.indexOf('-o') + 1];
       fs.writeFileSync(output, "page.getByRole('link', { name: '巡检管理' }).click();\n");
@@ -100,6 +101,7 @@ test('recording does not open the sandbox when confirmation is declined', async 
     workspace: fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-record-no-')),
     sandboxUrl: 'https://sandbox.example/app',
     confirm: async () => false,
+    skipBrowserCheck: true, // skip browser check in tests
     execFile: async () => { opened = true; },
   });
   assert.equal(result.recorded, false);

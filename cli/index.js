@@ -7,7 +7,10 @@ const { checkDependencies, installDependencies } = require('./install');
 const { checkForUpdates } = require('./update-checker');
 const { registerConfigCommand } = require('./commands/config');
 const { registerAgentCommand, startAgent } = require('./commands/agent');
+const { registerBrowserCommand } = require('./commands/browser');
 const { startGraphService, stopGraphService, logGraphService } = require('./services/local');
+const { setupBrowserEnvironment } = require('./browser/setup');
+const { loadBrowserConfig } = require('./browser/config-store');
 const pkg = require('../package.json');
 
 // Create CLI program
@@ -38,9 +41,20 @@ program
   .description('Open the terminal test agent')
   .argument('[prompt...]', 'First message. Prefix a document with @.')
   .option('--print', 'Run one turn and exit')
-    .action(async (prompt, options) => {
-      await startAgent(prompt, options);
-    });
+  .option('--skip-browser-setup', 'Skip browser setup check')
+  .action(async (prompt, options) => {
+    // Check browser configuration on first run (unless explicitly skipped)
+    if (!options.skipBrowserSetup) {
+      const browserConfig = await loadBrowserConfig();
+      if (!browserConfig.configured) {
+        console.log(chalk.yellow('\n⚠️  首次运行需要配置浏览器环境\n'));
+        await setupBrowserEnvironment();
+        console.log(''); // Add spacing
+      }
+    }
+    
+    await startAgent(prompt, options);
+  });
 
 // Command: install - Install dependencies
 program
@@ -125,9 +139,44 @@ program
       console.log();
     }
     
+    // Browser environment check
+    const { loadBrowserConfig } = require('./browser/config-store');
+    const { detectEnvironment } = require('./browser/env-detector');
+    
+    console.log(chalk.bold('Browser Environment:'));
+    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+    
+    const browserConfig = await loadBrowserConfig();
+    const env = await detectEnvironment();
+    
+    if (browserConfig.configured && browserConfig.type !== 'none') {
+      console.log(chalk.green('✓ Configured:'));
+      const browserName = browserConfig.browser?.name || 'Playwright Chromium';
+      const browserVersion = browserConfig.browser?.version || 'unknown';
+      console.log(chalk.green(`  ✓ ${browserName} v${browserVersion}`));
+    } else {
+      console.log(chalk.yellow('⚠ Not configured'));
+      console.log(chalk.gray('  Run: npx open-test browser setup'));
+    }
+    
+    // Show detected browsers
+    if (env.systemBrowsers.length > 0 || env.playwright.installed) {
+      console.log(chalk.gray('\n  Available browsers:'));
+      env.systemBrowsers.forEach(browser => {
+        console.log(chalk.gray(`    • ${browser.name} v${browser.version}`));
+      });
+      if (env.playwright.installed) {
+        console.log(chalk.gray(`    • Playwright Chromium v${env.playwright.version}`));
+      }
+    }
+    console.log();
+    
     // Overall status
-    if (allInstalled) {
+    if (allInstalled && browserConfig.configured) {
       console.log(chalk.green.bold('✅ System is healthy!\n'));
+    } else if (allInstalled) {
+      console.log(chalk.yellow.bold('⚠️  System is ready, browser setup recommended'));
+      console.log(chalk.blue('Run: npx open-test browser setup\n'));
     } else {
       console.log(chalk.yellow.bold('⚠️  Some dependencies are missing'));
       console.log(chalk.blue('Run: npx open-test install\n'));
@@ -164,6 +213,7 @@ program
 
 registerConfigCommand(program);
 registerAgentCommand(program);
+registerBrowserCommand(program);
 
 if (process.argv.length === 2 && process.stdout.isTTY) {
   process.argv.push('agent');

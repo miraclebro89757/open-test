@@ -53,6 +53,7 @@
     "neo4j-driver": "^5.28.3",
     "ora": "^5.4.1",
     "playwright": "1.63.0",
+    "playwright-core": "^1.48.0",
     "semver": "^7.5.4"
   },
   "preferGlobal": true,
