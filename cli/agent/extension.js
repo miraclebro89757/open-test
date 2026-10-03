@@ -9,6 +9,7 @@ const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
 const { playwrightInvoke } = require('./tools/playwright-cli');
 const { recordScenario } = require('./tools/record');
+const { selectRecordingMode, getModeConfirmationMessage } = require('./tools/record-mode-selector');
 const { createLLMClient } = require('./tools/llm-client');
 const { pickFolder, canPickFolder } = require('./tools/folder-picker');
 const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
@@ -555,6 +556,12 @@ module.exports = async function opentestExtension(pi) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       await ensureChromium();
       
+      // Interactive mode selection if no mode specified and UI available
+      let selectedMode = params.mode || 'ui+api';
+      if (!params.mode && ctx.hasUI) {
+        selectedMode = await selectRecordingMode({ hasUI: true });
+      }
+      
       // Resolve a real LLM client for HAR analysis; null when unconfigured,
       // which makes the analyzer fall back to rules instead of faking a reply.
       const llmClient = createLLMClient({ cwd: ctx.cwd });
@@ -563,12 +570,14 @@ module.exports = async function opentestExtension(pi) {
         workspace,
         sandboxUrl: params.sandboxUrl,
         caseId: params.caseId,
-        mode: params.mode || 'ui+api',
+        mode: selectedMode,
         llmClient,
         execFile: (file, args, options) => execFileAsync(file, args, options),
         confirm: async (summary) => {
           if (!ctx.hasUI) return false;
-          return ctx.ui.confirm('录制沙箱场景', summary);
+          // Enhanced confirmation with mode info
+          const enhancedSummary = getModeConfirmationMessage(selectedMode, params.sandboxUrl);
+          return ctx.ui.confirm('录制沙箱场景', enhancedSummary);
         },
       });
       
