@@ -68,6 +68,37 @@ function agentHome() {
   return process.env.OPENTEST_HOME || os.homedir();
 }
 
+/**
+ * Show folder picker dialog with fallback to manual input
+ * @param {object} ctx - Context with UI methods
+ * @param {string} title - Dialog title
+ * @param {string} placeholder - Default path for manual input
+ * @returns {Promise<string|null>} Selected folder path or null if cancelled
+ */
+async function selectFolder(ctx, title = '选择文件夹', placeholder = '~/Desktop') {
+  // Try modern folder picker APIs
+  if (typeof ctx.ui.selectFolder === 'function') {
+    return await ctx.ui.selectFolder(title);
+  }
+  
+  if (typeof ctx.ui.pickFolder === 'function') {
+    return await ctx.ui.pickFolder({ title });
+  }
+  
+  if (typeof ctx.ui.showOpenDialog === 'function') {
+    const result = await ctx.ui.showOpenDialog({
+      title,
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: '选择',
+    });
+    return result && result.length > 0 ? result[0] : null;
+  }
+  
+  // Fallback to manual input
+  ctx.ui.notify('文件夹选择器不可用，请手动输入路径', 'info');
+  return await ctx.ui.input(title, placeholder);
+}
+
 async function reviewHeals(ctx, project) {
   const pending = pendingInProject(project);
   if (!pending.length) {
@@ -122,9 +153,17 @@ async function switchProject(ctx, args) {
   let target = String(args || '').trim();
   if (!target) {
     const recent = readProject(agentHome()).recent;
-    const picked = await ctx.ui.select('切换项目', recent.length ? [...recent, '输入路径'] : ['输入路径']);
+    const options = recent.length ? [...recent, '浏览文件夹...', '手动输入路径'] : ['浏览文件夹...', '手动输入路径'];
+    const picked = await ctx.ui.select('切换项目', options);
     if (!picked) return;
-    target = picked === '输入路径' ? await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通') : picked;
+    
+    if (picked === '浏览文件夹...') {
+      target = await selectFolder(ctx, '选择项目目录', '~/Desktop/易训/筑安通');
+    } else if (picked === '手动输入路径') {
+      target = await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通');
+    } else {
+      target = picked; // Use recent project
+    }
   }
   if (!target) return;
   try {
@@ -481,3 +520,4 @@ module.exports = async function opentestExtension(pi) {
 };
 
 module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;
+module.exports.selectFolder = selectFolder;
