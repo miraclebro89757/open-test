@@ -313,7 +313,11 @@ pi.registerTool({
 - 端到端渲染测试
 - 空分析处理
 
-**测试覆盖率**：~85%+（核心逻辑 100%）
+**测试覆盖**：`npm test` 中的 `har-analyzer.test.js`（10 例）、
+`har-renderer.test.js`（13 例）、`record.test.js`（10 例）全部通过。
+
+> 注：早期版本此处标注「~85%+ 覆盖率」，但两个 HAR 测试文件当时是 Jest 风格、
+> 未接入 `npm test`，实际从未运行过。已于 2026-10-03 改写为 `node:test` 并接入。
 
 ---
 
@@ -713,7 +717,6 @@ pip install pytest-json-report pytest-html
 
 - [TODO.md](./TODO.md) - 项目待办事项
 - [SKILL.md](./.pi/skills/opentest-qa/SKILL.md) - AI Agent 使用指南
-- [HUMAN-READABLE-TESTCASE-SYSTEM.md](./knowledge-graph/HUMAN-READABLE-TESTCASE-SYSTEM.md) - 人类可读测试用例系统
 
 ### 外部资源
 
@@ -729,10 +732,10 @@ pip install pytest-json-report pytest-html
 成功实现了 **UI + API 同步录制系统**，完成了以下里程碑：
 
 ✅ **3 种录制模式**：ui+api、ui-only、api-only  
-✅ **AI 驱动分析**：变量提取、依赖检测、敏感数据标记  
+✅ **AI 驱动分析**：变量提取、依赖检测、敏感数据标记（未配置模型时退回规则引擎，结果以 `source` 字段标注）  
 ✅ **自动脚本生成**：pytest + cleanup hooks + 环境变量管理  
 ✅ **执行器支持**：失败重试、并行执行、多格式报告  
-✅ **完整测试覆盖**：8 个文件，2500+ 行代码，85%+ 覆盖率  
+✅ **测试接入**：`npm test` 覆盖分析、渲染与用例标记（33 例）  
 ✅ **生产就绪**：文档完善、最佳实践、安全考虑  
 
 **下一步行动**：

@@ -171,9 +171,13 @@ npx open-test@latest init my-project
   },
   "files": [
     "cli/",
-    "docker-compose.yml",
-    "*.md",
-    "LICENSE"
+    ".pi/",
+    "schemas/",
+    "opentest.config.example.json",
+    "README.md",
+    "PUBLISHING.md",
+    "LICENSE",
+    "!cli/**/*.test.js"
   ],
   "keywords": [
     "test",
@@ -191,13 +195,18 @@ npx open-test@latest init my-project
 }
 ```
 
-### .npmignore Configuration
+### Publishing surface
 
-Important files to exclude:
-- Development files (.env, .git)
-- Test artifacts (tests/target/)
-- Large binary files
-- IDE configurations
+The `files` allowlist in `package.json` decides what ships — currently `cli/`, `.pi/`, `schemas/`, the config example, and the docs. There is deliberately no `.npmignore`: npm ignores it whenever `files` is present, so keeping one would only create a second source of truth that silently disagrees.
+
+Exclude a file with a negation pattern inside `files`:
+
+```json
+"files": [
+  "cli/",
+  "!cli/**/*.test.js"
+]
+```
 
 ## Version Management
 
@@ -263,13 +272,12 @@ npm publish
 
 ### Issue: "Package too large"
 
-Solution: Check .npmignore
+Solution: check the `files` allowlist in `package.json`, then verify.
 ```bash
-# See what's included
+# See exactly what would ship
 npm pack --dry-run
 
-# Add large files to .npmignore
-echo "large-directory/" >> .npmignore
+# Exclude it with a negation pattern in "files", e.g. "!cli/**/*.test.js"
 ```
 
 ## Continuous Deployment

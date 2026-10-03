@@ -4,10 +4,6 @@ const { Command } = require('commander');
 const chalk = require('chalk');
 const figlet = require('figlet');
 const { checkDependencies, installDependencies } = require('./install');
-const { runTests } = require('./commands/run');
-const { initProject } = require('./commands/init');
-const { startServices } = require('./commands/start');
-const { statusCheck } = require('./commands/status');
 const { checkForUpdates } = require('./update-checker');
 const { registerConfigCommand } = require('./commands/config');
 const { registerAgentCommand, startAgent } = require('./commands/agent');
@@ -46,77 +42,6 @@ program
       await startAgent(prompt, options);
     });
 
-// Command: init - Initialize new project
-program
-  .command('init [project-name]')
-  .description('📂 Initialize a new OpenTest project')
-  .option('-t, --template <template>', 'Project template', 'basic')
-  .action(async (projectName, options) => {
-    showBanner();
-    await initProject(projectName, options);
-  });
-
-// Command: start - Start services only
-program
-  .command('start')
-  .description('🐳 Start OpenTest services')
-  .option('-d, --detached', 'Run in detached mode')
-  .action(async (options) => {
-    await startServices(options);
-  });
-
-// Command: stop - Stop services
-program
-  .command('stop')
-  .description('⏹️  Stop OpenTest services')
-  .action(async () => {
-    const { execSync } = require('child_process');
-    console.log(chalk.blue('Stopping OpenTest services...'));
-    try {
-      execSync('docker compose down', { stdio: 'inherit' });
-      console.log(chalk.green('✓ Services stopped'));
-    } catch (error) {
-      console.error(chalk.red('Failed to stop services'));
-      process.exit(1);
-    }
-  });
-
-// Command: status - Check service status
-program
-  .command('status')
-  .description('📊 Check OpenTest service status')
-  .action(async () => {
-    showBanner();
-    await statusCheck();
-  });
-
-// Command: test - Run tests
-program
-  .command('test [suite]')
-  .description('🧪 Run integration tests')
-  .option('-v, --verbose', 'Verbose output')
-  .action(async (suite, options) => {
-    await runTests(suite, options);
-  });
-
-// Command: logs - View service logs
-program
-  .command('logs [service]')
-  .description('📜 View service logs')
-  .option('-f, --follow', 'Follow log output')
-  .action(async (service, options) => {
-    const { execSync } = require('child_process');
-    const cmd = service 
-      ? `docker compose logs ${options.follow ? '-f' : ''} ${service}`
-      : `docker compose logs ${options.follow ? '-f' : ''}`;
-    
-    try {
-      execSync(cmd, { stdio: 'inherit' });
-    } catch (error) {
-      console.error(chalk.red('Failed to view logs'));
-    }
-  });
-
 // Command: install - Install dependencies
 program
   .command('install')
@@ -151,64 +76,10 @@ program
       console.log(chalk.cyan('  npm update -g open-test\n'));
       console.log(chalk.gray('Or use npx (always latest):'));
       console.log(chalk.cyan('  npx open-test@latest run\n'));
-      console.log(chalk.gray('See full guide:'));
-      console.log(chalk.cyan('  cat UPGRADE_GUIDE.md\n'));
     } else {
       console.log(chalk.green('✅ You are using the latest version!'));
       console.log(chalk.cyan(`Version: ${pkg.version}\n`));
     }
-  });
-
-// Command: upgrade - Upgrade OpenTest (global install only)
-program
-  .command('upgrade')
-  .description('⬆️  Upgrade OpenTest to latest version')
-  .option('-f, --force', 'Force upgrade even if latest')
-  .action(async (options) => {
-    showBanner();
-    console.log(chalk.blue('Upgrading OpenTest...\n'));
-    
-    const updateInfo = await checkForUpdates(pkg.version);
-    
-    if (!updateInfo.updateAvailable && !options.force) {
-      console.log(chalk.green('✅ Already using latest version'));
-      console.log(chalk.cyan(`Version: ${pkg.version}\n`));
-      return;
-    }
-    
-    const { execSync } = require('child_process');
-    const ora = require('ora');
-    const spinner = ora('Upgrading...').start();
-    
-    try {
-      execSync('npm update -g open-test', { stdio: 'pipe' });
-      spinner.succeed(chalk.green('Upgraded successfully!'));
-      
-      if (updateInfo.latestVersion) {
-        console.log(chalk.cyan(`New version: ${updateInfo.latestVersion}\n`));
-      }
-      
-      console.log(chalk.gray('Verify with:'));
-      console.log(chalk.cyan('  open-test --version\n'));
-    } catch (error) {
-      spinner.fail(chalk.red('Upgrade failed'));
-      console.log(chalk.yellow('\n💡 Try manual upgrade:'));
-      console.log(chalk.cyan('  npm update -g open-test'));
-      console.log(chalk.gray('\nOr use npx (always latest):'));
-      console.log(chalk.cyan('  npx open-test@latest run\n'));
-    }
-  });
-
-// Command: changelog - View changelog
-program
-  .command('changelog')
-  .description('📋 View update changelog')
-  .action(() => {
-    console.log(chalk.cyan('\n📋 OpenTest Changelog\n'));
-    console.log(chalk.gray('View full changelog at:'));
-    console.log(chalk.blue('https://github.com/miraclebro89757/open-test/releases\n'));
-    console.log(chalk.gray('Or read UPGRADE_GUIDE.md for migration instructions.'));
-    console.log();
   });
 
 // Command: doctor - Check system health

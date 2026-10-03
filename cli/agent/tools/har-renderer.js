@@ -23,16 +23,20 @@ const path = require('path');
  * @param {object} options - Rendering options
  * @returns {Promise<object>} Rendered scripts
  */
+/** Libraries stay quiet by default; the caller decides what to print. */
+const QUIET = { log() {}, warn() {}, error() {} };
+
 async function renderHARToPytest(harPath, analysis, options = {}) {
-  console.log(`🎨 Rendering HAR to pytest: ${harPath}`);
-  
   const {
     testName = 'test_api_scenario',
     baseUrl = null,
     timeout = 30,
     includeCleanup = true,
     includeAssertions = true,
+    logger = QUIET,
   } = options;
+
+  logger.log(`🎨 Rendering HAR to pytest: ${harPath}`);
   
   // Load HAR
   const harContent = await fs.readFile(harPath, 'utf-8');
@@ -73,7 +77,7 @@ async function renderHARToPytest(harPath, analysis, options = {}) {
   // Generate README
   const readme = generateTestReadme(testName, analysis);
   
-  console.log(`  ✓ Generated pytest script (${pytestScript.length} chars)`);
+  logger.log(`  ✓ Generated pytest script (${pytestScript.length} chars)`);
   
   return {
     pytestScript,
@@ -553,7 +557,7 @@ async function main() {
     const analysis = JSON.parse(analysisContent);
     
     // Render scripts
-    const scripts = await renderHARToPytest(harPath, analysis);
+    const scripts = await renderHARToPytest(harPath, analysis, { logger: console });
     
     // Export
     await exportScripts(scripts, outputDir);

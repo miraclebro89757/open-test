@@ -43,8 +43,11 @@ const DYNAMIC_PATTERNS = {
  * @param {object} llmClient - LLM client for AI analysis
  * @returns {Promise<object>} Analysis result
  */
-async function analyzeHAR(harPath, llmClient) {
-  console.log(`📊 Analyzing HAR file: ${harPath}`);
+/** Libraries stay quiet by default; the caller decides what to print. */
+const QUIET = { log() {}, warn() {}, error() {} };
+
+async function analyzeHAR(harPath, llmClient, { logger = QUIET } = {}) {
+  logger.log(`📊 Analyzing HAR file: ${harPath}`);
   
   // Step 1: Load and parse HAR
   const harContent = await fs.readFile(harPath, 'utf-8');
@@ -55,16 +58,17 @@ async function analyzeHAR(harPath, llmClient) {
   }
   
   const entries = har.log.entries;
-  console.log(`  ✓ Found ${entries.length} HTTP requests`);
+  logger.log(`  ✓ Found ${entries.length} HTTP requests`);
   
   // Step 2: Basic extraction (no AI needed)
   const basicAnalysis = extractBasicInfo(entries);
   
-  // Step 3: AI-powered deep analysis
-  const aiAnalysis = await performAIAnalysis(entries, llmClient);
+  // Step 3: AI-powered deep analysis, with a rule-based fallback
+  const aiAnalysis = await performAIAnalysis(entries, llmClient, { logger });
   
   // Step 4: Merge results
   const result = {
+    source: aiAnalysis.source,
     summary: {
       totalRequests: entries.length,
       uniqueEndpoints: basicAnalysis.endpoints.length,
@@ -80,10 +84,10 @@ async function analyzeHAR(harPath, llmClient) {
     recommendations: aiAnalysis.recommendations,
   };
   
-  console.log(`  ✓ Analysis complete`);
-  console.log(`    - Extracted ${result.variables.length} variables`);
-  console.log(`    - Identified ${result.dependencies.length} dependencies`);
-  console.log(`    - Flagged ${result.sensitiveData.length} sensitive fields`);
+  logger.log(`  ✓ Analysis complete`);
+  logger.log(`    - Extracted ${result.variables.length} variables`);
+  logger.log(`    - Identified ${result.dependencies.length} dependencies`);
+  logger.log(`    - Flagged ${result.sensitiveData.length} sensitive fields`);
   
   return result;
 }
@@ -139,7 +143,12 @@ function detectSensitiveData(data, index, type, results) {
 /**
  * Perform AI-powered analysis using LLM
  */
-async function performAIAnalysis(entries, llmClient) {
+async function performAIAnalysis(entries, llmClient, { logger = QUIET } = {}) {
+  if (!llmClient || typeof llmClient.chat !== 'function') {
+    logger.warn('  ⚠ No usable LLM profile, using rule-based analysis');
+    return { ...fallbackAnalysis(entries), source: 'rules' };
+  }
+
   // Prepare compact representation for LLM
   const compactEntries = entries.slice(0, 50).map((entry, idx) => ({
     index: idx,
@@ -169,11 +178,25 @@ async function performAIAnalysis(entries, llmClient) {
     ]);
     
     const result = JSON.parse(response);
-    return result;
+    return { ...normalizeAIResult(result), source: 'ai' };
   } catch (error) {
-    console.warn(`  ⚠ AI analysis failed: ${error.message}, using fallback`);
-    return fallbackAnalysis(entries);
+    logger.warn(`  ⚠ AI analysis failed: ${error.message}, using fallback`);
+    return { ...fallbackAnalysis(entries), source: 'rules' };
   }
+}
+
+/**
+ * Models routinely return partial or loosely shaped objects. Fill in the
+ * contract the renderer depends on so one bad field cannot break the script.
+ */
+function normalizeAIResult(result) {
+  const asArray = (value) => (Array.isArray(value) ? value : []);
+  return {
+    variables: asArray(result.variables),
+    dependencies: asArray(result.dependencies),
+    requestChains: asArray(result.requestChains),
+    recommendations: asArray(result.recommendations),
+  };
 }
 
 /**
@@ -362,7 +385,7 @@ async function main() {
   };
   
   try {
-    const analysis = await analyzeHAR(harPath, mockLLM);
+    const analysis = await analyzeHAR(harPath, mockLLM, { logger: console });
     await exportAnalysis(analysis, outputPath);
     
     console.log('\n✅ HAR analysis complete!');
@@ -382,6 +405,7 @@ module.exports = {
   extractBasicInfo,
   performAIAnalysis,
   fallbackAnalysis,
+  normalizeAIResult,
   SENSITIVE_PATTERNS,
   DYNAMIC_PATTERNS,
 };

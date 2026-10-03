@@ -1,334 +1,238 @@
-/**
- * Integration tests for HAR Analyzer
- */
+'use strict';
 
+const test = require('node:test');
+const assert = require('node:assert/strict');
 const fs = require('fs').promises;
 const path = require('path');
+const os = require('os');
 const {
   analyzeHAR,
   extractBasicInfo,
   performAIAnalysis,
   fallbackAnalysis,
+  normalizeAIResult,
   SENSITIVE_PATTERNS,
   DYNAMIC_PATTERNS,
 } = require('./har-analyzer');
 
-describe('HAR Analyzer', () => {
-  const fixturesDir = path.join(__dirname, '__fixtures__');
-  const testHarPath = path.join(fixturesDir, 'test.har');
-  
-  beforeAll(async () => {
-    // Create fixtures directory
-    await fs.mkdir(fixturesDir, { recursive: true });
-    
-    // Create sample HAR file
-    const sampleHAR = {
-      log: {
-        version: '1.2',
-        creator: { name: 'OpenTest', version: '1.0' },
-        entries: [
-          // Entry 0: Login request
-          {
-            startedDateTime: '2024-01-01T10:00:00.000Z',
-            time: 150,
-            request: {
-              method: 'POST',
-              url: 'https://api.example.com/auth/login',
-              headers: [
-                { name: 'Content-Type', value: 'application/json' },
-              ],
-              postData: {
-                mimeType: 'application/json',
-                text: JSON.stringify({
-                  username: 'test@example.com',
-                  password: 'secret123',
-                }),
-              },
-            },
-            response: {
-              status: 200,
-              headers: [
-                { name: 'Content-Type', value: 'application/json' },
-              ],
-              content: {
-                mimeType: 'application/json',
-                text: JSON.stringify({
-                  token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature',
-                  userId: '12345',
-                  expiresIn: 3600,
-                }),
-              },
+function sampleHAR() {
+  return {
+    log: {
+      version: '1.2',
+      creator: { name: 'OpenTest', version: '1.0' },
+      entries: [
+        {
+          startedDateTime: '2024-01-01T10:00:00.000Z',
+          time: 150,
+          request: {
+            method: 'POST',
+            url: 'https://api.example.com/auth/login',
+            headers: [{ name: 'Content-Type', value: 'application/json' }],
+            postData: {
+              mimeType: 'application/json',
+              text: JSON.stringify({ username: 'test@example.com', password: 'secret123' }),
             },
           },
-          // Entry 1: Get user profile (uses token from login)
-          {
-            startedDateTime: '2024-01-01T10:00:01.000Z',
-            time: 80,
-            request: {
-              method: 'GET',
-              url: 'https://api.example.com/users/12345',
-              headers: [
-                { name: 'Authorization', value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature' },
-                { name: 'Accept', value: 'application/json' },
-              ],
-            },
-            response: {
-              status: 200,
-              headers: [
-                { name: 'Content-Type', value: 'application/json' },
-              ],
-              content: {
-                mimeType: 'application/json',
-                text: JSON.stringify({
-                  id: '12345',
-                  name: 'Test User',
-                  email: 'test@example.com',
-                }),
-              },
+          response: {
+            status: 200,
+            headers: [{ name: 'Content-Type', value: 'application/json' }],
+            content: {
+              mimeType: 'application/json',
+              text: JSON.stringify({
+                token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature',
+                userId: '12345',
+                expiresIn: 3600,
+              }),
             },
           },
-          // Entry 2: Create resource (uses token)
-          {
-            startedDateTime: '2024-01-01T10:00:02.000Z',
-            time: 120,
-            request: {
-              method: 'POST',
-              url: 'https://api.example.com/resources',
-              headers: [
-                { name: 'Authorization', value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature' },
-                { name: 'Content-Type', value: 'application/json' },
-              ],
-              postData: {
-                mimeType: 'application/json',
-                text: JSON.stringify({
-                  name: 'New Resource',
-                  type: 'document',
-                }),
+        },
+        {
+          startedDateTime: '2024-01-01T10:00:01.000Z',
+          time: 80,
+          request: {
+            method: 'GET',
+            url: 'https://api.example.com/users/12345',
+            headers: [
+              {
+                name: 'Authorization',
+                value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature',
               },
-            },
-            response: {
-              status: 201,
-              headers: [
-                { name: 'Content-Type', value: 'application/json' },
-              ],
-              content: {
-                mimeType: 'application/json',
-                text: JSON.stringify({
-                  id: 'abc-def-123',
-                  name: 'New Resource',
-                  createdAt: 1704103202000,
-                }),
-              },
+              { name: 'Accept', value: 'application/json' },
+            ],
+          },
+          response: {
+            status: 200,
+            headers: [{ name: 'Content-Type', value: 'application/json' }],
+            content: {
+              mimeType: 'application/json',
+              text: JSON.stringify({ id: '12345', name: 'Test User', email: 'test@example.com' }),
             },
           },
-        ],
-      },
-    };
-    
-    await fs.writeFile(testHarPath, JSON.stringify(sampleHAR, null, 2), 'utf-8');
+        },
+        {
+          startedDateTime: '2024-01-01T10:00:02.000Z',
+          time: 120,
+          request: {
+            method: 'POST',
+            url: 'https://api.example.com/resources',
+            headers: [
+              {
+                name: 'Authorization',
+                value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature',
+              },
+              { name: 'Content-Type', value: 'application/json' },
+            ],
+            postData: {
+              mimeType: 'application/json',
+              text: JSON.stringify({ name: 'New Resource', type: 'document' }),
+            },
+          },
+          response: {
+            status: 201,
+            headers: [{ name: 'Content-Type', value: 'application/json' }],
+            content: {
+              mimeType: 'application/json',
+              text: JSON.stringify({ id: 'abc-def-123', name: 'New Resource', createdAt: 1704103202000 }),
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
+async function withFixture(run) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'opentest-har-'));
+  const harPath = path.join(dir, 'test.har');
+  await fs.writeFile(harPath, JSON.stringify(sampleHAR(), null, 2), 'utf-8');
+  try {
+    return await run(harPath, dir);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function loadEntries(harPath) {
+  return JSON.parse(await fs.readFile(harPath, 'utf-8')).log.entries;
+}
+
+test('extractBasicInfo extracts endpoints and sensitive fields', async () => {
+  await withFixture(async (harPath) => {
+    const result = extractBasicInfo(await loadEntries(harPath));
+
+    assert.equal(result.endpoints.length, 3);
+    assert.ok(result.endpoints.includes('POST /auth/login'));
+    assert.ok(result.endpoints.includes('GET /users/12345'));
+    assert.ok(result.endpoints.includes('POST /resources'));
+
+    assert.ok(result.sensitiveFields.length > 0);
+    const categories = result.sensitiveFields.map((field) => field.category);
+    assert.ok(categories.includes('password'));
+    assert.ok(categories.includes('token'));
   });
-  
-  afterAll(async () => {
-    // Cleanup fixtures
-    try {
-      await fs.rm(fixturesDir, { recursive: true });
-    } catch (error) {
-      // Ignore cleanup errors
+});
+
+test('fallbackAnalysis works without AI and keeps the contract', async () => {
+  await withFixture(async (harPath) => {
+    const result = fallbackAnalysis(await loadEntries(harPath));
+
+    assert.ok(Array.isArray(result.variables));
+    assert.ok(Array.isArray(result.dependencies));
+    assert.ok(Array.isArray(result.requestChains));
+    assert.ok(Array.isArray(result.recommendations));
+
+    assert.ok(result.variables.length > 0);
+    assert.equal(result.requestChains.length, 1);
+    assert.deepEqual(result.requestChains[0].requests, [0, 1, 2]);
+  });
+});
+
+test('analyzeHAR uses the AI result and reports source ai', async () => {
+  await withFixture(async (harPath) => {
+    const mockLLM = {
+      chat: async () =>
+        JSON.stringify({
+          variables: [{ name: 'auth_token', location: 'response[0].body.token', type: 'string', usedIn: [1, 2] }],
+          dependencies: [
+            { from: 0, to: 1, variable: 'auth_token', extraction: 'response.body.token', injection: 'headers.Authorization' },
+          ],
+          requestChains: [{ name: 'User Authentication Flow', requests: [0, 1, 2], purpose: 'Login and verify' }],
+          recommendations: ['Extract auth_token from login response'],
+        }),
+    };
+
+    const result = await analyzeHAR(harPath, mockLLM);
+
+    assert.equal(result.source, 'ai');
+    assert.equal(result.summary.totalRequests, 3);
+    assert.equal(result.summary.uniqueEndpoints, 3);
+    assert.equal(result.variables.length, 1);
+    assert.equal(result.dependencies.length, 1);
+  });
+});
+
+test('analyzeHAR falls back to rules when the model call throws', async () => {
+  await withFixture(async (harPath) => {
+    const failingLLM = { chat: async () => { throw new Error('LLM service unavailable'); } };
+    const result = await analyzeHAR(harPath, failingLLM);
+
+    assert.equal(result.source, 'rules');
+    assert.ok(result.variables.length > 0);
+    assert.ok(result.recommendations.some((item) => item.includes('Manual review')));
+  });
+});
+
+test('analyzeHAR falls back to rules when no client is configured', async () => {
+  await withFixture(async (harPath) => {
+    for (const client of [null, undefined, {}]) {
+      const result = await analyzeHAR(harPath, client);
+      assert.equal(result.source, 'rules');
+      assert.ok(result.variables.length > 0);
     }
   });
-  
-  describe('extractBasicInfo', () => {
-    test('should extract endpoints from HAR entries', async () => {
-      const harContent = await fs.readFile(testHarPath, 'utf-8');
-      const har = JSON.parse(harContent);
-      const result = extractBasicInfo(har.log.entries);
-      
-      expect(result.endpoints).toHaveLength(3);
-      expect(result.endpoints).toContain('POST /auth/login');
-      expect(result.endpoints).toContain('GET /users/12345');
-      expect(result.endpoints).toContain('POST /resources');
-    });
-    
-    test('should detect sensitive data patterns', async () => {
-      const harContent = await fs.readFile(testHarPath, 'utf-8');
-      const har = JSON.parse(harContent);
-      const result = extractBasicInfo(har.log.entries);
-      
-      // Should detect password, token in requests/responses
-      expect(result.sensitiveFields.length).toBeGreaterThan(0);
-      
-      const categories = result.sensitiveFields.map(f => f.category);
-      expect(categories).toContain('password');
-      expect(categories).toContain('token');
-    });
+});
+
+test('normalizeAIResult fills missing fields so the renderer cannot crash', () => {
+  const normalized = normalizeAIResult({ variables: [{ name: 'token' }] });
+  assert.equal(normalized.variables.length, 1);
+  assert.deepEqual(normalized.dependencies, []);
+  assert.deepEqual(normalized.requestChains, []);
+  assert.deepEqual(normalized.recommendations, []);
+});
+
+test('performAIAnalysis survives a model returning non-JSON', async () => {
+  await withFixture(async (harPath) => {
+    const result = await performAIAnalysis(await loadEntries(harPath), { chat: async () => 'not json at all' });
+    assert.equal(result.source, 'rules');
+    assert.ok(result.variables.length > 0);
   });
-  
-  describe('fallbackAnalysis', () => {
-    test('should perform basic analysis without AI', async () => {
-      const harContent = await fs.readFile(testHarPath, 'utf-8');
-      const har = JSON.parse(harContent);
-      const result = fallbackAnalysis(har.log.entries);
-      
-      expect(result).toHaveProperty('variables');
-      expect(result).toHaveProperty('dependencies');
-      expect(result).toHaveProperty('requestChains');
-      expect(result).toHaveProperty('recommendations');
-      
-      // Should detect token in response
-      expect(result.variables.length).toBeGreaterThan(0);
-      
-      // Should have default chain
-      expect(result.requestChains).toHaveLength(1);
-      expect(result.requestChains[0].requests).toEqual([0, 1, 2]);
-    });
-    
-    test('should extract ID patterns from responses', async () => {
-      const harContent = await fs.readFile(testHarPath, 'utf-8');
-      const har = JSON.parse(harContent);
-      const result = fallbackAnalysis(har.log.entries);
-      
-      // Should detect userId and resource ID
-      const varNames = result.variables.map(v => v.name);
-      expect(varNames.some(n => n.includes('token') || n.includes('id'))).toBe(true);
-    });
+});
+
+test('analyzeHAR rejects a HAR without log.entries', async () => {
+  await withFixture(async (_harPath, dir) => {
+    const invalid = path.join(dir, 'invalid.har');
+    await fs.writeFile(invalid, JSON.stringify({ invalid: true }), 'utf-8');
+    await assert.rejects(() => analyzeHAR(invalid, { chat: async () => '{}' }), /Invalid HAR format/);
   });
-  
-  describe('analyzeHAR', () => {
-    test('should analyze HAR file with mock LLM client', async () => {
-      const mockLLM = {
-        chat: async () => {
-          // Simulate AI response
-          return JSON.stringify({
-            variables: [
-              {
-                name: 'auth_token',
-                location: 'response[0].body.token',
-                type: 'string',
-                usedIn: [1, 2],
-                example: 'eyJ...',
-              },
-              {
-                name: 'user_id',
-                location: 'response[0].body.userId',
-                type: 'string',
-                usedIn: [1],
-                example: '12345',
-              },
-            ],
-            dependencies: [
-              {
-                from: 0,
-                to: 1,
-                variable: 'auth_token',
-                extraction: 'response.body.token',
-                injection: 'headers.Authorization',
-              },
-              {
-                from: 0,
-                to: 2,
-                variable: 'auth_token',
-                extraction: 'response.body.token',
-                injection: 'headers.Authorization',
-              },
-            ],
-            requestChains: [
-              {
-                name: 'User Authentication Flow',
-                requests: [0, 1, 2],
-                purpose: 'Login and perform authenticated operations',
-              },
-            ],
-            recommendations: [
-              'Extract auth_token from login response',
-              'Use environment variables for credentials',
-            ],
-          });
-        },
-      };
-      
-      const result = await analyzeHAR(testHarPath, mockLLM);
-      
-      expect(result).toHaveProperty('summary');
-      expect(result).toHaveProperty('endpoints');
-      expect(result).toHaveProperty('variables');
-      expect(result).toHaveProperty('dependencies');
-      expect(result).toHaveProperty('sensitiveData');
-      
-      expect(result.summary.totalRequests).toBe(3);
-      expect(result.variables.length).toBeGreaterThan(0);
-      expect(result.dependencies.length).toBeGreaterThan(0);
-    });
-    
-    test('should handle LLM failure gracefully with fallback', async () => {
-      const failingLLM = {
-        chat: async () => {
-          throw new Error('LLM service unavailable');
-        },
-      };
-      
-      const result = await analyzeHAR(testHarPath, failingLLM);
-      
-      // Should still return results using fallback
-      expect(result).toHaveProperty('summary');
-      expect(result).toHaveProperty('variables');
-      expect(result).toHaveProperty('recommendations');
-      
-      // Fallback should recommend manual review
-      expect(result.recommendations.some(r => r.includes('Manual review'))).toBe(true);
-    });
-    
-    test('should throw error for invalid HAR file', async () => {
-      const invalidHarPath = path.join(fixturesDir, 'invalid.har');
-      await fs.writeFile(invalidHarPath, JSON.stringify({ invalid: true }), 'utf-8');
-      
-      const mockLLM = { chat: async () => '{}' };
-      
-      await expect(analyzeHAR(invalidHarPath, mockLLM)).rejects.toThrow('Invalid HAR format');
-      
-      await fs.unlink(invalidHarPath);
-    });
-  });
-  
-  describe('SENSITIVE_PATTERNS', () => {
-    test('should have correct sensitive patterns', () => {
-      expect(SENSITIVE_PATTERNS).toHaveProperty('password');
-      expect(SENSITIVE_PATTERNS).toHaveProperty('apiKey');
-      expect(SENSITIVE_PATTERNS).toHaveProperty('token');
-      expect(SENSITIVE_PATTERNS).toHaveProperty('secret');
-      expect(SENSITIVE_PATTERNS).toHaveProperty('credential');
-      
-      // Test pattern matching
-      expect(SENSITIVE_PATTERNS.password.test('password')).toBe(true);
-      expect(SENSITIVE_PATTERNS.password.test('PASSWORD')).toBe(true);
-      expect(SENSITIVE_PATTERNS.apiKey.test('api_key')).toBe(true);
-      expect(SENSITIVE_PATTERNS.token.test('authorization')).toBe(true);
-    });
-  });
-  
-  describe('DYNAMIC_PATTERNS', () => {
-    test('should match UUID pattern', () => {
-      const uuid = '550e8400-e29b-41d4-a716-446655440000';
-      const matches = uuid.match(DYNAMIC_PATTERNS.uuid);
-      expect(matches).toBeTruthy();
-      expect(matches[0]).toBe(uuid);
-    });
-    
-    test('should match JWT pattern', () => {
-      const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature';
-      const matches = jwt.match(DYNAMIC_PATTERNS.jwt);
-      expect(matches).toBeTruthy();
-    });
-    
-    test('should match timestamp pattern', () => {
-      const timestamp = '1704103202000';
-      const matches = timestamp.match(DYNAMIC_PATTERNS.timestamp);
-      expect(matches).toBeTruthy();
-    });
-    
-    test('should match numeric ID pattern', () => {
-      const id = '123456';
-      const matches = id.match(DYNAMIC_PATTERNS.numericId);
-      expect(matches).toBeTruthy();
-    });
-  });
+});
+
+test('SENSITIVE_PATTERNS matches credential field names', () => {
+  for (const key of ['password', 'apiKey', 'token', 'secret', 'credential']) {
+    assert.ok(SENSITIVE_PATTERNS[key], `missing pattern ${key}`);
+  }
+  assert.ok(SENSITIVE_PATTERNS.password.test('password'));
+  assert.ok(SENSITIVE_PATTERNS.password.test('PASSWORD'));
+  assert.ok(SENSITIVE_PATTERNS.apiKey.test('api_key'));
+  assert.ok(SENSITIVE_PATTERNS.token.test('authorization'));
+});
+
+test('DYNAMIC_PATTERNS match uuid, jwt, timestamp and numeric id', () => {
+  const uuid = '550e8400-e29b-41d4-a716-446655440000';
+  assert.equal(uuid.match(DYNAMIC_PATTERNS.uuid)[0], uuid);
+
+  const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NSJ9.signature';
+  assert.ok(jwt.match(DYNAMIC_PATTERNS.jwt));
+
+  assert.ok('1704103202000'.match(DYNAMIC_PATTERNS.timestamp));
+  assert.ok('123456'.match(DYNAMIC_PATTERNS.numericId));
 });

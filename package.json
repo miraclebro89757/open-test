@@ -9,14 +9,20 @@
   },
   "scripts": {
     "start": "node cli/index.js run",
-    "install:deps": "node cli/install.js",
-    "test": "npm run test:llm",
-    "test:llm": "node --test cli/llm/config-store.test.js cli/llm/adapter.test.js cli/agent/launch.test.js cli/agent/tools.test.js cli/agent/graph.test.js cli/agent/tasks/checkpoint.test.js cli/services/local.test.js cli/agent/commands.test.js && python3 -m unittest agent.llm.test_config agent.llm.test_adapter",
-    "test:rust": "cd tests && cargo test --all -- --nocapture",
-    "dev": "docker compose up",
-    "build": "docker compose build",
+    "test": "node --test 'cli/**/*.test.js'",
+    "dev": "node cli/services/local.js",
     "postinstall": "node cli/postinstall.js"
   },
+  "files": [
+    "cli/",
+    ".pi/",
+    "schemas/",
+    "opentest.config.example.json",
+    "README.md",
+    "PUBLISHING.md",
+    "LICENSE",
+    "!cli/**/*.test.js"
+  ],
   "keywords": [
     "test",
     "automation",

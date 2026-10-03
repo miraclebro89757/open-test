@@ -67,12 +67,13 @@ function matchRecording(cases, phrases, caseId) {
 function upsertField(body, name, value) {
   const pattern = new RegExp(`^- ${name}：.*$`, 'm');
   if (pattern.test(body)) return body.replace(pattern, `- ${name}：${value}`);
-  const newline = body.startsWith('\n') ? '\n' : '\n\n';
+  const prefix = body.startsWith('\n') ? '\n' : '';
   const rest = body.startsWith('\n') ? body.slice(1) : body;
-  return `${newline}- ${name}：${value}\n${rest}`;
+  return `${prefix}- ${name}：${value}\n${rest}`;
 }
 
-function applyAutomationTags(markdown, { matchedIds, specPath }) {
+function applyAutomationTags(markdown, { matchedIds, specPaths }) {
+  const paths = (Array.isArray(specPaths) ? specPaths : [specPaths]).filter(Boolean);
   const cases = parseCases(markdown);
   if (!cases.length) return markdown;
   let cursor = 0;
@@ -84,7 +85,7 @@ function applyAutomationTags(markdown, { matchedIds, specPath }) {
     let body = item.body;
     if (matched) {
       body = upsertField(body, '自动化', '是');
-      body = upsertField(body, '脚本', specPath);
+      if (paths.length) body = upsertField(body, '脚本', paths.join('，'));
     } else if (!hasTag) {
       body = upsertField(body, '自动化', '否');
     }
@@ -164,9 +165,9 @@ async function recordScenario({
   
   const command = playwrightInvoke(codegenArgs);
   
-  console.log(`🎬 Recording with mode: ${mode}`);
-  console.log(`   UI Script: ${mode !== 'api-only' ? specFile : 'N/A'}`);
-  console.log(`   HAR File: ${mode !== 'ui-only' ? harFile : 'N/A'}`);
+  // Progress is collected and returned in `message`; this library never prints,
+  // so the terminal UI stays in charge and tests are not corrupted by stdout.
+  const steps = [`录制模式：${mode}`];
   
   // Execute recording
   await execFile(command.file, command.args, {
@@ -190,11 +191,11 @@ async function recordScenario({
   // Process HAR file (for ui+api and api-only modes)
   if (mode !== 'ui-only') {
     if (fs.existsSync(harFile)) {
-      console.log(`📊 Analyzing HAR file...`);
+      steps.push('正在分析 HAR');
       
       try {
-        // Analyze HAR with AI (if LLM client provided)
-        const analysis = await analyzeHAR(harFile, llmClient || createMockLLM());
+        // Analyze HAR with the resolved LLM client; falls back to rules when none.
+        const analysis = await analyzeHAR(harFile, llmClient);
         
         // Save analysis
         const analysisFile = path.join(dir, `${baseName}.analysis.json`);
@@ -203,10 +204,11 @@ async function recordScenario({
           JSON.stringify(analysis, null, 2),
           'utf8'
         );
-        console.log(`   ✓ Analysis saved: ${analysisFile}`);
+        const source = analysis.source === 'ai' ? 'AI' : '规则引擎';
+        steps.push(`分析完成（${source}）：${path.basename(analysisFile)}`);
         
         // Render HAR to pytest script
-        console.log(`🎨 Rendering HAR to pytest...`);
+        steps.push('正在生成 pytest 脚本');
         const scripts = await renderHARToPytest(harFile, analysis, {
           testName: `test_${caseId || 'api_scenario'}`,
           includeCleanup: true,
@@ -215,17 +217,15 @@ async function recordScenario({
         
         // Save pytest script
         await fs.promises.writeFile(apiTestFile, scripts.pytestScript, 'utf8');
-        console.log(`   ✓ API test: ${apiTestFile}`);
+        steps.push(`API 脚本：${path.basename(apiTestFile)}`);
         
         // Save .env.example
         const envFile = path.join(dir, `${baseName}.env.example`);
         await fs.promises.writeFile(envFile, scripts.envExample, 'utf8');
-        console.log(`   ✓ Env template: ${envFile}`);
         
         // Save README
         const readmeFile = path.join(dir, `${baseName}_README.md`);
         await fs.promises.writeFile(readmeFile, scripts.readme, 'utf8');
-        console.log(`   ✓ README: ${readmeFile}`);
         
         apiScript = {
           pytestFile: apiTestFile,
@@ -235,12 +235,11 @@ async function recordScenario({
         };
         
       } catch (error) {
-        console.warn(`⚠ HAR processing failed: ${error.message}`);
-        console.warn(`   HAR file preserved at: ${harFile}`);
+        steps.push(`⚠ HAR 处理失败：${error.message}`);
+        steps.push(`HAR 原件已保留：${harFile}`);
       }
     } else {
-      console.warn(`⚠ HAR file not found: ${harFile}`);
-      console.warn(`   This may happen if no API calls were captured during recording.`);
+      steps.push(`⚠ 没有找到 HAR：${path.basename(harFile)}，录制期间可能没有捕获到 API 请求。`);
     }
   }
   
@@ -259,41 +258,38 @@ async function recordScenario({
     const found = matchRecording(parseCases(markdown), phrases, caseId);
     note = found.message;
     const matchedIds = new Set(found.matches.map((item) => item.id));
-    const relativeSpec = mode !== 'api-only' ? path.posix.join('automation', specName) : '';
-    const relativeApiTest = apiScript ? path.posix.join('automation', apiTestName) : '';
-    
-    // Update automation tags with both UI and API script paths
-    let updatedMarkdown = markdown;
-    if (relativeSpec) {
-      updatedMarkdown = applyAutomationTags(updatedMarkdown, { matchedIds, specPath: relativeSpec });
-    }
-    if (relativeApiTest) {
-      updatedMarkdown = applyAutomationTags(updatedMarkdown, { matchedIds, specPath: relativeApiTest });
-    }
-    
+    const scriptPaths = [
+      mode !== 'api-only' ? path.posix.join('automation', specName) : '',
+      apiScript ? path.posix.join('automation', apiTestName) : '',
+    ].filter(Boolean);
+
+    const updatedMarkdown = applyAutomationTags(markdown, { matchedIds, specPaths: scriptPaths });
+
     await fs.promises.writeFile(file, updatedMarkdown);
     found.matches.forEach((item) => matches.push({ 
       id: item.id, 
       file: name, 
-      uiSpec: relativeSpec,
-      apiSpec: relativeApiTest,
+      uiSpec: mode !== 'api-only' ? path.posix.join('automation', specName) : '',
+      apiSpec: apiScript ? path.posix.join('automation', apiTestName) : '',
     }));
   }
   
   const listed = matches.length ? matches.map((item) => `${item.id} 自动化：是`).join('，') : '没有用例被标为自动化';
   
   // Build result message
-  let message = `录制完成（模式：${mode}）\n`;
+  const lines = [`录制完成（模式：${mode}）`];
+  steps.forEach((step) => lines.push(`  ${step}`));
   if (mode !== 'api-only') {
-    message += `  UI 脚本：${specFile}\n`;
+    lines.push(`  UI 脚本：${specFile}`);
   }
   if (apiScript) {
-    message += `  API 脚本：${apiScript.pytestFile}\n`;
-    message += `  变量提取：${apiScript.analysis.variables.length} 个\n`;
-    message += `  请求依赖：${apiScript.analysis.dependencies.length} 条\n`;
+    lines.push(`  API 脚本：${apiScript.pytestFile}`);
+    lines.push(`  变量提取：${apiScript.analysis.variables.length} 个`);
+    lines.push(`  请求依赖：${apiScript.analysis.dependencies.length} 条`);
   }
-  message += `${note}${listed}`;
-  
+  lines.push(`${note}${listed}`);
+  const message = lines.join('\n');
+
   return {
     recorded: true,
     mode,
@@ -302,17 +298,6 @@ async function recordScenario({
     apiScript,
     matches,
     message,
-  };
-}
-
-/**
- * Create mock LLM client for fallback analysis
- */
-function createMockLLM() {
-  return {
-    chat: async () => {
-      throw new Error('LLM not configured, using fallback analysis');
-    },
   };
 }
 

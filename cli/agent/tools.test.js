@@ -242,3 +242,151 @@ test('@ token is taken from the end of the line and merged ahead of project file
   assert.equal(merged.items[0].label, '文档/');
   assert.equal(merged.items[1].label, 'cli/');
 });
+
+// --- /project folder selection -------------------------------------------------
+
+function projectHome() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-project-home-'));
+}
+
+function fakeCtx(answer) {
+  const notices = [];
+  return {
+    notices,
+    offered: null,
+    ui: {
+      async select(_title, options) { this.offered = options; return answer(options); },
+      async input() { throw new Error('input should not be reached'); },
+      notify(message, type) { notices.push({ message, type }); },
+      setStatus() {},
+    },
+  };
+}
+
+test('/project offers the native folder browser on macOS', async () => {
+  const { switchProject } = require('./extension');
+  const home = projectHome();
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = home;
+  try {
+    const ctx = fakeCtx(() => undefined);
+    await switchProject(ctx, '', { pickerSupported: true, pick: async () => ({ ok: true, path: '/tmp' }) });
+    assert.equal(ctx.ui.offered.includes('📁 浏览本机文件夹...'), true);
+    assert.equal(ctx.ui.offered.includes('输入新路径...'), true);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  }
+});
+
+test('/project hides the native browser where no picker exists', async () => {
+  const { switchProject } = require('./extension');
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = projectHome();
+  try {
+    const ctx = fakeCtx(() => undefined);
+    await switchProject(ctx, '', { pickerSupported: false, pick: async () => ({ ok: true, path: '/tmp' }) });
+    assert.equal(ctx.ui.offered.includes('📁 浏览本机文件夹...'), false);
+    assert.deepEqual(ctx.ui.offered, ['输入新路径...']);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  }
+});
+
+test('/project switches to the folder chosen in the native dialog', async () => {
+  const { switchProject } = require('./extension');
+  const home = projectHome();
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-picked-'));
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = home;
+  const requested = [];
+  try {
+    const ctx = fakeCtx((options) => options.includes('📁 浏览本机文件夹...') ? '📁 浏览本机文件夹...' : undefined);
+    await switchProject(ctx, '', {
+      pickerSupported: true,
+      pick: async (opts) => { requested.push(opts); return { ok: true, path: target }; },
+    });
+
+    assert.equal(requested.length, 1);
+    assert.equal(requested[0].title, '选择项目目录');
+    assert.equal(typeof requested[0].defaultPath, 'string');
+    const saved = JSON.parse(fs.readFileSync(path.join(home, '.opentest', 'project.json'), 'utf8'));
+    assert.equal(saved.current, target);
+    assert.equal(ctx.notices.some((n) => n.message.includes('当前项目')), true);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  }
+});
+
+test('/project leaves the project untouched when the dialog is cancelled', async () => {
+  const { switchProject } = require('./extension');
+  const home = projectHome();
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = home;
+  try {
+    const ctx = fakeCtx(() => '📁 浏览本机文件夹...');
+    await switchProject(ctx, '', {
+      pickerSupported: true,
+      pick: async () => ({ ok: false, reason: 'cancelled' }),
+    });
+    assert.equal(fs.existsSync(path.join(home, '.opentest', 'project.json')), false);
+    assert.equal(ctx.notices.some((n) => n.message.includes('已取消选择')), true);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  }
+});
+
+test('/project falls back to manual input when the native dialog fails', async () => {
+  const { switchProject } = require('./extension');
+  const home = projectHome();
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-fallback-'));
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = home;
+  try {
+    const ctx = fakeCtx(() => '📁 浏览本机文件夹...');
+    ctx.ui.input = async () => target;
+    await switchProject(ctx, '', {
+      pickerSupported: true,
+      pick: async () => ({ ok: false, reason: 'error', message: 'osascript: boom' }),
+    });
+
+    assert.equal(ctx.notices.some((n) => n.type === 'warning' && n.message.includes('osascript: boom')), true);
+    const saved = JSON.parse(fs.readFileSync(path.join(home, '.opentest', 'project.json'), 'utf8'));
+    assert.equal(saved.current, target);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  }
+});
+
+test('/project still switches from the recent list without touching the picker', async () => {
+  const { switchProject } = require('./extension');
+  const home = projectHome();
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-recent-'));
+  const previous = process.env.OPENTEST_HOME;
+  process.env.OPENTEST_HOME = home;
+  try {
+    fs.mkdirSync(path.join(home, '.opentest'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.opentest', 'project.json'),
+      JSON.stringify({ current: '', recent: [fs.realpathSync(target)] })
+    );
+    let called = false;
+    const ctx = fakeCtx((options) => options[0]);
+    await switchProject(ctx, '', {
+      pickerSupported: true,
+      pick: async () => { called = true; return { ok: true, path: '/tmp' }; },
+    });
+
+    assert.equal(called, false, 'recent entries must not open the dialog');
+    assert.deepEqual(ctx.ui.offered, [fs.realpathSync(target), '📁 浏览本机文件夹...', '输入新路径...']);
+    const saved = JSON.parse(fs.readFileSync(path.join(home, '.opentest', 'project.json'), 'utf8'));
+    assert.equal(saved.current, fs.realpathSync(target));
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_HOME;
+    else process.env.OPENTEST_HOME = previous;
+  }
+});

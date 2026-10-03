@@ -28,7 +28,6 @@ async function checkDependencies() {
     { name: 'docker', command: 'docker', required: true },
     { name: 'docker-compose', command: 'docker compose version', required: true },
     { name: 'node', command: 'node', required: true },
-    { name: 'cargo', command: 'cargo', required: false }, // Optional for tests
   ];
 
   const installed = [];
@@ -101,12 +100,7 @@ async function installDependencies(missing) {
         console.log(chalk.gray('  Linux: sudo systemctl start docker'));
         break;
 
-      case 'cargo':
-        console.log(chalk.blue('\nRust/Cargo (optional, for tests):'));
-        console.log(chalk.gray('  curl --proto \'=https\' --tlsv1.2 -sSf https://sh.rustup.rs | sh'));
-        break;
-
-      case 'node':
+case 'node':
         console.log(chalk.blue('\nNode.js:'));
         console.log(chalk.gray('  macOS:   brew install node'));
         console.log(chalk.gray('  Or: https://nodejs.org/'));

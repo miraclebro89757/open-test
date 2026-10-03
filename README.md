@@ -78,6 +78,16 @@ Two things it is explicitly instructed never to do: fabricate pass rates or defe
 
 `/record` asks for the sandbox URL, then opens a Playwright codegen window. You perform the scenario per your case; close the window when done. The agent then maps the recorded UI text back onto your functional cases: matched cases flip to `- 自动化：是` and record the script path, and unmatched cases get tagged `- 自动化：否`.
 
+Recording has three modes, chosen when you call `/record`:
+
+| Mode | Produces |
+|---|---|
+| `ui+api` (default) | Playwright spec **and** a pytest API script generated from the HAR |
+| `ui-only` | Playwright spec only |
+| `api-only` | pytest API script only |
+
+In `ui+api` the HAR is analyzed for variables, request dependencies, and secrets. When an LLM profile is configured the analysis is model-driven; otherwise a rule engine produces the same structure and the result is labelled `source: "rules"` so you always know which ran. Credentials are written to a `.env.example` and read from the environment — never hardcoded into the script.
+
 When a selector breaks during `/run`, the agent calls `heal_selector` immediately rather than stopping to ask. Both the before and after versions are kept, and the current file uses the replacement so the run can finish. **You** decide which version survives, with `/heal`.
 
 ## 📁 Where Files Land
@@ -103,6 +113,8 @@ Artifacts go to a visible folder next to your requirement document, named for th
 Sibling products in the same folder each get their own directory — 绩效管理 does not leak into 筑安通.
 
 Use `/project` to pin a working directory; after that, steps write there. The selection persists in `~/.opentest/project.json` along with your recent directories.
+
+The picker lists your recent directories first. On macOS it also offers **📁 浏览本机文件夹...**, which opens the native Finder folder chooser and starts at your current project. Closing the dialog without choosing leaves the project unchanged; if the dialog cannot open, it falls back to typed input. Other platforms get recent entries plus typed input.
 
 ## 🧠 The Requirement Graph
 
@@ -136,12 +148,9 @@ open-test config list            Show profiles with keys masked
 
 open-test services [up|stop|logs]   Bundled local Neo4j
 
+open-test install                Check and install host dependencies
 open-test doctor                 Dependency and update health check
-open-test status                 Legacy service status (Docker Compose)
-open-test init [name]            Legacy project scaffold
-open-test start|stop|logs        Legacy Docker Compose service control
-open-test test [suite]           Legacy Rust integration tests
-open-test update|upgrade         Version checks
+open-test update                 Check npm for a newer version
 ```
 
 ### Inside the agent
@@ -190,34 +199,29 @@ export JIRA_JQL="ORDER BY updated DESC"   # optional
 | `OPENTEST_HOME` | Override `~/.opentest` |
 | `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | Point at an existing Neo4j instead of the bundled one |
 
-API keys are never written into case files, automation scripts, or reports, and the agent will not print them.
+A full list lives in [`.env.example`](.env.example). API keys are never written into case files, automation scripts, or reports, and the agent will not print them.
 
 ## 🛠️ Development
 
 ```bash
-npm test           # Node + Python unit tests
-npm run test:llm   # Same suite, explicit
+npm test
 ```
 
-The suite covers LLM config resolution and failover, agent launch, all registered tools, graph storage and batching, checkpoint resume, command gating, and local Neo4j startup. 57 Node tests, 9 Python tests.
+The suite runs on `node --test` against a glob, so a new `*.test.js` file is picked up automatically. It covers LLM config resolution and failover, agent launch, every registered tool, requirement-graph storage and batching, checkpoint resume, command gating, recording/tagging, HAR analysis and pytest rendering, and local Neo4j startup. 91 tests.
 
 Playwright is pinned to `1.63.0` so recording uses a browser matching the installed Chromium. Do not float this version — codegen output must stay compatible with replay.
 
 ### Repository layout
 
-Only `cli/` is the product. Everything else is legacy from an earlier microservice architecture, kept for reference:
-
 ```
 open-test/
-├── cli/               ← the agent: commands, tools, graph, checkpoints
-├── agent/llm/         LLM config resolution (Python side)
-├── .pi/skills/        The QA skill the agent loads
-├── schemas/           JSON schemas
-├── knowledge-graph/   Legacy — superseded by cli/agent/graph/
-├── api/ executor/ frontend/       Legacy microservices
-├── semantic-engine/ event-bus/ worker-pool/     Legacy Rust
-└── tests/             Legacy Rust integration tests
+├── cli/               the agent: commands, tools, graph, checkpoints, LLM config
+├── .pi/skills/        the QA skill the agent loads
+├── schemas/           llm-config.schema.json
+└── opentest.config.example.json
 ```
+
+The earlier microservice architecture (Go API, React frontend, Rust worker pool / semantic engine / event bus, Python agent service) has been removed. `cli/services/compose.yml` is the only Compose file, and it runs just the bundled Neo4j.
 
 ## 📄 License
 

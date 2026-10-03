@@ -1,7 +1,6 @@
 'use strict';
 
 const assert = require('assert');
-const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -282,12 +281,27 @@ test('unknown profile use fails', () => {
   );
 });
 
-test('python preset catalog matches the CLI catalog', () => {
-  const repoRoot = path.resolve(__dirname, '..', '..');
-  const output = execFileSync(
-    'python3',
-    ['-c', 'from agent.llm.config import presets_json; print(presets_json())'],
-    { cwd: repoRoot, encoding: 'utf8' }
+test('the exported preset catalog matches the documented providers', () => {
+  const catalog = exportPresetCatalog();
+
+  assert.equal(catalog.active_profile, 'free-openrouter');
+  assert.deepEqual(catalog.failover_order, ['deepseek-prod', 'cc-switch-enterprise', 'free-openrouter']);
+  assert.deepEqual(
+    Object.values(catalog.profiles).map((profile) => profile.provider).sort(),
+    ['cc-switch', 'custom', 'deepseek', 'ollama', 'openrouter']
   );
-  assert.deepEqual(JSON.parse(output), exportPresetCatalog());
+
+  // Every preset except `custom` must be usable without further configuration.
+  for (const [name, profile] of Object.entries(catalog.profiles)) {
+    if (name === 'custom') continue;
+    assert.ok(profile.baseUrl, `${name} has no baseUrl`);
+    assert.ok(profile.model, `${name} has no model`);
+  }
+});
+
+test('every failover target names a preset that exists', () => {
+  const catalog = exportPresetCatalog();
+  for (const name of catalog.failover_order) {
+    assert.ok(catalog.profiles[name], `failover_order references unknown profile ${name}`);
+  }
 });

@@ -9,6 +9,8 @@ const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
 const { playwrightInvoke } = require('./tools/playwright-cli');
 const { recordScenario } = require('./tools/record');
+const { createLLMClient } = require('./tools/llm-client');
+const { pickFolder, canPickFolder } = require('./tools/folder-picker');
 const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
 const { fetchDefects, renderDefects } = require('./tools/defects');
 const { buildReport } = require('./tools/report');
@@ -118,40 +120,70 @@ async function runStep(pi, name, ctx) {
   if (name === 'heal') await reviewHeals(ctx, project);
 }
 
-async function switchProject(ctx, args) {
+async function promptForProjectPath(ctx) {
+  const homeDir = os.homedir();
+  const examplePath = path.join(homeDir, 'Desktop', '项目名');
+  ctx.ui.notify(
+    `💡 提示：\n` +
+    `• 使用完整路径，例如：${examplePath}\n` +
+    `• 可以使用 ~ 代表用户目录：~/Desktop/项目名\n` +
+    `• 可以拖拽文件夹到终端获取路径`,
+    'info'
+  );
+  return ctx.ui.input('项目目录（完整路径）', examplePath);
+}
+
+/**
+ * Open the native macOS folder chooser, falling back to manual input when the
+ * dialog is unavailable. Returns null when the user cancels or dismisses.
+ */
+async function browseForProject(ctx, currentPath, pick) {
+  ctx.ui.notify('正在打开系统文件夹选择器…', 'info');
+  const result = await pick({
+    title: '选择项目目录',
+    defaultPath: currentPath || os.homedir(),
+  });
+
+  if (result.ok) return result.path;
+  if (result.reason === 'cancelled') {
+    ctx.ui.notify('已取消选择', 'info');
+    return null;
+  }
+  ctx.ui.notify(`${result.message}\n已切换为手动输入路径`, 'warning');
+  return promptForProjectPath(ctx);
+}
+
+async function switchProject(ctx, args, deps = {}) {
+  const pick = deps.pick || pickFolder;
+  const pickerSupported = deps.pickerSupported === undefined ? canPickFolder() : deps.pickerSupported;
+
   let target = String(args || '').trim();
   if (!target) {
-    const recent = readProject(agentHome()).recent;
-    
-    // Simplified options - remove folder browser since it's not working in current environment
-    const options = recent.length 
-      ? [...recent, '输入新路径...'] 
-      : ['输入新路径...'];
-    
+    const home = agentHome();
+    const { recent, current } = readProject(home);
+    const BROWSE = '📁 浏览本机文件夹...';
+    const MANUAL = '输入新路径...';
+
+    const options = [...recent];
+    // Only offer the native picker where one actually exists.
+    if (pickerSupported) options.push(BROWSE);
+    options.push(MANUAL);
+
     const picked = await ctx.ui.select('切换项目', options);
     if (!picked) return;
-    
-    if (picked === '输入新路径...') {
-      // Show helpful message with example paths
-      const homeDir = os.homedir();
-      const examplePath = path.join(homeDir, 'Desktop', '项目名');
-      
-      ctx.ui.notify(
-        `💡 提示：\n` +
-        `• 使用完整路径，例如：${examplePath}\n` +
-        `• 可以使用 ~ 代表用户目录：~/Desktop/项目名\n` +
-        `• 可以拖拽文件夹到终端获取路径`,
-        'info'
-      );
-      
-      target = await ctx.ui.input('项目目录（完整路径）', examplePath);
+
+    if (picked === BROWSE) {
+      target = await browseForProject(ctx, current, pick);
+      if (target === null) return;
+    } else if (picked === MANUAL) {
+      target = await promptForProjectPath(ctx);
     } else {
       target = picked; // Use recent project
     }
   }
-  
+
   if (!target || target.trim() === '') return;
-  
+
   try {
     const saved = setProject(target, agentHome());
     if (typeof ctx.ui.setStatus === 'function') ctx.ui.setStatus('opentest-project', path.basename(saved.current));
@@ -297,8 +329,9 @@ module.exports = async function opentestExtension(pi) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       await ensureChromium();
       
-      // Get LLM client for HAR analysis (if available)
-      const llmClient = ctx.llmClient || null;
+      // Resolve a real LLM client for HAR analysis; null when unconfigured,
+      // which makes the analyzer fall back to rules instead of faking a reply.
+      const llmClient = createLLMClient({ cwd: ctx.cwd });
       
       const result = await recordScenario({
         workspace,
@@ -506,3 +539,4 @@ module.exports = async function opentestExtension(pi) {
 };
 
 module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;
+module.exports.switchProject = switchProject;
