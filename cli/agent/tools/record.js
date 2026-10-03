@@ -3,6 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const { playwrightInvoke } = require('./playwright-cli');
+const { analyzeHAR } = require('./har-analyzer');
+const { renderHARToPytest } = require('./har-renderer');
 
 function parseCases(markdown) {
   const matches = [...String(markdown || '').matchAll(/^###\s+(\S+)\s+(.+)$/gm)];
@@ -112,44 +114,205 @@ async function recordScenario({
   caseId,
   confirm,
   execFile,
+  mode = 'ui+api', // 'ui+api', 'ui-only', 'api-only'
+  llmClient = null,
   now = () => Date.now(),
 }) {
   const url = assertSandboxUrl(sandboxUrl);
-  const allowed = await confirm(`沙箱 ${url}\n请按功能用例操作。关闭录制窗口后，会把脚本对上用例并标记是否自动化。`);
+  
+  // Validate recording mode
+  const validModes = ['ui+api', 'ui-only', 'api-only'];
+  if (!validModes.includes(mode)) {
+    throw new Error(`Invalid recording mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
+  }
+  
+  const modeDesc = {
+    'ui+api': '同时录制 UI 脚本（Playwright）和 API 脚本（HAR）',
+    'ui-only': '仅录制 UI 脚本（Playwright）',
+    'api-only': '仅录制 API 请求（HAR）',
+  }[mode];
+  
+  const allowed = await confirm(
+    `沙箱 ${url}\n录制模式：${modeDesc}\n请按功能用例操作。关闭录制窗口后，会把脚本对上用例并标记是否自动化。`
+  );
   if (!allowed) return { recorded: false, matches: [], message: '未打开沙箱，没有录制。' };
+  
   const dir = path.join(workspace, 'automation');
   await fs.promises.mkdir(dir, { recursive: true });
-  const specName = `${caseId || 'record'}-${now()}.spec.ts`;
+  const timestamp = now();
+  const baseName = `${caseId || 'record'}-${timestamp}`;
+  
+  // Prepare file paths
+  const specName = `${baseName}.spec.ts`;
   const specFile = path.join(dir, specName);
-  const command = playwrightInvoke(['codegen', '--target', 'javascript', '-o', specFile, url]);
+  const harName = `${baseName}.har`;
+  const harFile = path.join(dir, harName);
+  const apiTestName = `test_api_${baseName}.py`;
+  const apiTestFile = path.join(dir, apiTestName);
+  
+  // Build Playwright codegen command with HAR recording
+  const codegenArgs = ['codegen', '--target', 'javascript', '-o', specFile];
+  
+  // Add HAR recording flags if mode requires API capture
+  if (mode === 'ui+api' || mode === 'api-only') {
+    codegenArgs.push('--save-har', harFile);
+    // Only record relevant API calls (exclude static assets)
+    codegenArgs.push('--save-har-glob', '**/api/**');
+  }
+  
+  codegenArgs.push(url);
+  
+  const command = playwrightInvoke(codegenArgs);
+  
+  console.log(`🎬 Recording with mode: ${mode}`);
+  console.log(`   UI Script: ${mode !== 'api-only' ? specFile : 'N/A'}`);
+  console.log(`   HAR File: ${mode !== 'ui-only' ? harFile : 'N/A'}`);
+  
+  // Execute recording
   await execFile(command.file, command.args, {
     cwd: workspace,
     timeout: 15 * 60 * 1000,
   });
-  const spec = await fs.promises.readFile(specFile, 'utf8');
-  const phrases = recordingPhrases(spec);
+  
+  let spec = '';
+  let apiScript = null;
+  
+  // Process UI script (for ui+api and ui-only modes)
+  if (mode !== 'api-only') {
+    spec = await fs.promises.readFile(specFile, 'utf8');
+  } else {
+    // For api-only, delete the empty UI script
+    if (fs.existsSync(specFile)) {
+      await fs.promises.unlink(specFile);
+    }
+  }
+  
+  // Process HAR file (for ui+api and api-only modes)
+  if (mode !== 'ui-only') {
+    if (fs.existsSync(harFile)) {
+      console.log(`📊 Analyzing HAR file...`);
+      
+      try {
+        // Analyze HAR with AI (if LLM client provided)
+        const analysis = await analyzeHAR(harFile, llmClient || createMockLLM());
+        
+        // Save analysis
+        const analysisFile = path.join(dir, `${baseName}.analysis.json`);
+        await fs.promises.writeFile(
+          analysisFile,
+          JSON.stringify(analysis, null, 2),
+          'utf8'
+        );
+        console.log(`   ✓ Analysis saved: ${analysisFile}`);
+        
+        // Render HAR to pytest script
+        console.log(`🎨 Rendering HAR to pytest...`);
+        const scripts = await renderHARToPytest(harFile, analysis, {
+          testName: `test_${caseId || 'api_scenario'}`,
+          includeCleanup: true,
+          includeAssertions: true,
+        });
+        
+        // Save pytest script
+        await fs.promises.writeFile(apiTestFile, scripts.pytestScript, 'utf8');
+        console.log(`   ✓ API test: ${apiTestFile}`);
+        
+        // Save .env.example
+        const envFile = path.join(dir, `${baseName}.env.example`);
+        await fs.promises.writeFile(envFile, scripts.envExample, 'utf8');
+        console.log(`   ✓ Env template: ${envFile}`);
+        
+        // Save README
+        const readmeFile = path.join(dir, `${baseName}_README.md`);
+        await fs.promises.writeFile(readmeFile, scripts.readme, 'utf8');
+        console.log(`   ✓ README: ${readmeFile}`);
+        
+        apiScript = {
+          pytestFile: apiTestFile,
+          envFile,
+          readmeFile,
+          analysis,
+        };
+        
+      } catch (error) {
+        console.warn(`⚠ HAR processing failed: ${error.message}`);
+        console.warn(`   HAR file preserved at: ${harFile}`);
+      }
+    } else {
+      console.warn(`⚠ HAR file not found: ${harFile}`);
+      console.warn(`   This may happen if no API calls were captured during recording.`);
+    }
+  }
+  
+  // Match recording to test cases
+  const phrases = spec ? recordingPhrases(spec) : [];
   const casesDir = path.join(workspace, 'cases');
   const files = fs.existsSync(casesDir)
     ? (await fs.promises.readdir(casesDir)).filter((name) => name.endsWith('.md'))
     : [];
   const matches = [];
   let note = '没有功能用例文件。';
+  
   for (const name of files) {
     const file = path.join(casesDir, name);
     const markdown = await fs.promises.readFile(file, 'utf8');
     const found = matchRecording(parseCases(markdown), phrases, caseId);
     note = found.message;
     const matchedIds = new Set(found.matches.map((item) => item.id));
-    const relativeSpec = path.posix.join('automation', specName);
-    await fs.promises.writeFile(file, applyAutomationTags(markdown, { matchedIds, specPath: relativeSpec }));
-    found.matches.forEach((item) => matches.push({ id: item.id, file: name, spec: relativeSpec }));
+    const relativeSpec = mode !== 'api-only' ? path.posix.join('automation', specName) : '';
+    const relativeApiTest = apiScript ? path.posix.join('automation', apiTestName) : '';
+    
+    // Update automation tags with both UI and API script paths
+    let updatedMarkdown = markdown;
+    if (relativeSpec) {
+      updatedMarkdown = applyAutomationTags(updatedMarkdown, { matchedIds, specPath: relativeSpec });
+    }
+    if (relativeApiTest) {
+      updatedMarkdown = applyAutomationTags(updatedMarkdown, { matchedIds, specPath: relativeApiTest });
+    }
+    
+    await fs.promises.writeFile(file, updatedMarkdown);
+    found.matches.forEach((item) => matches.push({ 
+      id: item.id, 
+      file: name, 
+      uiSpec: relativeSpec,
+      apiSpec: relativeApiTest,
+    }));
   }
+  
   const listed = matches.length ? matches.map((item) => `${item.id} 自动化：是`).join('，') : '没有用例被标为自动化';
+  
+  // Build result message
+  let message = `录制完成（模式：${mode}）\n`;
+  if (mode !== 'api-only') {
+    message += `  UI 脚本：${specFile}\n`;
+  }
+  if (apiScript) {
+    message += `  API 脚本：${apiScript.pytestFile}\n`;
+    message += `  变量提取：${apiScript.analysis.variables.length} 个\n`;
+    message += `  请求依赖：${apiScript.analysis.dependencies.length} 条\n`;
+  }
+  message += `${note}${listed}`;
+  
   return {
     recorded: true,
-    specFile,
+    mode,
+    specFile: mode !== 'api-only' ? specFile : null,
+    harFile: mode !== 'ui-only' ? harFile : null,
+    apiScript,
     matches,
-    message: `录制已保存到 ${specFile}。${note}${listed}`,
+    message,
+  };
+}
+
+/**
+ * Create mock LLM client for fallback analysis
+ */
+function createMockLLM() {
+  return {
+    chat: async () => {
+      throw new Error('LLM not configured, using fallback analysis');
+    },
   };
 }
 

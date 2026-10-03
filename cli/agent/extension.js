@@ -249,29 +249,45 @@ module.exports = async function opentestExtension(pi) {
   pi.registerTool({
     name: 'record_playwright_scenario',
     label: 'Record scenario',
-    description: '打开沙箱里的 Playwright 录制窗口，引导用户操作，并把录制对上功能用例的自动化标记。',
+    description: '打开沙箱里的 Playwright 录制窗口，引导用户操作，并把录制对上功能用例的自动化标记。支持三种录制模式：ui+api（同时录制 UI 和 API）、ui-only（仅 UI）、api-only（仅 API）。',
     promptSnippet: 'Record a sandbox scenario with Playwright and tag matching cases',
-    promptGuidelines: ['Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL. The terminal asks the user before opening the browser.'],
+    promptGuidelines: [
+      'Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL.',
+      'Use mode="ui+api" (default) to record both UI (Playwright) and API (HAR) scripts simultaneously.',
+      'Use mode="ui-only" for UI automation only, or mode="api-only" for API recording only.',
+      'The terminal asks the user before opening the browser.',
+    ],
     executionMode: 'sequential',
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
       sandboxUrl: Type.String({ description: 'Sandbox base URL, http or https' }),
       caseId: Type.Optional(Type.String({ description: 'Functional case id to attach when several cases share the same wording' })),
+      mode: Type.Optional(Type.String({ 
+        description: 'Recording mode: "ui+api" (default, records both UI and API), "ui-only" (UI only), or "api-only" (API only)',
+        enum: ['ui+api', 'ui-only', 'api-only'],
+      })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       await ensureChromium();
+      
+      // Get LLM client for HAR analysis (if available)
+      const llmClient = ctx.llmClient || null;
+      
       const result = await recordScenario({
         workspace,
         sandboxUrl: params.sandboxUrl,
         caseId: params.caseId,
+        mode: params.mode || 'ui+api',
+        llmClient,
         execFile: (file, args, options) => execFileAsync(file, args, options),
         confirm: async (summary) => {
           if (!ctx.hasUI) return false;
           return ctx.ui.confirm('录制沙箱场景', summary);
         },
       });
+      
       if (result.recorded && result.matches.length) {
         result.matches.forEach((item) => markTask(workspace, {
           product: params.productName, task: 'record', step: item.id, action: 'complete',
