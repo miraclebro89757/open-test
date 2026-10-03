@@ -557,9 +557,23 @@ module.exports = async function opentestExtension(pi) {
       await ensureChromium();
       
       // Interactive mode selection if no mode specified and UI available
-      let selectedMode = params.mode || 'ui+api';
-      if (!params.mode && ctx.hasUI) {
-        selectedMode = await selectRecordingMode({ hasUI: true });
+      let selectedMode = params.mode;
+      
+      // Always ask for mode selection if not specified (even if default exists)
+      if (!selectedMode && ctx.hasUI) {
+        try {
+          selectedMode = await selectRecordingMode({ 
+            hasUI: true,
+            piUI: ctx.ui,
+            defaultMode: 'ui+api',
+          });
+        } catch (error) {
+          // User cancelled or error occurred, use default
+          selectedMode = 'ui+api';
+        }
+      } else if (!selectedMode) {
+        // No UI and no mode specified, use default
+        selectedMode = 'ui+api';
       }
       
       // Resolve a real LLM client for HAR analysis; null when unconfigured,

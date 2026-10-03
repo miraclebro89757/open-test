@@ -36,16 +36,72 @@ const RECORDING_MODES = {
  * @param {Object} options Options
  * @param {boolean} options.hasUI Whether UI is available (for automated calls)
  * @param {string} options.defaultMode Default mode if no UI
+ * @param {Object} options.piUI Pi UI object for integration
  * @returns {Promise<string>} Selected mode: 'ui+api' | 'ui-only' | 'api-only'
  */
 async function selectRecordingMode(options = {}) {
-  const { hasUI = true, defaultMode = 'ui+api' } = options;
+  const { hasUI = true, defaultMode = 'ui+api', piUI = null } = options;
   
   // If no UI available, return default
   if (!hasUI) {
     return defaultMode;
   }
   
+  // If Pi UI is provided, use Pi's choice system
+  if (piUI) {
+    return selectRecordingModeWithPiUI(piUI, defaultMode);
+  }
+  
+  // Otherwise use inquirer for standalone/testing
+  return selectRecordingModeWithInquirer(defaultMode);
+}
+
+/**
+ * Select mode using Pi's UI system
+ * @param {Object} piUI Pi UI object
+ * @param {string} defaultMode Default mode
+ * @returns {Promise<string>}
+ */
+async function selectRecordingModeWithPiUI(piUI, defaultMode) {
+  const options = Object.entries(RECORDING_MODES).map(([mode, config]) => {
+    const recommendation = config.recommended ? ' (推荐)' : '';
+    return {
+      id: mode,
+      label: `${config.icon} ${config.label}${recommendation}`,
+      description: config.description,
+    };
+  });
+  
+  // Add help option
+  options.push({
+    id: 'help',
+    label: '❓ 查看详细说明',
+    description: '显示各模式的详细使用说明',
+  });
+  
+  const selected = await piUI.choose(
+    '请选择录制模式：',
+    options,
+    { defaultId: defaultMode }
+  );
+  
+  // If user selected help, show it and ask again
+  if (selected === 'help') {
+    // Show help using Pi's UI
+    const helpText = buildHelpText();
+    await piUI.display(helpText);
+    return selectRecordingModeWithPiUI(piUI, defaultMode);
+  }
+  
+  return selected;
+}
+
+/**
+ * Select mode using inquirer (for standalone/testing)
+ * @param {string} defaultMode Default mode
+ * @returns {Promise<string>}
+ */
+async function selectRecordingModeWithInquirer(defaultMode) {
   // Build choices
   const choices = Object.entries(RECORDING_MODES).map(([mode, config]) => {
     const recommendation = config.recommended ? chalk.green(' (推荐)') : '';
@@ -74,16 +130,41 @@ async function selectRecordingMode(options = {}) {
       message: '请选择录制模式：',
       choices,
       pageSize: 10,
+      default: defaultMode,
     },
   ]);
   
   // If user wants help, show it and ask again
   if (mode === 'help') {
     showModeHelp();
-    return selectRecordingMode(options);
+    return selectRecordingModeWithInquirer(defaultMode);
   }
   
   return mode;
+}
+
+/**
+ * Build help text for Pi UI display
+ * @returns {string}
+ */
+function buildHelpText() {
+  const lines = ['# 录制模式详细说明\n'];
+  
+  Object.entries(RECORDING_MODES).forEach(([mode, config]) => {
+    const recommendation = config.recommended ? ' (推荐)' : '';
+    lines.push(`## ${config.icon} ${config.label}${recommendation}\n`);
+    lines.push(`${config.description}\n`);
+    lines.push('**产出物：**');
+    config.produces.forEach(item => lines.push(`- ${item}`));
+    lines.push(`\n**适用场景：** ${config.useCase}\n`);
+  });
+  
+  lines.push('## 💡 如何选择？\n');
+  lines.push('- **完整测试**：选择 UI + API（推荐），同时获得 UI 自动化脚本和 API 测试脚本');
+  lines.push('- **纯前端**：选择 UI Only，只关注页面交互，不测试后端接口');
+  lines.push('- **纯接口**：选择 API Only，只测试后端接口，不生成 UI 脚本\n');
+  
+  return lines.join('\n');
 }
 
 /**
