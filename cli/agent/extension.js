@@ -70,32 +70,53 @@ function agentHome() {
 
 /**
  * Show folder picker dialog with fallback to manual input
+ * Uses VSCode/Kiro native file system browser
  * @param {object} ctx - Context with UI methods
  * @param {string} title - Dialog title
- * @param {string} placeholder - Default path for manual input
+ * @param {string} placeholder - Default path for manual input fallback
  * @returns {Promise<string|null>} Selected folder path or null if cancelled
  */
 async function selectFolder(ctx, title = '选择文件夹', placeholder = '~/Desktop') {
-  // Try modern folder picker APIs
-  if (typeof ctx.ui.selectFolder === 'function') {
-    return await ctx.ui.selectFolder(title);
-  }
-  
-  if (typeof ctx.ui.pickFolder === 'function') {
-    return await ctx.ui.pickFolder({ title });
-  }
-  
+  // Method 1: Try VSCode-style showOpenDialog (Kiro IDE standard)
   if (typeof ctx.ui.showOpenDialog === 'function') {
-    const result = await ctx.ui.showOpenDialog({
-      title,
-      properties: ['openDirectory', 'createDirectory'],
-      buttonLabel: '选择',
-    });
-    return result && result.length > 0 ? result[0] : null;
+    try {
+      const uris = await ctx.ui.showOpenDialog({
+        title,
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: '选择',
+      });
+      if (uris && uris.length > 0) {
+        // Return the file path (uris[0] could be a URI object or string)
+        return typeof uris[0] === 'string' ? uris[0] : (uris[0].fsPath || uris[0].path);
+      }
+    } catch (error) {
+      console.warn('showOpenDialog failed:', error.message);
+    }
   }
   
-  // Fallback to manual input
-  ctx.ui.notify('文件夹选择器不可用，请手动输入路径', 'info');
+  // Method 2: Try direct folder selection API
+  if (typeof ctx.ui.selectFolder === 'function') {
+    try {
+      const result = await ctx.ui.selectFolder(title);
+      if (result) return result;
+    } catch (error) {
+      console.warn('selectFolder failed:', error.message);
+    }
+  }
+  
+  // Method 3: Try alternate folder picker
+  if (typeof ctx.ui.pickFolder === 'function') {
+    try {
+      const result = await ctx.ui.pickFolder({ title });
+      if (result) return result;
+    } catch (error) {
+      console.warn('pickFolder failed:', error.message);
+    }
+  }
+  
+  // Fallback: Manual input (all pickers failed or returned null)
   return await ctx.ui.input(title, placeholder);
 }
 
@@ -159,6 +180,10 @@ async function switchProject(ctx, args) {
     
     if (picked === '浏览文件夹...') {
       target = await selectFolder(ctx, '选择项目目录', '~/Desktop/易训/筑安通');
+      // If selectFolder returned empty/null, fallback to manual input
+      if (!target || target.trim() === '') {
+        target = await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通');
+      }
     } else if (picked === '手动输入路径') {
       target = await ctx.ui.input('项目目录', '~/Desktop/易训/筑安通');
     } else {
