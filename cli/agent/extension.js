@@ -10,6 +10,7 @@ const { runPlaywright } = require('./tools/playwright');
 const { playwrightInvoke } = require('./tools/playwright-cli');
 const { recordScenario } = require('./tools/record');
 const { selectRecordingMode, getModeConfirmationMessage } = require('./tools/record-mode-selector');
+const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
 const { pickFolder, canPickFolder } = require('./tools/folder-picker');
 const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
@@ -545,7 +546,7 @@ module.exports = async function opentestExtension(pi) {
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
-      sandboxUrl: Type.String({ description: 'Sandbox base URL, http or https' }),
+      sandboxUrl: Type.Optional(Type.String({ description: 'Sandbox base URL (http or https). If not provided, will use configured default or prompt user.' })),
       caseId: Type.Optional(Type.String({ description: 'Functional case id to attach when several cases share the same wording' })),
       mode: Type.Optional(Type.String({ 
         description: 'Recording mode: "ui+api" (default, records both UI and API), "ui-only" (UI only), or "api-only" (API only)',
@@ -555,6 +556,21 @@ module.exports = async function opentestExtension(pi) {
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       await ensureChromium();
+      
+      // Resolve sandbox URL (from config, env, or prompt)
+      let sandboxUrl = params.sandboxUrl;
+      if (!sandboxUrl) {
+        const resolved = await resolveSandboxUrl(workspace, {
+          piUI: ctx.ui,
+          allowPrompt: ctx.hasUI,
+        });
+        sandboxUrl = resolved.url;
+        
+        // Update last used URL if it was temporary
+        if (resolved.shouldSave) {
+          await updateLastUsedUrl(workspace, sandboxUrl);
+        }
+      }
       
       // Interactive mode selection if no mode specified and UI available
       let selectedMode = params.mode;
