@@ -11,7 +11,7 @@ const { completeWithFailover } = require('../../llm/adapter');
  * analysis. It never invents a client: an unconfigured machine gets null, not a
  * stub that silently pretends a model answered.
  */
-function createLLMClient(context = {}) {
+async function createLLMClient(context = {}) {
   let resolved;
   try {
     resolved = resolveLLMConfig({
@@ -19,14 +19,19 @@ function createLLMClient(context = {}) {
       env: process.env,
       ...context,
     });
-  } catch {
+  } catch (error) {
+    // LLM not configured, return null for graceful degradation
     return null;
   }
 
   const chain = (resolved.chain || []).filter(
     (entry) => entry && entry.config && isUsableConfig(entry.config)
   );
-  if (!chain.length) return null;
+  
+  if (!chain.length) {
+    // No usable profiles, return null
+    return null;
+  }
 
   return {
     activeProfile: resolved.activeProfile,
@@ -36,11 +41,30 @@ function createLLMClient(context = {}) {
         .filter((message) => message.role !== 'system')
         .map((message) => message.content)
         .join('\n\n');
-      const result = await completeWithFailover(chain, prompt, {
-        ...options,
-        systemPrompt,
-      });
-      return result.content;
+      
+      try {
+        const result = await completeWithFailover(chain, prompt, {
+          ...options,
+          systemPrompt,
+        });
+        return result.content;
+      } catch (error) {
+        // LLM call failed, let caller handle fallback
+        throw new Error(`LLM call failed: ${error.message}`);
+      }
+    },
+    async complete(prompt, options = {}) {
+      try {
+        const result = await completeWithFailover(chain, prompt, options);
+        return {
+          content: result.content,
+          model: result.model,
+          provider: result.provider,
+        };
+      } catch (error) {
+        // LLM call failed, let caller handle fallback
+        throw new Error(`LLM call failed: ${error.message}`);
+      }
     },
   };
 }

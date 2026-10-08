@@ -1,20 +1,20 @@
 {
   "sessionId": "mock-session",
   "startUrl": "https://example.com",
-  "timestamp": 1791446158272,
+  "timestamp": 1791450654764,
   "duration": 3000,
   "events": [
     {
       "id": 1,
       "type": "navigation",
-      "timestamp": 1791446158272,
+      "timestamp": 1791450654764,
       "url": "https://example.com/login",
       "from": "https://example.com"
     },
     {
       "id": 2,
       "type": "input",
-      "timestamp": 1791446159272,
+      "timestamp": 1791450655764,
       "url": "https://example.com/login",
       "selector": "#username",
       "value": "testuser",
@@ -28,7 +28,7 @@
     {
       "id": 3,
       "type": "input",
-      "timestamp": 1791446159772,
+      "timestamp": 1791450656264,
       "url": "https://example.com/login",
       "selector": "#password",
       "value": "password123",
@@ -42,7 +42,7 @@
     {
       "id": 4,
       "type": "click",
-      "timestamp": 1791446160272,
+      "timestamp": 1791450656764,
       "url": "https://example.com/login",
       "selector": "button[type=\"submit\"]",
       "context": {
@@ -55,7 +55,7 @@
     {
       "id": 5,
       "type": "navigation",
-      "timestamp": 1791446161272,
+      "timestamp": 1791450657764,
       "url": "https://example.com/dashboard",
       "from": "https://example.com/login"
     }

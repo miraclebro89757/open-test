@@ -80,10 +80,21 @@ async function exploreAndGenerate({
     result.steps.push('开始语义分析');
     console.log('🧠 分析语义动作...');
     
-    const analysis = await analyzeExploration(
-      exploreResult.sessionFile,
-      llmClient
-    );
+    // Try AI-enhanced analysis, fall back to rules on failure
+    let analysis;
+    try {
+      analysis = await analyzeExploration(
+        exploreResult.sessionFile,
+        llmClient
+      );
+    } catch (error) {
+      console.log(`   ⚠️  AI 分析失败: ${error.message}`);
+      console.log('   ℹ️  降级到规则引擎...');
+      analysis = await analyzeExploration(
+        exploreResult.sessionFile,
+        null  // Force rule-based analysis
+      );
+    }
     
     result.analysis = analysis;
     result.steps.push(
