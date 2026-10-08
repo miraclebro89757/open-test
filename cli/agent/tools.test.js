@@ -188,7 +188,7 @@ test('extension registers the terminal tools', async () => {
     'explore_and_generate',
   ]);
   assert.deepEqual(commands, [
-    'project', 'task-model', 'status', 'analyze', 'points', 'cases', 'record', 'run', 'heal', 'defects', 'report',
+    'project', 'task-model', 'status', 'analyze', 'points', 'cases', 'explore', 'record', 'run', 'heal', 'defects', 'report',
   ]);
 });
 

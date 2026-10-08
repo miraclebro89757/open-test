@@ -283,6 +283,31 @@ async function runStep(pi, name, ctx) {
     ctx.ui.notify('先用 /project 选择项目目录', 'warning');
     return;
   }
+  
+  // Special handling for explore command
+  if (name === 'explore') {
+    await applyTaskModel(ctx, name);
+    
+    // Get sandbox URL (will use config or prompt user)
+    const message = `启动智能探索：用户操作一遍浏览器，Agent 自动生成测试脚本。
+
+使用 explore_and_generate 工具，参数：
+- requirementDir: 项目目录
+- productName: 从项目路径提取产品名称
+- sandboxUrl: 不传（让工具自动解析配置）
+
+工具会：
+1. 启动浏览器
+2. 用户操作后关闭浏览器
+3. Agent 自动分析并生成脚本
+
+请调用 explore_and_generate 工具开始探索。`;
+    
+    pi.sendUserMessage(message);
+    return;
+  }
+  
+  // Original logic for other steps
   // Route before the choice prompt so the model is already correct even if the
   // user takes a while to decide.
   await applyTaskModel(ctx, name);
@@ -416,7 +441,7 @@ function registerWorkflow(pi) {
     }
   });
   if (typeof pi.registerShortcut === 'function') {
-    pi.registerShortcut('ctrl+shift+9', {
+    pi.registerShortcut('ctrl+alt+p', {
       description: '切换项目',
       handler: (ctx) => switchProject(ctx, ''),
     });
