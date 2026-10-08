@@ -800,6 +800,95 @@ module.exports = async function opentestExtension(pi) {
     },
   });
 
+  pi.registerTool({
+    name: 'explore_and_generate',
+    label: 'Explore & Generate',
+    description: '启动浏览器让用户操作一遍，Agent 自动分析并生成测试脚本。包含事件捕获、语义分析、脚本生成三个阶段。',
+    promptSnippet: 'Let user explore in browser, then Agent generates test script automatically',
+    promptGuidelines: [
+      'Call explore_and_generate when user wants to record a test by doing it once',
+      'The tool captures raw events, extracts semantic actions, and generates Playwright script',
+      'Supports AI-enhanced analysis when LLM client is available',
+      'User closes browser window to finish recording',
+    ],
+    executionMode: 'sequential',
+    parameters: Type.Object({
+      sandboxUrl: Type.Optional(Type.String({ description: 'Starting URL for exploration. If not provided, will use project config or prompt user.' })),
+      requirementDir: Type.Optional(Type.String({ description: 'Directory containing the requirement document' })),
+      productName: Type.Optional(Type.String({ description: 'Visible product name, such as 筑安通' })),
+      caseId: Type.Optional(Type.String({ description: 'Test case ID to associate with this recording' })),
+      headless: Type.Optional(Type.Boolean({ description: 'Run browser in headless mode (default: false)' })),
+      timeout: Type.Optional(Type.Number({ description: 'Recording timeout in milliseconds (default: 900000 / 15 min)' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const { exploreAndGenerate } = require('./tools/explore-and-generate');
+      
+      // Resolve workspace
+      let workspace = ctx.cwd;
+      if (params.requirementDir && params.productName) {
+        workspace = visibleWorkspace(params.requirementDir, params.productName);
+      }
+      
+      // Resolve sandbox URL
+      let url = params.sandboxUrl;
+      if (!url) {
+        url = await resolveSandboxUrl(workspace, {
+          piUI: ctx.ui,
+          allowPrompt: true,
+        });
+      }
+      
+      // Create LLM client for AI-enhanced analysis
+      const llmClient = await createLLMClient(workspace);
+      
+      // Update last used URL
+      if (url) {
+        await updateLastUsedUrl(workspace, url);
+      }
+      
+      // Execute explore and generate
+      const result = await exploreAndGenerate({
+        url,
+        workspace,
+        caseId: params.caseId,
+        llmClient,
+        headless: params.headless !== undefined ? params.headless : false,
+        timeout: params.timeout || 15 * 60 * 1000,
+      });
+      
+      // Update checkpoint
+      if (params.requirementDir && params.productName) {
+        markTask(workspace, {
+          product: params.productName,
+          task: 'automation',
+          step: 'explore',
+          action: 'done',
+          note: `Generated ${result.summary.testName}`,
+        });
+        showProgress(ctx, workspace);
+      }
+      
+      // Format result
+      const summary = [
+        '✅ 探索和生成完成！',
+        '',
+        '📊 总结：',
+        `   - 录制事件: ${result.summary.eventCount} 个`,
+        `   - 语义动作: ${result.summary.actionCount} 个`,
+        `   - 用户流程: ${result.summary.flowCount} 个`,
+        `   - 测试意图: ${result.summary.testIntent}`,
+        `   - 分析方式: ${result.summary.analysisSource === 'ai' ? 'AI 增强' : '规则引擎'}`,
+        '',
+        '📁 生成文件：',
+        `   - 测试脚本: ${path.basename(result.summary.files.script)}`,
+        `   - 说明文档: ${path.basename(result.summary.files.readme)}`,
+        `   - 完整数据: ${path.basename(result.summary.files.sessionDir)}`,
+      ].join('\n');
+      
+      return textResult(summary, result);
+    },
+  });
+
   registerWorkflow(pi);
 };
 

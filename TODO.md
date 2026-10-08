@@ -1,5 +1,85 @@
 # TODO
 
+## 🚧 Explore and Generate - 智能探索与脚本生成
+
+> **状态**: 开发中 · **文档**: [EXPLORE_AND_GENERATE.md](./docs/EXPLORE_AND_GENERATE.md)
+> **测试**: `npm test` + `node test-explore.js mock`
+
+### 功能概述
+
+实现"人录制一遍，Agent 自动探索并形成脚本"的核心能力。
+
+**核心流程**:
+```
+Raw Event → Semantic Action → Test Step
+```
+
+### 已完成
+
+- [x] Browser Explore - 原始事件捕获
+  - [x] 完整交互事件追踪（click, input, navigation 等）
+  - [x] 元素上下文收集（selector, attributes, text）
+  - [x] 截图和视频录制
+  - [x] 网络请求追踪
+- [x] Semantic Action - 语义动作提取
+  - [x] 事件分组策略（时间窗口 + 上下文相关性）
+  - [x] 动作类型识别（navigate, click, form-fill, submit）
+  - [x] 操作意图推断（基于元素文本和属性）
+  - [x] 用户流程识别
+  - [x] AI 增强分析（可选 LLM 支持）
+- [x] Script Generator - 测试脚本生成
+  - [x] Playwright 脚本生成
+  - [x] 选择器优化（优先 testid, aria-label, role）
+  - [x] 测试数据参数化
+  - [x] 断言自动生成
+  - [x] README 文档生成
+- [x] Agent Tool 集成
+  - [x] `explore_and_generate` 工具注册
+  - [x] Sandbox URL 自动解析
+  - [x] LLM Client 集成
+  - [x] Checkpoint 记录
+- [x] 测试覆盖
+  - [x] 14 个单元测试（事件分组、语义提取、脚本生成）
+  - [x] 集成测试工具（mock 数据测试）
+  - [x] 所有测试通过（182 tests）
+
+### 产出文件
+
+```
+automation/
+├── <caseId>-<timestamp>/
+│   ├── session.json           # 原始会话数据
+│   ├── events.json            # 事件列表
+│   ├── analysis.json          # 语义分析结果
+│   ├── screenshot-N.png       # 关键截图
+│   └── video/                 # 录制视频
+├── <caseId>-<timestamp>.spec.ts    # Playwright 脚本
+├── <caseId>-<timestamp>_README.md  # 说明文档
+└── <caseId>-<timestamp>_summary.json # 执行摘要
+```
+
+### 待完成
+
+- [ ] 集成到 `/record` 命令（提供录制模式选择）
+- [ ] 与 test case 自动关联和标记
+- [ ] 与 HAR 分析结合（UI + API 双脚本）
+- [ ] 智能等待识别
+- [ ] 更多断言模式
+- [ ] Page Object 模式支持
+
+### 使用示例
+
+```bash
+# 在 Agent 中使用
+/explore https://test.example.com
+
+# 或通过工具测试
+node test-explore.js mock    # 模拟数据测试
+node test-explore.js demo    # 实际浏览器演示
+```
+
+---
+
 ## ✅ 录制同时产出 UI 和 API 脚本
 
 > **状态**: 已完成 · **设计文档**: [UI_API_RECORDING_SYSTEM.md](./UI_API_RECORDING_SYSTEM.md)

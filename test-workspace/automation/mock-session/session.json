@@ -1,0 +1,66 @@
+{
+  "sessionId": "mock-session",
+  "startUrl": "https://example.com",
+  "timestamp": 1791446158272,
+  "duration": 3000,
+  "events": [
+    {
+      "id": 1,
+      "type": "navigation",
+      "timestamp": 1791446158272,
+      "url": "https://example.com/login",
+      "from": "https://example.com"
+    },
+    {
+      "id": 2,
+      "type": "input",
+      "timestamp": 1791446159272,
+      "url": "https://example.com/login",
+      "selector": "#username",
+      "value": "testuser",
+      "context": {
+        "tagName": "INPUT",
+        "type": "text",
+        "name": "username",
+        "placeholder": "用户名"
+      }
+    },
+    {
+      "id": 3,
+      "type": "input",
+      "timestamp": 1791446159772,
+      "url": "https://example.com/login",
+      "selector": "#password",
+      "value": "password123",
+      "context": {
+        "tagName": "INPUT",
+        "type": "password",
+        "name": "password",
+        "placeholder": "密码"
+      }
+    },
+    {
+      "id": 4,
+      "type": "click",
+      "timestamp": 1791446160272,
+      "url": "https://example.com/login",
+      "selector": "button[type=\"submit\"]",
+      "context": {
+        "tagName": "BUTTON",
+        "type": "submit",
+        "textContent": "登录",
+        "role": "button"
+      }
+    },
+    {
+      "id": 5,
+      "type": "navigation",
+      "timestamp": 1791446161272,
+      "url": "https://example.com/dashboard",
+      "from": "https://example.com/login"
+    }
+  ],
+  "screenshots": [],
+  "networkRequests": [],
+  "consoleMessages": []
+}

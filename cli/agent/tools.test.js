@@ -185,6 +185,7 @@ test('extension registers the terminal tools', async () => {
     'write_executive_report',
     'store_requirement_graph',
     'query_requirement_graph',
+    'explore_and_generate',
   ]);
   assert.deepEqual(commands, [
     'project', 'task-model', 'status', 'analyze', 'points', 'cases', 'record', 'run', 'heal', 'defects', 'report',
