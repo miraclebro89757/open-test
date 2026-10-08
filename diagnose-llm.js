@@ -116,22 +116,34 @@ function checkLLMConfig() {
   console.log('\n' + '═'.repeat(60));
   console.log('  总结');
   console.log('═'.repeat(60));
-  console.log('\n✨ Explore & Generate 功能状态:');
+  console.log('\n✨ OpenTest 功能状态:');
   console.log('   - 基础功能: ✓ 正常（不依赖 LLM）');
   console.log('   - 事件捕获: ✓ 正常');
   console.log('   - 语义分析: ✓ 正常（规则引擎）');
   console.log('   - 脚本生成: ✓ 正常');
   
-  if (!globalConfig && !projectConfig) {
+  const hasConfig = globalConfig || projectConfig || 
+                   process.env.OPENAI_API_KEY || 
+                   process.env.DEEPSEEK_API_KEY;
+  
+  if (!hasConfig) {
     console.log('   - AI 增强:  ⚠️  未配置（可选）');
-    console.log('\n💡 如何启用 AI 增强:');
-    console.log('   npx open-test config llm');
+    console.log('\n💡 配置默认 LLM 后，所有功能自动使用 AI 增强：');
+    console.log('   node cli/commands/llm-config.js');
+    console.log('');
+    console.log('   配置一次，全部生效：');
+    console.log('   • /explore - AI 识别用户意图和业务场景');
+    console.log('   • /analyze - AI 分析需求文档');
+    console.log('   • /points - AI 生成测试点');
+    console.log('   • /cases - AI 生成测试用例');
   } else {
     console.log('   - AI 增强:  ✓ 已配置');
+    console.log('\n✓ 所有 OpenTest 功能将自动使用 AI 增强分析');
   }
   
   console.log('\n📚 相关文档:');
-  console.log('   - LLM 配置: README.md#配置');
+  console.log('   - 查看当前配置: node cli/commands/llm-config.js show');
+  console.log('   - 重新配置: node cli/commands/llm-config.js');
   console.log('   - Explore 功能: docs/EXPLORE_AND_GENERATE.md');
   console.log('');
 }
