@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh.md)
+
 # Open-Test
 
 A terminal test agent that turns a requirement document into test knowledge, test points, and executable cases — then records real browser sessions to automate them.
