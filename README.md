@@ -3,7 +3,7 @@
 A terminal test agent that turns a requirement document into test knowledge, test points, and executable cases — then records real browser sessions to automate them.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![npm version](https://img.shields.io/npm/v/open-test.svg)](https://www.npmjs.com/package/open-test)
+[![npm version](https://img.shields.io/npm/v/opentest-ai.svg)](https://www.npmjs.com/package/opentest-ai)
 
 ## 🎯 What is Open-Test?
 

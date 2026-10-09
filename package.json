@@ -1,11 +1,12 @@
 {
-  "name": "open-test",
+  "name": "opentest-ai",
   "version": "1.0.0",
-  "description": "Terminal test agent that turns requirement documents into test knowledge, test points, and recorded Playwright automation",
+  "description": "AI-native QA agent that turns requirement documents into test knowledge, test points, and Playwright automation",
   "main": "cli/index.js",
   "bin": {
     "open-test": "./cli/index.js",
-    "opentest": "./cli/index.js"
+    "opentest": "./cli/index.js",
+    "opentest-ai": "./cli/index.js"
   },
   "scripts": {
     "start": "node cli/index.js run",
@@ -41,7 +42,7 @@
     "url": "https://github.com/miraclebro89757/open-test.git"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.4",

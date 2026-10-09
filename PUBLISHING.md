@@ -1,8 +1,8 @@
-# OpenTest - Publishing Guide
+# OpenTest AI - Publishing Guide
 
 ## 📦 Publishing to npm
 
-This guide explains how to publish OpenTest CLI to npm so users can run it with `npx open-test@latest run`.
+This guide explains how to publish OpenTest CLI to npm so users can run it with `npx opentest-ai@latest run`.
 
 ## Prerequisites
 
@@ -15,8 +15,8 @@ This guide explains how to publish OpenTest CLI to npm so users can run it with 
 
 2. **Package Name Availability**
    ```bash
-   # Check if "open-test" is available
-   npm view open-test
+   # Check if "opentest-ai" is available
+   npm view opentest-ai
    
    # If taken, update package.json with different name
    # e.g., "@yourorg/open-test" or "opentest-ai"
@@ -39,7 +39,7 @@ open-test doctor
 open-test --help
 
 # Unlink after testing
-npm unlink -g open-test
+npm unlink -g opentest-ai
 ```
 
 ### 2. Update Version
@@ -76,7 +76,7 @@ open-test doctor
 open-test --help
 
 # Uninstall
-npm uninstall -g open-test
+npm uninstall -g opentest-ai
 ```
 
 ## Publishing Steps
@@ -104,7 +104,7 @@ npm publish --tag beta
 npm publish --tag latest
 
 # Users can install specific tag
-npx open-test@beta run
+npx opentest-ai@beta run
 ```
 
 ### Option 3: Publish Specific Version
@@ -123,37 +123,37 @@ npm publish
 
 ```bash
 # View published package
-npm view open-test
+npm view opentest-ai
 
 # Check all versions
-npm view open-test versions
+npm view opentest-ai versions
 
 # Check latest version
-npm view open-test version
+npm view opentest-ai version
 ```
 
 ### 2. Test Installation
 
 ```bash
 # Test global install
-npm install -g open-test
+npm install -g opentest-ai
 open-test --version
 
 # Test npx (most important)
-npx open-test@latest --version
-npx open-test@latest doctor
+npx opentest-ai@latest --version
+npx opentest-ai@latest doctor
 
 # Test in new directory
 mkdir test-install
 cd test-install
-npx open-test@latest init my-project
+npx opentest-ai@latest init my-project
 ```
 
 ### 3. Update Documentation
 
 - Update README.md with correct npm package name
 - Update installation instructions
-- Add npm badge: `[![npm version](https://badge.fury.io/js/open-test.svg)](https://www.npmjs.com/package/open-test)`
+- Add npm badge: `[![npm version](https://img.shields.io/npm/v/opentest-ai.svg)](https://www.npmjs.com/package/opentest-ai)`
 
 ## Package Configuration
 
