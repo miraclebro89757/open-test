@@ -17,6 +17,13 @@ import { SystemPromptPanel } from "./SystemPromptPanel";
 import { ToolDefinitionsPanel } from "./ToolDefinitionsPanel";
 import { AgentSessionPanel } from "./AgentSessionPanel";
 import { TerminalPanel } from "./TerminalPanel";
+import { QaModeSwitch } from "./qa/QaModeSwitch";
+import { QaPipelineBar } from "./qa/QaPipelineBar";
+import { QaAssetTree } from "./qa/QaAssetTree";
+import { QaWorkbench } from "./qa/QaWorkbench";
+import { useQaMode } from "@/hooks/useQaMode";
+import { useQaOverview } from "@/hooks/useQaOverview";
+import { QA_TAB_ID, type QaAskAgent, type QaPanelId } from "@/lib/qa/client";
 import { newTerminalTab, restoreTerminalTabs, TERMINAL_TABS_KEY, type TerminalTab } from "./terminal-tab-state";
 import { useTheme } from "@/hooks/useTheme";
 import { useFontPreferences } from "@/hooks/useFontPreferences";
@@ -513,7 +520,12 @@ export function AppShell() {
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [terminalsRestored, setTerminalsRestored] = useState(false);
-  const panelTabs: Tab[] = [...fileTabs, ...terminalTabs.map((tab) => ({
+  // OpenTest: test mode adds the QA workbench as the first, permanent tab.
+  const [qaMode, setQaMode] = useQaMode();
+  const qaEnabled = qaMode === "test";
+  const [qaPanel, setQaPanel] = useState<QaPanelId>("overview");
+  const qaTab: Tab = { id: QA_TAB_ID, label: "测试工作台", filePath: "", kind: "qa" };
+  const panelTabs: Tab[] = [...(qaEnabled ? [qaTab] : []), ...fileTabs, ...terminalTabs.map((tab) => ({
     id: tab.id,
     label: getFileName(tab.cwd) || tab.cwd,
     filePath: tab.cwd,
@@ -1156,6 +1168,38 @@ export function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [terminalTabs, isMobile]);
 
+  // OpenTest QA workbench: the overview feeds the pipeline bar, asset tree and workbench.
+  const { overview: qaOverview, error: qaError } = useQaOverview(activeCwd, qaEnabled, explorerRefreshKey);
+  const qaWorkbenchActive = qaEnabled && (activeFileTabId === QA_TAB_ID || !activeFileTabId);
+
+  const handleOpenQaPanel = useCallback((panel: QaPanelId) => {
+    setQaPanel(panel);
+    setActiveFileTabId(QA_TAB_ID);
+    setRightPanelOpen(true);
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+
+  const handleQaOpenFile = useCallback((absolutePath: string) => {
+    handleOpenFile(absolutePath, getFileName(absolutePath), { sourceSessionId: selectedSession?.id ?? null });
+  }, [handleOpenFile, selectedSession?.id]);
+
+  // A panel button speaks to the agent through the composer, so the request
+  // shows up in the conversation like anything the user typed.
+  const handleQaAskAgent = useCallback<QaAskAgent>((request) => {
+    const input = chatInputRef.current;
+    if (!input) return "unavailable";
+    if (request.mode === "send" && input.submitText(request.text)) return "sent";
+    input.insertText(request.text);
+    return "composed";
+  }, []);
+
+  // Leaving test mode closes the workbench tab it was showing.
+  useEffect(() => {
+    if (!qaEnabled && activeFileTabId === QA_TAB_ID) {
+      setActiveFileTabId(fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? null);
+    }
+  }, [qaEnabled, activeFileTabId, fileTabs, terminalTabs]);
+
   const handleTerminalClosed = (tab: TerminalTab) => {
     const replacement = tab.closing === "restart" ? newTerminalTab(tab.cwd) : null;
     const remaining = terminalTabs.filter((item) => item.id !== tab.id);
@@ -1333,6 +1377,7 @@ export function AppShell() {
 
   const sidebarContent = (
     <>
+      <QaModeSwitch mode={qaMode} onChange={setQaMode} />
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
         onSelectSession={handleSelectSession}
@@ -1356,6 +1401,13 @@ export function AppShell() {
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
       />
+      {qaEnabled && activeCwd ? (
+        <QaAssetTree
+          overview={qaOverview}
+          activePanel={qaWorkbenchActive && rightPanelOpen ? qaPanel : null}
+          onOpenPanel={handleOpenQaPanel}
+        />
+      ) : null}
       <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
           ["models", translate("common.models")],
@@ -2461,6 +2513,14 @@ export function AppShell() {
 
         </div>
         {isMobile && renderProjectTrustWarning(true)}
+        {qaEnabled ? (
+          <QaPipelineBar
+            overview={qaOverview}
+            hasProject={Boolean(activeCwd)}
+            activePanel={qaWorkbenchActive && rightPanelOpen ? qaPanel : null}
+            onOpenPanel={handleOpenQaPanel}
+          />
+        ) : null}
         </div>
 
         {/* Chat content */}
@@ -2591,7 +2651,7 @@ export function AppShell() {
           <div style={{ flex: 1, overflow: "hidden" }}>
             <TabBar
               tabs={panelTabs}
-              activeTabId={activeFileTabId ?? ""}
+              activeTabId={qaWorkbenchActive ? QA_TAB_ID : activeFileTabId ?? ""}
               onSelectTab={setActiveFileTabId}
               onCloseTab={handleCloseFileTab}
             />
@@ -2635,7 +2695,18 @@ export function AppShell() {
 
         {/* Only the active viewer is mounted. Lightweight per-tab state is restored on activation. */}
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {activeFileTab?.filePath ? (
+          {qaWorkbenchActive ? (
+            <QaWorkbench
+              cwd={activeCwd}
+              overview={qaOverview}
+              error={qaError}
+              panel={qaPanel}
+              refreshKey={explorerRefreshKey}
+              onPanelChange={setQaPanel}
+              onOpenFile={handleQaOpenFile}
+              onAskAgent={handleQaAskAgent}
+            />
+          ) : activeFileTab?.filePath ? (
             <FileViewer
               key={`${activeFileTab.id}:${activeFileTab.viewerRevision ?? 0}`}
               filePath={activeFileTab.filePath}

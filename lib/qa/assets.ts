@@ -141,3 +141,33 @@ export function readGraphSummary(workspace: string): { nodes: number } | null {
     return { nodes: 0 };
   }
 }
+
+export interface AssetFile {
+  /** Relative to the workspace. */
+  file: string;
+  name: string;
+  absolute: string;
+  size: number;
+  modifiedAt: string;
+  kind?: "ui" | "api";
+}
+
+/** Files of one workspace sub-directory, newest first, without healing history. */
+export function listAssetFiles(workspace: string, dir: WorkspaceDir): AssetFile[] {
+  const root = path.join(workspace, dir);
+  const scripts = dir === "automation" ? new Map(listAutomationScripts(workspace).map((script) => [script.file, script.kind])) : null;
+  return listFiles(root, () => true, 3)
+    .map<AssetFile>((absolute) => {
+      const stat = fs.statSync(absolute);
+      const file = path.relative(workspace, absolute);
+      return {
+        file,
+        name: path.basename(absolute),
+        absolute,
+        size: stat.size,
+        modifiedAt: stat.mtime.toISOString(),
+        ...(scripts?.get(file) ? { kind: scripts.get(file) } : {}),
+      };
+    })
+    .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+}

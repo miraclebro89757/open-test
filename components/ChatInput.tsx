@@ -100,6 +100,8 @@ interface Props {
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;
+  /** Send a message as if typed. False when the agent is busy and nothing was sent. */
+  submitText: (text: string) => boolean;
   insertIfEmpty: (text: string) => void;
   replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
@@ -870,6 +872,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
       replaceTextareaRange(ta, start, end, sep + text);
       setAtQuery(null);
+    },
+    submitText(text: string) {
+      const message = text.trim();
+      if (!message || isStreaming) return false;
+      onSend(message);
+      return true;
     },
     addImages(files: File[]) {
       processImageFiles(files);
