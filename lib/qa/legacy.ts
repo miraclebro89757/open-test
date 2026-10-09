@@ -15,7 +15,7 @@ export function loadAgentModule<T>(relativePath: string): T {
 export interface CheckpointModule {
   updateCheckpoint(
     workspace: string,
-    options: { action?: string; task?: string; step?: string; steps?: string | string[]; note?: string },
+    options: { product?: string; sourceFile?: string; action?: string; task?: string; step?: string; steps?: string | string[]; note?: string },
   ): { text: string; state: unknown };
 }
 

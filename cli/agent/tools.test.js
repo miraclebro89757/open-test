@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const { healSelector } = require('./tools/heal');
 const { runPlaywright } = require('./tools/playwright');
 const { recordScenario } = require('./tools/record');
-const { fetchDefects } = require('./tools/defects');
+const { fetchDefects, defectSetup, saveDefects } = require('./tools/defects');
 const { buildReport, signRelease } = require('./tools/report');
 const { gitDiffImpact } = require('./tools/git-diff');
 const { productWorkspace, sanitizeProductName } = require('./tools/workspace');
@@ -122,6 +122,71 @@ test('report counts only local case headings', () => {
   const report = buildReport(workspace);
   assert.equal(report.caseCount, 2);
   assert.match(report.text, /用例标题 2 条/);
+});
+
+test('report counts the case headings the skill writes, not the headings that group them', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-report-'));
+  const workspace = path.join(dir, '易训');
+  fs.mkdirSync(path.join(workspace, 'cases'), { recursive: true });
+  fs.writeFileSync(
+    path.join(workspace, 'cases', 'login.md'),
+    '# 功能用例\n\n## 登录功能\n\n### TC001 登录\n- 自动化：是\n\n### TC002 退出\n- 自动化：否\n',
+  );
+  const report = buildReport(workspace);
+  assert.equal(report.caseCount, 2);
+  assert.equal(report.automated, 1);
+  assert.match(report.text, /已自动化 1 条，手工 1 条/);
+});
+
+test('report uses the latest finished run and says so when there is none', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-report-'));
+  const workspace = path.join(dir, '易训');
+  fs.mkdirSync(path.join(workspace, 'reports', 'runs'), { recursive: true });
+  assert.match(buildReport(workspace).text, /还没有执行记录，所以没有通过率/);
+
+  const runs = path.join(workspace, 'reports', 'runs');
+  fs.writeFileSync(path.join(runs, '20261009-100000.json'), JSON.stringify({
+    id: '20261009-100000', status: 'done', summary: { passed: 1, failed: 3, skipped: 0, errors: 0 }, scripts: [],
+  }));
+  fs.writeFileSync(path.join(runs, '20261009-110000.json'), JSON.stringify({
+    id: '20261009-110000', status: 'done', summary: { passed: 3, failed: 1, skipped: 2, errors: 1 },
+    scripts: [{ file: 'automation/a.spec.ts', status: 'failed' }, { file: 'automation/test_api_a.py', status: 'error' }, { file: 'automation/b.spec.ts', status: 'passed' }],
+  }));
+  // A run that is still going has no result yet and must not be reported.
+  fs.writeFileSync(path.join(runs, '20261009-120000.json'), JSON.stringify({
+    id: '20261009-120000', status: 'running', summary: { passed: 0, failed: 0, skipped: 0, errors: 0 }, scripts: [],
+  }));
+  const report = buildReport(workspace);
+  assert.deepEqual(report.run, { id: '20261009-110000', passed: 3, failed: 1, skipped: 2, errors: 1 });
+  assert.match(report.text, /通过 3，失败 1，跳过 2，无法执行 1/);
+  assert.match(report.text, /通过率 75%/);
+  assert.match(report.text, /automation\/test_api_a\.py（无法执行）/);
+  assert.ok(!report.text.includes('automation/b.spec.ts'));
+});
+
+test('defect setup lists the variables still missing and never their values', () => {
+  const none = defectSetup({});
+  assert.deepEqual(none.zentao.missing, ['ZENTAO_BASE_URL', 'ZENTAO_TOKEN']);
+  assert.deepEqual(none.jira.missing, ['JIRA_BASE_URL', 'JIRA_TOKEN']);
+  const partial = defectSetup({ ZENTAO_BASE_URL: 'https://z.example.com', ZENTAO_TOKEN: 'secret-token', JIRA_BASE_URL: 'https://j.example.com' });
+  assert.equal(partial.zentao.configured, true);
+  assert.deepEqual(partial.jira.missing, ['JIRA_TOKEN']);
+  assert.ok(!JSON.stringify(partial).includes('secret-token'));
+});
+
+test('saved defects feed the report with counts by status', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-defects-'));
+  const workspace = path.join(dir, '易训');
+  const bugs = [
+    { source: 'zentao', id: '1', title: 'a', priority: '1', status: 'active' },
+    { source: 'zentao', id: '2', title: 'b', priority: '2', status: 'active' },
+    { source: 'jira', id: 'K-3', title: 'c', priority: 'High', status: 'closed' },
+  ];
+  saveDefects(workspace, { bugs }, () => new Date('2026-10-09T08:00:00Z'));
+  assert.ok(fs.existsSync(path.join(workspace, 'defects', 'latest.md')));
+  const report = buildReport(workspace);
+  assert.equal(report.defectCount, 3);
+  assert.match(report.text, /缺陷 3 条（读取于 2026-10-09T08:00:00.000Z）：active 2，closed 1/);
 });
 
 test('release sign-off is not written when confirmation is declined', async () => {

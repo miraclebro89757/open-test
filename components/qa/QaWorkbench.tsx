@@ -14,6 +14,7 @@ import { RecordPanel } from "./panels/RecordPanel";
 import { RunPanel } from "./panels/RunPanel";
 import { HealPanel } from "./panels/HealPanel";
 import { ReportPanel } from "./panels/ReportPanel";
+import { DefectsPanel } from "./panels/DefectsPanel";
 
 interface Props {
   cwd: string | null;
@@ -48,7 +49,7 @@ const FOLDER_PANELS: Partial<Record<QaPanelId, FolderPanel>> = {
   record: { dir: "automation", emptyTitle: "", emptyHint: "" },
   run: { dir: "automation", emptyTitle: "", emptyHint: "" },
   heal: { dir: "automation", emptyTitle: "", emptyHint: "" },
-  defects: { dir: "defects", emptyTitle: "还没有缺陷记录", emptyHint: "配置禅道或 Jira 的环境变量后，让 Agent 读取。", stage: "defects", action: "读取缺陷" },
+  defects: { dir: "defects", emptyTitle: "", emptyHint: "" },
   report: { dir: "reports", emptyTitle: "还没有报告", emptyHint: "用例写好后，让 Agent 写测试简报。", stage: "report", action: "生成测试简报" },
 };
 
@@ -111,8 +112,10 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
           <RunPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "heal" ? (
           <HealPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
+        ) : panel === "defects" ? (
+          <DefectsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "report" ? (
-          <ReportPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onOpenPanel={onPanelChange} />
+          <ReportPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onOpenPanel={onPanelChange} onChanged={onChanged} />
         ) : (
           <AssetFilesPanel
             key={panel}

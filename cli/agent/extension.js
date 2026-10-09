@@ -14,7 +14,7 @@ const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config
 const { createLLMClient } = require('./tools/llm-client');
 const { pickFolder, canPickFolder } = require('./tools/folder-picker');
 const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
-const { fetchDefects, renderDefects } = require('./tools/defects');
+const { fetchDefects, renderDefects, saveDefects } = require('./tools/defects');
 const { buildReport } = require('./tools/report');
 const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
@@ -518,9 +518,7 @@ async function installOpentest(pi, options = {}) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       const result = await fetchDefects({ source: params.source || 'auto' });
       if (result.configured) {
-        const file = path.join(workspace, 'defects', 'latest.md');
-        await fs.promises.mkdir(path.dirname(file), { recursive: true });
-        await fs.promises.writeFile(file, renderDefects(result.bugs));
+        saveDefects(workspace, result);
       }
       markTask(workspace, {
         product: params.productName,

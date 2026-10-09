@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 function defectConfig(env) {
   return {
     zentao: env.ZENTAO_BASE_URL && env.ZENTAO_TOKEN
@@ -73,4 +76,31 @@ function renderDefects(bugs) {
   return bugs.map((bug) => `- [${bug.source}] ${bug.id} ${bug.priority} ${bug.status} ${bug.title}`).join('\n') + '\n';
 }
 
-module.exports = { fetchDefects, renderDefects };
+/**
+ * Which variables a person still has to set. Names only, never values, so a page
+ * can show the list without risking a token.
+ */
+function defectSetup(env = process.env) {
+  const present = (name) => Boolean(env[name]);
+  const check = (required) => {
+    const missing = required.filter((name) => !present(name));
+    return { configured: missing.length === 0, missing, required };
+  };
+  return {
+    zentao: check(['ZENTAO_BASE_URL', 'ZENTAO_TOKEN']),
+    jira: { ...check(['JIRA_BASE_URL', 'JIRA_TOKEN']), optional: ['JIRA_EMAIL', 'JIRA_JQL'].filter((name) => !present(name)) },
+  };
+}
+
+/** Write what was read to defects/latest.md (for people) and latest.json (for the page and the report). */
+function saveDefects(workspace, result, now = () => new Date()) {
+  const dir = path.join(workspace, 'defects');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'latest.md'), renderDefects(result.bugs));
+  fs.writeFileSync(
+    path.join(dir, 'latest.json'),
+    `${JSON.stringify({ fetchedAt: now().toISOString(), bugs: result.bugs }, null, 2)}\n`,
+  );
+}
+
+module.exports = { fetchDefects, renderDefects, defectSetup, saveDefects };
