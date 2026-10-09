@@ -78,3 +78,13 @@ export function setItemBody(markdown: string, id: string, body: string): string 
   const normalized = `\n${trimmed}${item.end < markdown.length ? "\n\n" : "\n"}`;
   return markdown.slice(0, item.headingEnd) + normalized + markdown.slice(item.end);
 }
+
+/** Rename an item: only the heading text changes, the id stays. */
+export function setItemTitle(markdown: string, id: string, title: string): string | null {
+  const item = parseItems(markdown).find((candidate) => candidate.id === id);
+  const clean = title.replace(/\s+/g, " ").trim();
+  if (!item || !clean) return null;
+  const heading = markdown.slice(item.start, item.headingEnd);
+  const prefix = heading.slice(0, heading.indexOf(id) + id.length);
+  return markdown.slice(0, item.start) + `${prefix} ${clean}` + markdown.slice(item.headingEnd);
+}

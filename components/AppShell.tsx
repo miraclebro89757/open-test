@@ -1169,7 +1169,7 @@ export function AppShell() {
   }, [terminalTabs, isMobile]);
 
   // OpenTest QA workbench: the overview feeds the pipeline bar, asset tree and workbench.
-  const { overview: qaOverview, error: qaError } = useQaOverview(activeCwd, qaEnabled, explorerRefreshKey);
+  const { overview: qaOverview, error: qaError, refresh: refreshQa } = useQaOverview(activeCwd, qaEnabled, explorerRefreshKey);
   const qaWorkbenchActive = qaEnabled && (activeFileTabId === QA_TAB_ID || !activeFileTabId);
 
   const handleOpenQaPanel = useCallback((panel: QaPanelId) => {
@@ -2705,6 +2705,7 @@ export function AppShell() {
               onPanelChange={setQaPanel}
               onOpenFile={handleQaOpenFile}
               onAskAgent={handleQaAskAgent}
+              onChanged={refreshQa}
             />
           ) : activeFileTab?.filePath ? (
             <FileViewer

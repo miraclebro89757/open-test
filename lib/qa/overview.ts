@@ -107,8 +107,9 @@ export function readQaOverview(workspace: string): QaOverview {
 
   const stages = PIPELINE.map<StageOverview>((stage) => {
     let overview = taskStage(stage.task ? checkpoint?.tasks?.[stage.task] : undefined, filesFor[stage.id]);
-    // A test-point pass is finished only once a person has confirmed it.
-    if (stage.id === "test-points" && counts.points > 0 && counts.pointsConfirmed === counts.points) {
+    // Without a registered plan, test points are finished once a person has confirmed them all.
+    // With a plan, its steps decide: points still to be written are not done.
+    if (stage.id === "test-points" && overview.stepsTotal === 0 && counts.points > 0 && counts.pointsConfirmed === counts.points) {
       overview = { ...overview, status: "done" };
     }
     // Without a registered plan, the run stage is whatever files say.

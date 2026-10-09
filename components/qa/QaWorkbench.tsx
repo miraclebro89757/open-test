@@ -8,6 +8,8 @@ import { EmptyState, buttonStyle } from "./qa-ui";
 import { useAskFeedback } from "./useAskFeedback";
 import { AssetFilesPanel } from "./panels/AssetFilesPanel";
 import { OverviewPanel } from "./panels/OverviewPanel";
+import { TestPointsPanel } from "./panels/TestPointsPanel";
+import { CasesPanel } from "./panels/CasesPanel";
 
 interface Props {
   cwd: string | null;
@@ -19,6 +21,8 @@ interface Props {
   onPanelChange: (panel: QaPanelId) => void;
   onOpenFile: (absolutePath: string) => void;
   onAskAgent: QaAskAgent;
+  /** A panel changed a file; the overview should re-read. */
+  onChanged: () => void;
 }
 
 const NAV: QaPanelId[] = ["overview", "knowledge", "test-points", "cases", "automation", "record", "run", "defects", "report"];
@@ -54,7 +58,7 @@ function StageAction({ stage, label, onAskAgent }: { stage: keyof typeof STAGE_R
 }
 
 /** The right-panel workbench: one navigable view per stage of the test cycle. */
-export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelChange, onOpenFile, onAskAgent }: Props) {
+export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelChange, onOpenFile, onAskAgent, onChanged }: Props) {
   if (!cwd) {
     return <EmptyState title="先打开一个项目目录" hint="项目目录就是产品工作目录，测试产物都写在里面。在左侧项目列表里打开或新建。" />;
   }
@@ -92,6 +96,10 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
       <div style={{ flex: 1, minHeight: 0 }}>
         {panel === "overview" || !folder ? (
           <OverviewPanel overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} />
+        ) : panel === "test-points" ? (
+          <TestPointsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onChanged={onChanged} />
+        ) : panel === "cases" ? (
+          <CasesPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : (
           <AssetFilesPanel
             key={panel}
