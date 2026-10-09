@@ -38,3 +38,12 @@ opentest.config.json
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Next.js (Pi Web)
+/.next/
+/out/
+/test-results/
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+*.pem

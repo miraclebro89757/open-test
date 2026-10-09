@@ -1,7 +1,7 @@
 {
   "name": "opentest-ai",
   "version": "1.0.0",
-  "description": "AI-native QA agent that turns requirement documents into test knowledge, test points, and Playwright automation",
+  "description": "AI-native QA agent for test engineers: requirement documents to test knowledge, test points, cases and Playwright automation, with a Web UI and a Terminal Agent",
   "main": "cli/index.js",
   "bin": {
     "open-test": "./cli/index.js",
@@ -9,10 +9,20 @@
     "opentest-ai": "./cli/index.js"
   },
   "scripts": {
+    "dev": "next dev -H 127.0.0.1 -p 30141",
+    "dev:lan": "next dev -H 0.0.0.0 -p 30141",
+    "build": "next build --webpack",
+    "start:web": "next start -H 127.0.0.1 -p 30141",
+    "start:lan": "next start -H 0.0.0.0 -p 30141",
     "start": "node cli/index.js run",
-    "test": "node --test 'cli/**/*.test.js'",
-    "dev": "node cli/services/local.js",
-    "postinstall": "node cli/postinstall.js"
+    "services": "node cli/services/local.js",
+    "lint": "eslint .",
+    "test:cli": "node --test 'cli/**/*.test.js'",
+    "test:web": "node --experimental-strip-types --test \"app/**/*.test.mjs\" \"components/**/*.test.mjs\" \"hooks/**/*.test.mjs\" \"lib/**/*.test.mjs\" \"public/**/*.test.mjs\"",
+    "test": "npm run test:cli && npm run test:web",
+    "test:terminal": "node e2e/terminal.mjs",
+    "test:e2e": "node e2e/run.mjs",
+    "postinstall": "node cli/postinstall.js && node bin/prepare-terminal.js"
   },
   "files": [
     "cli/",
@@ -45,20 +55,71 @@
     "node": ">=22.19.0"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
     "commander": "^11.0.0",
     "figlet": "^1.6.0",
     "inquirer": "^8.2.5",
+    "js-yaml": "^5.2.3",
     "neo4j-driver": "^5.28.3",
+    "next": "16.3.8",
+    "node-pty": "1.2.0-beta.15",
     "ora": "^5.4.1",
     "playwright": "1.63.0",
     "playwright-core": "^1.48.0",
-    "semver": "^7.5.4"
+    "proper-lockfile": "4.1.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "semver": "7.8.5",
+    "undici": "8.11.0",
+    "web-push": "^3.6.7"
   },
   "preferGlobal": true,
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/js-yaml": "^4.0.9",
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^25",
+    "@types/proper-lockfile": "4.1.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/semver": "7.8.0",
+    "@types/web-push": "^3.6.4",
+    "ansi_up": "^6.0.6",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "jiti": "^2.7.0",
+    "katex": "^0.16.47",
+    "mammoth": "^1.12.0",
+    "mermaid": "^11.16.1",
+    "postcss": "^8.5.26",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-cjk-friendly": "^2.3.2",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5"
+  },
+  "browserslist": [
+    "chrome 111",
+    "edge 111",
+    "firefox 111",
+    "safari 16.2",
+    "ios_saf 16.2"
+  ]
 }
