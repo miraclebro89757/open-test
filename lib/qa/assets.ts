@@ -157,6 +157,8 @@ export function listAssetFiles(workspace: string, dir: WorkspaceDir): AssetFile[
   const root = path.join(workspace, dir);
   const scripts = dir === "automation" ? new Map(listAutomationScripts(workspace).map((script) => [script.file, script.kind])) : null;
   return listFiles(root, () => true, 3)
+    // Run records are results shown in the run panel, not reports.
+    .filter((absolute) => dir !== "reports" || !path.relative(root, absolute).split(path.sep).includes("runs"))
     .map<AssetFile>((absolute) => {
       const stat = fs.statSync(absolute);
       const file = path.relative(workspace, absolute);

@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { readCheckpoint, type CheckpointTask } from "./checkpoint";
 import {
@@ -9,6 +8,7 @@ import {
   readGraphSummary,
   readTestPoints,
 } from "./assets";
+import { latestRunState } from "./runs";
 
 /** The seven stages shown in the pipeline bar, in order. */
 export const PIPELINE = [
@@ -58,10 +58,6 @@ export interface QaOverview {
   counts: QaCounts;
 }
 
-function hasRunResults(workspace: string): boolean {
-  return fs.existsSync(path.join(workspace, "reports", "runs"));
-}
-
 function taskStage(task: CheckpointTask | undefined, fallbackHasFiles: boolean): Omit<StageOverview, "id" | "label" | "panel"> {
   const steps = task?.steps ?? [];
   const stepsDone = steps.filter((step) => step.status === "done").length;
@@ -77,11 +73,17 @@ function taskStage(task: CheckpointTask | undefined, fallbackHasFiles: boolean):
   return { status, stepsDone, stepsTotal: steps.length, nextStep: next?.id ?? "" };
 }
 
+/** Run records live under reports/runs/; they are results, not reports. */
+export function isReportFile(file: string): boolean {
+  return !file.split(path.sep).includes("runs");
+}
+
 export function readQaOverview(workspace: string): QaOverview {
   const checkpoint = readCheckpoint(workspace);
   const points = readTestPoints(workspace).flatMap((file) => file.items);
   const cases = readCases(workspace).flatMap((file) => file.items);
   const scripts = listAutomationScripts(workspace);
+  const runState = latestRunState(workspace);
   const counts: QaCounts = {
     knowledge: listMarkdownFiles(workspace, "knowledge").length,
     graphNodes: readGraphSummary(workspace)?.nodes ?? 0,
@@ -92,7 +94,7 @@ export function readQaOverview(workspace: string): QaOverview {
     uiScripts: scripts.filter((script) => script.kind === "ui").length,
     apiScripts: scripts.filter((script) => script.kind === "api").length,
     defects: listMarkdownFiles(workspace, "defects").length,
-    reports: listMarkdownFiles(workspace, "reports").length,
+    reports: listMarkdownFiles(workspace, "reports").filter(isReportFile).length,
   };
 
   const filesFor: Record<PipelineId, boolean> = {
@@ -100,7 +102,7 @@ export function readQaOverview(workspace: string): QaOverview {
     "test-points": counts.points > 0,
     cases: counts.cases > 0,
     record: counts.uiScripts + counts.apiScripts > 0,
-    run: hasRunResults(workspace),
+    run: runState !== "none",
     defects: counts.defects > 0,
     report: counts.reports > 0,
   };
@@ -112,8 +114,10 @@ export function readQaOverview(workspace: string): QaOverview {
     if (stage.id === "test-points" && overview.stepsTotal === 0 && counts.points > 0 && counts.pointsConfirmed === counts.points) {
       overview = { ...overview, status: "done" };
     }
-    // Without a registered plan, the run stage is whatever files say.
-    if (stage.id === "run" && filesFor.run) overview = { ...overview, status: "done" };
+    // The latest run decides the run stage; the checkpoint has no run task.
+    if (stage.id === "run" && runState !== "none") {
+      overview = { ...overview, status: runState === "passed" ? "done" : runState === "failed" ? "failed" : "in_progress" };
+    }
     return { id: stage.id, label: stage.label, panel: stage.panel, ...overview };
   });
 

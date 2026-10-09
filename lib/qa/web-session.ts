@@ -79,8 +79,8 @@ export function qaResourceOptions(
     // The extension is plain CommonJS shared with the terminal; load it at run
     // time so the bundler leaves it alone.
     const load = createRequire(join(root, "package.json"));
-    const module = load(extensionFile) as { createExtension: (options: { host: "web" }) => ExtensionFactory };
-    await module.createExtension({ host: "web" })(pi);
+    const extension = load(extensionFile) as { createExtension: (options: { host: "web" }) => ExtensionFactory };
+    await extension.createExtension({ host: "web" })(pi);
   };
   return {
     additionalSkillPaths: [qaSkillDir(root)],

@@ -10,6 +10,9 @@ import { AssetFilesPanel } from "./panels/AssetFilesPanel";
 import { OverviewPanel } from "./panels/OverviewPanel";
 import { TestPointsPanel } from "./panels/TestPointsPanel";
 import { CasesPanel } from "./panels/CasesPanel";
+import { RunPanel } from "./panels/RunPanel";
+import { HealPanel } from "./panels/HealPanel";
+import { ReportPanel } from "./panels/ReportPanel";
 
 interface Props {
   cwd: string | null;
@@ -25,7 +28,7 @@ interface Props {
   onChanged: () => void;
 }
 
-const NAV: QaPanelId[] = ["overview", "knowledge", "test-points", "cases", "automation", "record", "run", "defects", "report"];
+const NAV: QaPanelId[] = ["overview", "knowledge", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report"];
 
 interface FolderPanel {
   dir: WorkspaceDir;
@@ -42,7 +45,8 @@ const FOLDER_PANELS: Partial<Record<QaPanelId, FolderPanel>> = {
   cases: { dir: "cases", emptyTitle: "还没有用例", emptyHint: "测试点确认之后才能写用例。", stage: "cases", action: "生成用例" },
   automation: { dir: "automation", emptyTitle: "还没有自动化脚本", emptyHint: "录制或运行 Agent 的探索，脚本会写到 automation/。", stage: "record", action: "录制脚本" },
   record: { dir: "automation", emptyTitle: "还没有录制结果", emptyHint: "告诉 Agent 用例编号和沙箱地址，它会打开 Playwright 录制窗口。", stage: "record", action: "开始录制" },
-  run: { dir: "automation", emptyTitle: "还没有可执行的脚本", emptyHint: "先录制脚本，再执行。", stage: "run", action: "执行脚本" },
+  run: { dir: "automation", emptyTitle: "", emptyHint: "" },
+  heal: { dir: "automation", emptyTitle: "", emptyHint: "" },
   defects: { dir: "defects", emptyTitle: "还没有缺陷记录", emptyHint: "配置禅道或 Jira 的环境变量后，让 Agent 读取。", stage: "defects", action: "读取缺陷" },
   report: { dir: "reports", emptyTitle: "还没有报告", emptyHint: "用例写好后，让 Agent 写测试简报。", stage: "report", action: "生成测试简报" },
 };
@@ -100,6 +104,12 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
           <TestPointsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "cases" ? (
           <CasesPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
+        ) : panel === "run" ? (
+          <RunPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
+        ) : panel === "heal" ? (
+          <HealPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
+        ) : panel === "report" ? (
+          <ReportPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onOpenPanel={onPanelChange} />
         ) : (
           <AssetFilesPanel
             key={panel}

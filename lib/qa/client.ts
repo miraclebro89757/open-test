@@ -17,6 +17,7 @@ export type QaPanelId =
   | "automation"
   | "record"
   | "run"
+  | "heal"
   | "defects"
   | "report";
 
@@ -29,6 +30,7 @@ export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   automation: "自动化脚本",
   record: "录制",
   run: "执行",
+  heal: "自愈",
   defects: "缺陷",
   report: "报告",
 };
@@ -56,6 +58,7 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
   run: { mode: "send", text: "运行 automation 目录里的自动化脚本，选择器失效时自愈，然后汇报每条用例的结果。" },
+  heal: { mode: "send", text: "看最近一次执行里失败的 UI 脚本。如果是选择器失效，用 heal_selector 修复，再重新运行这个脚本，告诉我改了哪些选择器。" },
   defects: { mode: "send", text: "读取禅道或 Jira 的缺陷，写入 defects 目录。没有配置就告诉我缺哪些环境变量。" },
   report: { mode: "send", text: "根据已经写好的用例和缺陷写测试简报。不要编造通过率。" },
 };
