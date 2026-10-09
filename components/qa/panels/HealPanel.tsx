@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { QaAskAgent } from "@/lib/qa/client";
 import { STAGE_REQUESTS } from "@/lib/qa/client";
-import { changedLines } from "@/lib/qa/runs";
+import { changedLines } from "@/lib/qa/diff";
 import { Badge, EmptyState, QA_COLORS, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
 import { useQaData } from "../useQaData";

@@ -389,6 +389,8 @@ async function installOpentest(pi, options = {}) {
         description: 'Recording mode: "ui+api" (default, records both UI and API), "ui-only" (UI only), or "api-only" (API only)',
         enum: ['ui+api', 'ui-only', 'api-only'],
       })),
+      cleanupPre: Type.Optional(Type.Boolean({ description: 'Generated API script cleans test data before the test. Default true.' })),
+      cleanupPost: Type.Optional(Type.Boolean({ description: 'Generated API script cleans test data after the test. Default true.' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
@@ -435,9 +437,10 @@ async function installOpentest(pi, options = {}) {
       
       const result = await recordScenario({
         workspace,
-        sandboxUrl: params.sandboxUrl,
+        sandboxUrl,
         caseId: params.caseId,
         mode: selectedMode,
+        cleanup: { pre: params.cleanupPre !== false, post: params.cleanupPost !== false },
         llmClient,
         execFile: (file, args, options) => execFileAsync(file, args, options),
         confirm: async (summary) => {

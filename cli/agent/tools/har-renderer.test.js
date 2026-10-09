@@ -219,6 +219,27 @@ test('renderHARToPytest can leave out cleanup hooks', async () => {
   });
 });
 
+test('renderHARToPytest can clean only before or only after the test', async () => {
+  await withFixture(async (harPath) => {
+    const both = (await renderHARToPytest(harPath, sampleAnalysis(), { testName: 'test_both' })).pytestScript;
+    assert.ok(both.includes('pre-test cleanup') && both.includes('post-test cleanup'));
+
+    const pre = await renderHARToPytest(harPath, sampleAnalysis(), { testName: 'test_pre', cleanupPost: false });
+    assert.ok(pre.pytestScript.includes('pre-test cleanup'));
+    assert.ok(!pre.pytestScript.includes('post-test cleanup'));
+    assert.match(pre.readme, /runs pre-test cleanup/);
+
+    const post = await renderHARToPytest(harPath, sampleAnalysis(), { testName: 'test_post', cleanupPre: false });
+    assert.ok(!post.pytestScript.includes('pre-test cleanup'));
+    assert.ok(post.pytestScript.includes('post-test cleanup'));
+    assert.ok(post.pytestScript.includes('yield\n'));
+
+    const none = await renderHARToPytest(harPath, sampleAnalysis(), { testName: 'test_none', cleanupPre: false, cleanupPost: false });
+    assert.ok(!none.pytestScript.includes('def cleanup_test_data():'));
+    assert.match(none.readme, /no cleanup hooks/);
+  });
+});
+
 test('renderHARToPytest can leave out detailed assertions', async () => {
   await withFixture(async (harPath) => {
     const { pytestScript } = await renderHARToPytest(harPath, sampleAnalysis(), {

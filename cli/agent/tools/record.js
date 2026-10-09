@@ -116,6 +116,7 @@ async function recordScenario({
   confirm,
   execFile,
   mode = 'ui+api', // 'ui+api', 'ui-only', 'api-only'
+  cleanup = { pre: true, post: true }, // which pytest cleanup hooks to generate
   llmClient = null,
   now = () => Date.now(),
   skipBrowserCheck = false, // for testing
@@ -225,6 +226,8 @@ async function recordScenario({
         const scripts = await renderHARToPytest(harFile, analysis, {
           testName: `test_${caseId || 'api_scenario'}`,
           includeCleanup: true,
+          cleanupPre: cleanup.pre !== false,
+          cleanupPost: cleanup.post !== false,
           includeAssertions: true,
         });
         

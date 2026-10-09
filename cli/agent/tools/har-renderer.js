@@ -32,6 +32,9 @@ async function renderHARToPytest(harPath, analysis, options = {}) {
     baseUrl = null,
     timeout = 30,
     includeCleanup = true,
+    // Which half of the cleanup hook to emit; both by default.
+    cleanupPre = true,
+    cleanupPost = true,
     includeAssertions = true,
     logger = QUIET,
   } = options;
@@ -54,8 +57,9 @@ async function renderHARToPytest(harPath, analysis, options = {}) {
   scriptParts.push(generateSessionFixture());
   
   // 3. Setup/teardown hooks
-  if (includeCleanup) {
-    scriptParts.push(generateCleanupHooks(analysis));
+  const wantsCleanup = includeCleanup && (cleanupPre || cleanupPost);
+  if (wantsCleanup) {
+    scriptParts.push(generateCleanupHooks(analysis, { pre: cleanupPre, post: cleanupPost }));
   }
   
   // 4. Main test function
@@ -75,7 +79,7 @@ async function renderHARToPytest(harPath, analysis, options = {}) {
   const envExample = generateEnvExample(analysis);
   
   // Generate README
-  const readme = generateTestReadme(testName, analysis);
+  const readme = generateTestReadme(testName, analysis, wantsCleanup ? { pre: cleanupPre, post: cleanupPost } : null);
   
   logger.log(`  ✓ Generated pytest script (${pytestScript.length} chars)`);
   
@@ -164,26 +168,29 @@ def api_session():
 /**
  * Generate cleanup hooks
  */
-function generateCleanupHooks(analysis) {
-  return `@pytest.fixture(scope="function", autouse=True)
-def setup_and_teardown():
-    """Setup and teardown hooks for test idempotency."""
-    # Pre-test cleanup
-    print("🧹 Running pre-test cleanup...")
-    cleanup_test_data()
-    
-    yield
-    
-    # Post-test cleanup
-    print("🧹 Running post-test cleanup...")
-    cleanup_test_data()
-
-
-def cleanup_test_data():
-    """Clean up any test data created during execution."""
-    # TODO: Implement cleanup logic based on your API
-    # Example: Delete test users, reset database state, clear cache
-    pass`;
+function generateCleanupHooks(analysis, { pre = true, post = true } = {}) {
+  const lines = [
+    '@pytest.fixture(scope="function", autouse=True)',
+    'def setup_and_teardown():',
+    '    """Setup and teardown hooks for test idempotency."""',
+  ];
+  if (pre) {
+    lines.push('    # Pre-test cleanup', '    print("🧹 Running pre-test cleanup...")', '    cleanup_test_data()', '');
+  }
+  lines.push('    yield');
+  if (post) {
+    lines.push('', '    # Post-test cleanup', '    print("🧹 Running post-test cleanup...")', '    cleanup_test_data()');
+  }
+  lines.push(
+    '',
+    '',
+    'def cleanup_test_data():',
+    '    """Clean up any test data created during execution."""',
+    '    # TODO: Implement cleanup logic based on your API',
+    '    # Example: Delete test users, reset database state, clear cache',
+    '    pass',
+  );
+  return lines.join('\n');
 }
 
 /**
@@ -459,7 +466,7 @@ VERIFY_SSL=true
 /**
  * Generate README for the test
  */
-function generateTestReadme(testName, analysis) {
+function generateTestReadme(testName, analysis, cleanup = { pre: true, post: true }) {
   return `# API Test: ${testName}
 
 ## Overview
@@ -510,7 +517,7 @@ ${(analysis.recommendations || []).map(r => `- ${r}`).join('\n')}
 - Add retry logic for flaky network requests
 
 ## Notes
-- This test includes pre/post cleanup hooks for idempotency
+${cleanup ? `- This test runs ${[cleanup.pre ? 'pre' : '', cleanup.post ? 'post' : ''].filter(Boolean).join(' and ')}-test cleanup through \`cleanup_test_data()\` for idempotency` : '- This test has no cleanup hooks; it leaves the data it creates'}
 - Sensitive data (passwords, tokens) should be stored in \`.env\`
 - Review extracted variables to ensure they match your expectations
 `;

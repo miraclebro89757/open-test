@@ -2,7 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseCases, recordingPhrases, matchRecording, applyAutomationTags } = require('./record');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { parseCases, recordingPhrases, matchRecording, applyAutomationTags, recordScenario } = require('./record');
 
 const CASES = `# 功能用例
 
@@ -102,4 +105,36 @@ test('an existing 自动化 tag is left alone for unmatched cases', () => {
 
 test('a document without cases is left untouched', () => {
   assert.equal(applyAutomationTags('# 只有标题\n', { matchedIds: new Set(['TC001']), specPaths: ['a.ts'] }), '# 只有标题\n');
+});
+test('the recording wizard choices reach the generated API script', async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'record-wizard-'));
+  const har = {
+    log: {
+      entries: [{
+        startedDateTime: '2024-01-01T10:00:00.000Z',
+        time: 10,
+        request: { method: 'GET', url: 'https://api.example.com/api/items', headers: [] },
+        response: { status: 200, headers: [], content: { mimeType: 'application/json', text: '{"id":"1"}' } },
+      }],
+    },
+  };
+  const result = await recordScenario({
+    workspace,
+    sandboxUrl: 'https://sandbox.example.com',
+    caseId: 'TC001',
+    mode: 'api-only',
+    cleanup: { pre: false, post: true },
+    skipBrowserCheck: true,
+    now: () => 1700000000000,
+    confirm: async () => true,
+    execFile: async (_file, args) => {
+      fs.writeFileSync(args[args.indexOf('--save-har') + 1], JSON.stringify(har));
+    },
+  });
+  assert.equal(result.recorded, true);
+  const script = fs.readFileSync(result.apiScript.pytestFile, 'utf8');
+  assert.ok(script.includes('post-test cleanup'));
+  assert.ok(!script.includes('pre-test cleanup'));
+  // The analysis is kept next to the scripts so the Web wizard can show it.
+  assert.ok(fs.existsSync(path.join(workspace, 'automation', 'TC001-1700000000000.analysis.json')));
 });

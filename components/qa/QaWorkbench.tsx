@@ -10,6 +10,7 @@ import { AssetFilesPanel } from "./panels/AssetFilesPanel";
 import { OverviewPanel } from "./panels/OverviewPanel";
 import { TestPointsPanel } from "./panels/TestPointsPanel";
 import { CasesPanel } from "./panels/CasesPanel";
+import { RecordPanel } from "./panels/RecordPanel";
 import { RunPanel } from "./panels/RunPanel";
 import { HealPanel } from "./panels/HealPanel";
 import { ReportPanel } from "./panels/ReportPanel";
@@ -44,7 +45,7 @@ const FOLDER_PANELS: Partial<Record<QaPanelId, FolderPanel>> = {
   "test-points": { dir: "test-points", emptyTitle: "还没有测试点", emptyHint: "需求分析之后，让 Agent 按功能写测试点，写完等你确认。", stage: "test-points", action: "生成测试点" },
   cases: { dir: "cases", emptyTitle: "还没有用例", emptyHint: "测试点确认之后才能写用例。", stage: "cases", action: "生成用例" },
   automation: { dir: "automation", emptyTitle: "还没有自动化脚本", emptyHint: "录制或运行 Agent 的探索，脚本会写到 automation/。", stage: "record", action: "录制脚本" },
-  record: { dir: "automation", emptyTitle: "还没有录制结果", emptyHint: "告诉 Agent 用例编号和沙箱地址，它会打开 Playwright 录制窗口。", stage: "record", action: "开始录制" },
+  record: { dir: "automation", emptyTitle: "", emptyHint: "" },
   run: { dir: "automation", emptyTitle: "", emptyHint: "" },
   heal: { dir: "automation", emptyTitle: "", emptyHint: "" },
   defects: { dir: "defects", emptyTitle: "还没有缺陷记录", emptyHint: "配置禅道或 Jira 的环境变量后，让 Agent 读取。", stage: "defects", action: "读取缺陷" },
@@ -104,6 +105,8 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
           <TestPointsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "cases" ? (
           <CasesPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
+        ) : panel === "record" ? (
+          <RecordPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "run" ? (
           <RunPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "heal" ? (
