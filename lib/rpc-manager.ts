@@ -50,6 +50,7 @@ import { mcpPromptPreparation, type McpCommandCandidate } from "./mcp-command";
 import { createReadOnlyMcpPolicyExtension } from "./mcp-read-only-policy";
 import { createSubagentSkillsBinding } from "./subagent-skills";
 import { isNestedToolExecutionEvent } from "./agent-event-wire";
+import { qaResourceOptions } from "./qa/web-session";
 import {
   appendClearedSessionToolSelection,
   appendSessionToolSelection,
@@ -2376,6 +2377,8 @@ export async function startRpcSession(
     const builtins = subagentResources || chatOnly
       ? undefined
       : await createPiWebBuiltinExtensions({ agentDir });
+    // OpenTest: the QA workflow (tools, commands, skill) for ordinary sessions.
+    const qaOptions = subagentResources || chatOnly ? undefined : qaResourceOptions(sessionCwd);
     const skillsBinding = subagentResources ? createSubagentSkillsBinding({
       loadSkills: subagentResources.loadSkills,
       skills: subagentResources.skills,
@@ -2404,8 +2407,16 @@ export async function startRpcSession(
         : chatOnly
           ? { ...CHAT_ONLY_RESOURCE_LOADER_OPTIONS, extensionFactories: [exactSystemPromptExtension] }
         : {
+            ...(qaOptions
+              ? {
+                  additionalSkillPaths: qaOptions.additionalSkillPaths,
+                  additionalPromptTemplatePaths: qaOptions.additionalPromptTemplatePaths,
+                  appendSystemPrompt: qaOptions.appendSystemPrompt,
+                }
+              : {}),
             extensionFactories: [
               ...(builtins?.extensions ?? []),
+              ...(qaOptions?.extensionFactories ?? []),
               createReadOnlyMcpPolicyExtension(),
               createProjectCommandBashExtension({
                 cwd: sessionCwd,

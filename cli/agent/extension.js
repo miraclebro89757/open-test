@@ -86,10 +86,22 @@ async function reviewHeals(ctx, project) {
   ctx.ui.notify('已按选择保留自愈版本', 'info');
 }
 
-async function runStep(pi, name, ctx) {
-  const project = readProject(agentHome()).current;
+/**
+ * The product directory the step commands work in.
+ *
+ * The terminal remembers one with /project. The Web UI has no such command: a
+ * session is already opened on a directory, and that directory is the product
+ * workspace, the same way Pi Web scopes every session to a project.
+ */
+function currentProject(ctx, options = {}) {
+  if (options.host === 'web') return (ctx && ctx.cwd) || '';
+  return readProject(agentHome()).current;
+}
+
+async function runStep(pi, name, ctx, options = {}) {
+  const project = currentProject(ctx, options);
   if (!project) {
-    ctx.ui.notify('先用 /project 选择项目目录', 'warning');
+    ctx.ui.notify(options.host === 'web' ? '先在左侧打开一个项目目录' : '先用 /project 选择项目目录', 'warning');
     return;
   }
   
@@ -219,25 +231,28 @@ async function switchProject(ctx, args, deps = {}) {
   }
 }
 
-function registerWorkflow(pi) {
+function registerWorkflow(pi, options = {}) {
   if (typeof pi.registerCommand !== 'function') return;
-  pi.registerCommand('project', {
-    description: '切换当前项目，之后的步骤都在这个目录里',
-    handler: (args, ctx) => switchProject(ctx, args),
-  });
+  const web = options.host === 'web';
+  if (!web) {
+    pi.registerCommand('project', {
+      description: '切换当前项目，之后的步骤都在这个目录里',
+      handler: (args, ctx) => switchProject(ctx, args),
+    });
+  }
   STEPS.forEach(([name, shortcut, title]) => {
     pi.registerCommand(name, {
       description: title,
-      handler: (_args, ctx) => runStep(pi, name, ctx),
+      handler: (_args, ctx) => runStep(pi, name, ctx, options),
     });
-    if (typeof pi.registerShortcut === 'function') {
+    if (!web && typeof pi.registerShortcut === 'function') {
       pi.registerShortcut(shortcut, {
         description: title,
-        handler: (ctx) => runStep(pi, name, ctx),
+        handler: (ctx) => runStep(pi, name, ctx, options),
       });
     }
   });
-  if (typeof pi.registerShortcut === 'function') {
+  if (!web && typeof pi.registerShortcut === 'function') {
     pi.registerShortcut('ctrl+alt+p', {
       description: '切换项目',
       handler: (ctx) => switchProject(ctx, ''),
@@ -278,8 +293,8 @@ function modelHistorySnapshot() {
   return modelHistory.map((entry) => ({ ...entry }));
 }
 
-module.exports = async function opentestExtension(pi) {
-  installDocumentAutocomplete(pi);
+async function installOpentest(pi, options = {}) {
+  if (options.host !== 'web') installDocumentAutocomplete(pi);
   if (typeof pi.on === 'function') {
     pi.on('tool_call', (event, ctx) => blockBuiltinPromptEdit(event, ctx && ctx.cwd));
     pi.on('turn_start', (_event, ctx) => showProgress(ctx, activeWorkspace));
@@ -711,9 +726,15 @@ module.exports = async function opentestExtension(pi) {
     },
   });
 
-  registerWorkflow(pi);
-};
+  registerWorkflow(pi, options);
+}
 
+// The terminal loads this file as a plain extension. The Web UI calls
+// createExtension({ host: 'web' }) so the step commands use the session's
+// directory instead of the terminal's remembered /project.
+module.exports = (pi) => installOpentest(pi, { host: 'terminal' });
+module.exports.createExtension = (options = {}) => (pi) => installOpentest(pi, options);
+module.exports.currentProject = currentProject;
 module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;
 module.exports.switchProject = switchProject;
 module.exports.recordModelChange = recordModelChange;
