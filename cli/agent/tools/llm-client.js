@@ -1,95 +1,65 @@
 'use strict';
 
-const { resolveLLMConfig, isUsableConfig } = require('../../llm/config-store');
+const { readPiModel } = require('../pi-config');
 const { completeWithFailover } = require('../../llm/adapter');
 
 /**
- * Build a chat client from the resolved LLM profiles, reusing the same
- * failover ordering the agent itself runs on.
+ * Chat client for tools that call the model directly (HAR analysis, explore).
  *
- * This is the SINGLE source of LLM configuration for all OpenTest features.
- * Once configured, all features (explore, analyze, points, cases, etc.) 
- * automatically use this configuration unless explicitly overridden.
+ * It uses the same model the Terminal Agent and Pi Web run on: the default
+ * model in Pi's agent directory, with the provider's address and key taken
+ * from the same models.json that Pi Web's model page edits. There is no second
+ * configuration to keep in step.
  *
- * Configuration priority:
- * 1. Explicit overrides (passed as parameters)
- * 2. Project config (opentest.config.json)
- * 3. User config (~/.opentest/models.json)
- * 4. Environment variables
+ * Returns null when that model cannot be called over an OpenAI-compatible HTTP
+ * endpoint (nothing configured, a key that comes from a shell command, or a
+ * provider with its own protocol), so callers fall back to rule-based analysis.
+ * It never invents a client or pretends a model answered.
  *
- * Returns null when no profile is usable so callers can fall back to rule-based
- * analysis. It never invents a client: an unconfigured machine gets null, not a
- * stub that silently pretends a model answered.
- *
- * @param {Object} context - Context options
- * @param {string} context.cwd - Current working directory
- * @param {Object} context.env - Environment variables
- * @param {Object} context.overrides - Explicit overrides (provider, model, apiKey, etc.)
- * @returns {Promise<Object|null>} LLM client or null if not configured
+ * @param {Object|string} [context]
+ * @param {Object} [context.env] Environment, defaults to process.env
+ * @param {string} [context.homeDir] Home directory override, for tests
  */
 async function createLLMClient(context = {}) {
-  let resolved;
-  try {
-    // Resolve LLM configuration from all sources
-    // This automatically uses project/user config if available
-    resolved = resolveLLMConfig({
-      cwd: context.cwd || process.cwd(),
-      env: context.env || process.env,
-      overrides: context.overrides || null,
-    });
-  } catch (error) {
-    // LLM not configured, return null for graceful degradation
-    return null;
-  }
+  const options = context && typeof context === 'object' ? context : {};
+  const info = readPiModel({ env: options.env || process.env, homeDir: options.homeDir });
+  if (!info.direct) return null;
 
-  const chain = (resolved.chain || []).filter(
-    (entry) => entry && entry.config && isUsableConfig(entry.config)
-  );
-  
-  if (!chain.length) {
-    // No usable profiles, return null
-    return null;
-  }
+  const config = { ...info.direct };
+  const chain = [{ name: `${config.provider}/${config.model}`, config }];
 
   return {
-    activeProfile: resolved.activeProfile,
-    config: resolved.config,
-    
-    /**
-     * Chat-style completion (multiple messages)
-     */
-    async chat(messages, options = {}) {
+    activeProfile: chain[0].name,
+    config,
+
+    /** Chat-style completion (multiple messages). */
+    async chat(messages, callOptions = {}) {
       const systemPrompt = messages.find((message) => message.role === 'system');
       const prompt = messages
         .filter((message) => message.role !== 'system')
         .map((message) => message.content)
         .join('\n\n');
-      
       try {
         const result = await completeWithFailover(chain, prompt, {
-          ...options,
-          systemPrompt,
+          ...callOptions,
+          systemPrompt: systemPrompt ? systemPrompt.content : undefined,
         });
         return result.content;
       } catch (error) {
-        // LLM call failed, let caller handle fallback
         throw new Error(`LLM call failed: ${error.message}`);
       }
     },
-    
-    /**
-     * Simple text completion
-     */
-    async complete(prompt, options = {}) {
+
+    /** Simple text completion. */
+    async complete(prompt, callOptions = {}) {
       try {
-        const result = await completeWithFailover(chain, prompt, options);
+        const result = await completeWithFailover(chain, prompt, callOptions);
         return {
           content: result.content,
-          model: result.model,
+          model: config.model,
           provider: result.provider,
         };
       } catch (error) {
-        // LLM call failed, let caller handle fallback
         throw new Error(`LLM call failed: ${error.message}`);
       }
     },

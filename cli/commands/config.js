@@ -420,6 +420,16 @@ function registerConfigCommand(program) {
       await runWizard();
     }));
 
+  // The terminal agent now reads Pi's own configuration, the same one Pi Web's
+  // model page edits. This command only manages the legacy ~/.opentest profile
+  // store, so say so before anyone spends time on it.
+  config.hook('preAction', () => {
+    console.log(
+      '\n⚠️  终端 Agent 已改用 Pi 的模型配置，与 Web 共用：运行 open-test web，打开「模型」页配置。\n' +
+      '   本命令只管理旧的 ~/.opentest/config.json，不会影响 Agent 使用的模型。\n'
+    );
+  });
+
   config
     .command('use <profile>')
     .description('Switch the active LLM profile')

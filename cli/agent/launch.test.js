@@ -5,81 +5,22 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPiArgs, composeSystemPrompt, expandAttachments, modelsDocument, providerId, writePiHome } = require('./launch');
+const { buildPiArgs, composeSystemPrompt, expandAttachments, launchAgent } = require('./launch');
 const { DEFAULT_ANALYSIS_PROMPT, bundledPromptsDir } = require('./prompts');
 
-const SECRET = 'sk-or-v1-test-secret-value';
-
-test('openrouter and deepseek map to pi provider ids', () => {
-  assert.equal(providerId('https://openrouter.ai/api/v1'), 'openrouter');
-  assert.equal(providerId('https://api.deepseek.com/v1'), 'deepseek');
-  assert.equal(providerId('http://localhost:11434/v1'), 'opentest');
-});
-
-test('models.json stores an env reference per profile, not the key', () => {
-  const doc = modelsDocument([
-    {
-      name: 'free-openrouter',
-      provider: 'openrouter',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'stealth/space-bunny-alpha',
-      apiKey: SECRET,
-      usable: true,
-    },
-    {
-      name: 'team-deepseek',
-      provider: 'deepseek',
-      baseUrl: 'https://api.deepseek.com/v1',
-      model: 'deepseek-reasoner',
-      apiKey: 'sk-second-secret',
-      usable: true,
-    },
-  ]);
-  const text = JSON.stringify(doc);
-  // Every profile becomes its own pi provider so pi has something to switch to.
-  assert.equal(doc.providers['opentest-free-openrouter'].apiKey, '$OPENTEST_KEY_FREE_OPENROUTER');
-  assert.equal(doc.providers['opentest-team-deepseek'].apiKey, '$OPENTEST_KEY_TEAM_DEEPSEEK');
-  assert.equal(doc.providers['opentest-free-openrouter'].models[0].id, 'stealth/space-bunny-alpha');
-  assert.equal(text.includes(SECRET), false);
-  assert.equal(text.includes('sk-second-secret'), false);
-});
-
-test('the --models scope lets pi cycle between profiles', () => {
-  const args = buildPiArgs({
-    config: { profile: 'free-openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'a', apiKey: SECRET },
-    profiles: [
-      { name: 'free-openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'a', apiKey: SECRET, usable: true },
-      { name: 'team-deepseek', baseUrl: 'https://api.deepseek.com/v1', model: 'b', apiKey: 'sk-2', usable: true },
-    ],
+function baseArgs(extra = {}) {
+  return buildPiArgs({
     words: [],
-    skill: '/s',
-    extension: '/e',
-    prompt: 'p',
-    promptTemplate: '/pr',
-  });
-  const scope = args[args.indexOf('--models') + 1];
-  assert.equal(scope, 'opentest-free-openrouter/a,opentest-team-deepseek/b');
-  assert.equal(args.includes(SECRET), false);
-  // Startup still lands on the active profile.
-  assert.equal(args[args.indexOf('--provider') + 1], 'opentest-free-openrouter');
-  assert.equal(args[args.indexOf('--model') + 1], 'a');
-});
-
-test('pi arguments keep @ files and never include the key', () => {
-  const args = buildPiArgs({
-    config: {
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'stealth/space-bunny-alpha',
-      apiKey: SECRET,
-    },
-    words: ['@/tmp/req.md', '生成用例'],
-    print: true,
     skill: '/skills/opentest-qa',
     extension: '/extensions/opentest.js',
     prompt: '只做测试',
     promptTemplate: '/prompts',
+    ...extra,
   });
-  assert.equal(args.includes(SECRET), false);
+}
+
+test('pi arguments keep @ files and the read-only tool set', () => {
+  const args = baseArgs({ words: ['@/tmp/req.md', '生成用例'], print: true });
   assert.equal(args.includes('@/tmp/req.md'), true);
   assert.equal(args.includes('--print'), true);
   assert.equal(args.includes('--no-approve'), true);
@@ -89,8 +30,14 @@ test('pi arguments keep @ files and never include the key', () => {
   assert.equal(args.includes('/prompts'), true);
   assert.equal(args.includes('--no-prompt-templates'), false);
   assert.equal(args.includes('/extensions/opentest.js'), true);
-  assert.equal(args.includes('run_playwright_test'), false);
   assert.match(args.find((arg) => arg.includes('run_playwright_test')), /heal_selector/);
+});
+
+test('pi arguments never choose a model, so Pi uses the one set in Pi Web', () => {
+  const args = baseArgs();
+  assert.equal(args.includes('--provider'), false);
+  assert.equal(args.includes('--model'), false);
+  assert.equal(args.includes('--models'), false);
 });
 
 test('a docx attachment is extracted before pi sees it', () => {
@@ -108,22 +55,42 @@ test('a docx attachment is extracted before pi sees it', () => {
   assert.equal(fs.readFileSync(words[0].slice(1), 'utf8'), '登录需求');
 });
 
-test('written models file does not contain the key', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-pi-'));
-  const file = writePiHome([
-    {
-      name: 'free-openrouter',
-      provider: 'openrouter',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'demo-model',
-      apiKey: SECRET,
-      usable: true,
+function launchWith(env, homeDir) {
+  let spawned = null;
+  launchAgent({
+    words: [],
+    cwd: '/work',
+    env,
+    homeDir,
+    exists: () => true,
+    spawnImpl: (bin, args, options) => {
+      spawned = { bin, args, options };
+      return {};
     },
-  ], dir);
-  const text = fs.readFileSync(file, 'utf8');
-  assert.equal(text.includes(SECRET), false);
-  assert.match(text, /\$OPENTEST_KEY_FREE_OPENROUTER/);
-  assert.equal(fs.existsSync(path.join(dir, 'prompts')), true);
+  });
+  return spawned;
+}
+
+test('the terminal runs on the same agent directory Pi Web uses', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-home-'));
+  const spawned = launchWith({ PATH: '/bin' }, home);
+  // The launcher leaves the directory alone, so Pi falls back to ~/.pi/agent.
+  assert.equal('PI_CODING_AGENT_DIR' in spawned.options.env, false);
+  assert.equal(spawned.options.env.PI_TELEMETRY, '0');
+  // It does not write a second models.json for the terminal.
+  assert.equal(fs.existsSync(path.join(home, '.opentest')), false);
+  assert.equal(fs.existsSync(path.join(home, '.pi', 'agent', 'models.json')), false);
+  // Custom prompts live where Pi itself looks for them.
+  assert.equal(fs.existsSync(path.join(home, '.pi', 'agent', 'prompts')), true);
+});
+
+test('a PI_CODING_AGENT_DIR chosen by the user is passed through untouched', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-home-'));
+  const custom = path.join(home, 'custom-agent');
+  const spawned = launchWith({ PATH: '/bin', PI_CODING_AGENT_DIR: custom }, home);
+  assert.equal(spawned.options.env.PI_CODING_AGENT_DIR, custom);
+  assert.equal(fs.existsSync(path.join(custom, 'prompts')), true);
+  assert.equal(fs.existsSync(path.join(custom, 'models.json')), false);
 });
 
 test('default analysis prompt is a read-only version selected with /', () => {
@@ -134,7 +101,7 @@ test('default analysis prompt is a read-only version selected with /', () => {
   assert.match(text, /六流/);
   assert.match(text, /只读/);
   assert.equal(text.includes('$1'), false);
-  assert.match(skill, /~\/\.opentest\/pi-agent\/prompts/);
+  assert.match(skill, /~\/\.pi\/agent\/prompts/);
   const prompt = composeSystemPrompt('只做测试', {
     version: DEFAULT_ANALYSIS_PROMPT,
     promptFile: file,

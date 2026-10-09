@@ -23,8 +23,8 @@ It is a terminal agent, not a web dashboard. You stay in your editor and your te
 ### Terminal Agent (Quick)
 
 ```bash
-# 1. Configure a model (one-time)
-npx opentest-ai config
+# 1. Configure a model once, in the Web UI's model page (the terminal shares it)
+npx opentest-ai web
 
 # 2. Configure browser environment (one-time)
 npx opentest-ai browser setup
@@ -85,17 +85,9 @@ npx opentest-ai config ping      # verify it can complete a request
 npx opentest-ai config list      # profiles, keys masked
 ```
 
-### Providers
+### Models
 
-| Provider | Default model | Notes |
-|---|---|---|
-| `openrouter` | `deepseek/deepseek-r1:free` | Free tier, good for trying things out |
-| `deepseek` | `deepseek-chat` | Production case generation |
-| `cc-switch` | `claude-3-5-sonnet-20241022` | Enterprise aggregator routing |
-| `ollama` | `deepseek-r1:14b` | Offline / air-gapped, no API key |
-| `custom` | — | Any OpenAI-compatible endpoint (needs `--base-url` and `--model`) |
-
-Profiles support failover ordering, so a rate-limited free tier can fall through to a production endpoint. See [Configuration](#configuration).
+There is one model configuration, and it lives in Pi's agent directory (`~/.pi/agent/`, or `PI_CODING_AGENT_DIR` if you set it). The Web UI's **Models** page edits it, and the Terminal Agent reads the same files, so a model you add or switch to in the browser is the one the terminal starts on. Any provider Pi supports works, including OpenAI-compatible endpoints such as DeepSeek, SiliconFlow, ModelScope, OpenRouter or a local Ollama.
 
 ## 🔄 The Workflow
 
@@ -164,47 +156,28 @@ Use `/project` to pin a working directory; after that, steps write there. The se
 
 The picker lists your recent directories first. On macOS it also offers **📁 浏览本机文件夹...**, which opens the native Finder folder chooser and starts at your current project. Closing the dialog without choosing leaves the project unchanged; if the dialog cannot open, it falls back to typed input. Other platforms get recent entries plus typed input.
 
-## 🧠 Switching models
+## 🧠 Models
 
-Run `open-test config` more than once and it asks what you mean before touching anything:
+Set the model once in the Web UI (**Models** at the bottom left of the sidebar): add a provider and key, then choose a default model. The Terminal Agent starts on that default and prints it, with the key masked, when it opens.
 
-- **Add another profile** — existing ones are kept, so you can hold a free tier and a production endpoint side by side.
-- **Replace an existing profile** — pick which one, keep its provider pre-selected, and reuse the key already on disk if you only want to change the model or address. A key rotation only asks for the new key.
-
-Inside the agent, switching is Pi's job, so it behaves like Pi's own controls and keeps the conversation intact:
+Inside the agent, switching is Pi's own job and keeps the conversation intact:
 
 | | |
 |---|---|
-| `/model` | pick any configured profile from a list |
+| `/model` | pick any model Pi knows about |
 | `Ctrl+P` / `Shift+Ctrl+P` | cycle forward / backward |
-| `/task-model` | pin a *kind of task* to a profile (OpenTest's addition) |
+| `/login` | sign in to a subscription provider |
 
-No restart, and no lost context — the session carries on with the new model. Adding a profile while the agent is already running is the one exception: a profile written after launch is not in Pi's registry yet, so switch to it after one restart.
-
-### Different models for different tasks
-
-Testing stages have different needs: requirement analysis and bug analysis want reasoning depth, case generation is bulk structured output, reports are summarisation. Pin them separately:
-
-```
-/task-model 需求分析 team-deepseek      # strong model for analysis
-/task-model 用例生成 free-openrouter     # cheap model for volume
-```
-
-Routing is applied automatically before each step runs, and `/task-model 需求分析` with no profile clears the pin. Mappings live under `task_models` in your config file, so they survive restarts.
+OpenTest does not keep a second copy of any of this. The launcher never writes `models.json`, never passes `--model`, and never sets `PI_CODING_AGENT_DIR` for you.
 
 ### Where your key lives
 
-The key is written straight to a local file and never travels through the model:
-
 | | |
 |---|---|
-| Stored in | `~/.opentest/config.json` or `./opentest.config.json`, written with mode `0600` |
-| Passed to Pi as | a per-profile env var (`OPENTEST_KEY_<PROFILE>`), referenced from `models.json` as `$OPENTEST_KEY_<PROFILE>` |
-| Used by | the provider as an HTTP `Authorization` header |
-| Never | placed in the prompt, a message, a tool result, `models.json`, or the process command line |
-| Shown to you as | `sk-3d9…0a2d` — `open-test config list` and every picker render only the mask |
-
-Every configured profile gets its own Pi provider (`opentest-<profile>`) so it can authenticate independently — a free tier and a paid endpoint on the same host stay separately switchable. `open-test config` reads and writes the file directly; it does not ask the model to store anything for you.
+| Stored in | `~/.pi/agent/models.json` (or `auth.json`), written by Pi Web's model page |
+| Read by | Pi itself, and by OpenTest tools that call the model directly (HAR analysis, explore). The direct tools use the same default model; a key given as a shell command (`!cmd`) is left to Pi, and those tools fall back to rule-based analysis |
+| Never | placed in the prompt, a message, a tool result, or the process command line |
+| Shown to you as | `sk-…cret`, a mask |
 
 ## 🧠 The Requirement Graph
 
@@ -243,11 +216,8 @@ opentest-ai browser verify         Verify browser works
 opentest-ai browser detect         Detect available browsers
 opentest-ai browser reset          Reset browser configuration
 
-opentest-ai config                 Interactive provider wizard
-opentest-ai config set             Write one provider profile
-opentest-ai config use <profile>   Switch the active profile
-opentest-ai config ping            Check the active profile can serve a request
-opentest-ai config list            Show profiles with keys masked
+opentest-ai config                 Legacy ~/.opentest profiles (no longer used by the agent;
+                                   configure models in the Web UI instead)
 
 opentest-ai services [up|stop|logs]   Bundled local Neo4j
 
@@ -260,36 +230,13 @@ opentest-ai update                 Check npm for a newer version
 
 `@path/to/doc.md` points at any document, absolute paths fine. `/` lists prompts. `Ctrl+C` exits.
 
-The built-in analysis template is `/prd-analysis`, and it is **read-only**. Custom templates go in `~/.opentest/pi-agent/prompts/` and are selectable with `/`.
+The built-in analysis template is `/prd-analysis`, and it is **read-only**. Custom templates go in `~/.pi/agent/prompts/` (Pi's own prompt folder) and are selectable with `/`.
 
 ## ⚙️ Configuration
 
-### LLM profiles
+### Models
 
-Layers merge in this order, each overriding the last: overrides → project `./opentest.config.json` → user `~/.opentest/config.json` → environment → built-in preset. See [`opentest.config.example.json`](opentest.config.example.json) and the schema in [`schemas/llm-config.schema.json`](schemas/llm-config.schema.json).
-
-| Variable | Purpose |
-|---|---|
-| `OPENTEST_CONFIG` | Use a config file at a path other than `./opentest.config.json` |
-| `OPENTEST_PROFILE` | Active profile name |
-| `OPENTEST_PROVIDER` | `openrouter` \| `deepseek` \| `cc-switch` \| `ollama` \| `custom` |
-| `OPENTEST_BASE_URL` | OpenAI-compatible base URL |
-| `OPENTEST_MODEL` | Model id |
-| `OPENTEST_API_KEY` | API key (read from config/env by the CLI; the agent process receives it as a per-profile `OPENTEST_KEY_*` var) |
-| `OPENAI_API_KEY` | Legacy fallback — only reached when no preset matches; defaults to `gpt-4o-mini` on `api.openai.com` |
-
-A config file may also carry `task_models`, mapping a task to a profile:
-
-```json
-{
-  "task_models": {
-    "requirementAnalysis": "team-deepseek",
-    "bugAnalysis": "team-deepseek",
-    "testCaseGeneration": "free-openrouter",
-    "reportGeneration": "free-openrouter"
-  }
-}
-```
+Configured in the Web UI and stored in Pi's agent directory; see [Models](#-models). The older `~/.opentest/config.json` profile store and `open-test config` are legacy and are not read by the agent.
 
 ### Defect trackers
 

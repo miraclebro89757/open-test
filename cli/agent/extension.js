@@ -20,17 +20,6 @@ const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
 const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
-const {
-  TASK_MODELS,
-  formatProfileChoice,
-  normalizeTaskId,
-  readProfile,
-  resolveLLMConfig,
-  taskForStep,
-  useProfile,
-  writeTaskModel,
-} = require('../llm/config-store');
-const { piProviderId } = require('./pi-models');
 const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
 const { readProject, setProject } = require('./project');
@@ -97,186 +86,6 @@ async function reviewHeals(ctx, project) {
   ctx.ui.notify('已按选择保留自愈版本', 'info');
 }
 
-/**
- * Switch the live session to a stored profile — no restart, context kept.
- *
- * Pi owns the mechanics: we look the profile's model up in its registry and
- * hand it to `ctx.setModel()`, which swaps the model on the running session.
- * This is the same path Pi's own `/model` picker and Ctrl+P cycling use, so a
- * switch made here is indistinguishable from one the user made themselves.
- */
-async function activateProfile(ctx, profileName, model) {
-  const registry = ctx.modelRegistry;
-  if (!registry || typeof registry.find !== 'function') {
-    return { ok: false, reason: 'unsupported' };
-  }
-  const target = registry.find(piProviderId(profileName), model);
-  if (!target) {
-    return { ok: false, reason: 'missing' };
-  }
-  const ok = await ctx.setModel(target);
-  return { ok: ok !== false, model: target };
-}
-
-/**
- * Switch which stored profile this session uses, and persist it as the default
- * so the next launch starts there too.
- *
- * Only masked labels are ever rendered. The raw key stays on disk and is never
- * placed in a message, a tool result, or anything the model can read.
- */
-async function switchModel(ctx, args) {
-  const storeContext = { cwd: ctx.cwd, homeDir: process.env.OPENTEST_HOME || undefined };
-
-  let resolved;
-  try {
-    resolved = resolveLLMConfig(storeContext);
-  } catch (error) {
-    ctx.ui.notify(`读取模型配置失败：${error.message}`, 'error');
-    return;
-  }
-
-  const direct = String(args || '').trim();
-  let target = direct;
-  if (!target) {
-    // Only profiles that exist on disk are switchable; failover placeholders are not.
-    const saved = resolved.profiles.filter((item) => item.saved);
-    if (!saved.length) {
-      ctx.ui.notify('还没有任何模型配置。在终端运行：open-test config', 'warning');
-      return;
-    }
-    const byName = new Map(saved.map((item) => [
-      formatProfileChoice(item, item.name === resolved.activeProfile),
-      item.name,
-    ]));
-    const picked = await ctx.ui.select('切换到哪个模型配置', [...byName.keys()]);
-    if (!picked) return;
-    target = byName.get(picked);
-    if (!target) {
-      ctx.ui.notify('没认出选中的配置，请重试', 'error');
-      return;
-    }
-  }
-
-  const chosen = resolved.profiles.find((item) => item.name === target);
-  if (!chosen) {
-    ctx.ui.notify(`❌ 没有名为 ${target} 的配置`, 'error');
-    return;
-  }
-
-  const result = await activateProfile(ctx, target, chosen.model);
-  if (result.reason === 'missing') {
-    ctx.ui.notify(`Pi 没有登记 ${target}，请重启一次 open-test run 让配置生效`, 'error');
-    return;
-  }
-  if (result.reason === 'unsupported') {
-    ctx.ui.notify('当前 Pi 版本不支持运行时切换，请用 /model 或 Ctrl+P', 'warning');
-    return;
-  }
-  if (!result.ok) {
-    ctx.ui.notify(`切换失败：${target} 的 key 不可用`, 'error');
-    return;
-  }
-
-  try {
-    useProfile({ ...storeContext, profileName: target });
-  } catch {
-    // Persisting the default is a convenience; the live switch already happened.
-  }
-  ctx.ui.notify(`✅ 已切换到 ${target} · ${chosen.model}，上下文保留，无需重启`, 'info');
-}
-
-/**
- * Route a testing task to a specific profile, e.g. run bug analysis on the
- * strong model while case generation stays on the cheap one.
- */
-async function taskModel(ctx, args) {
-  const storeContext = { cwd: ctx.cwd, homeDir: process.env.OPENTEST_HOME || undefined };
-  let resolved;
-  try {
-    resolved = resolveLLMConfig(storeContext);
-  } catch (error) {
-    ctx.ui.notify(`读取模型配置失败：${error.message}`, 'error');
-    return;
-  }
-  const saved = resolved.profiles.filter((item) => item.saved);
-  if (!saved.length) {
-    ctx.ui.notify('还没有任何模型配置。在终端运行：open-test config', 'warning');
-    return;
-  }
-
-  const words = String(args || '').trim().split(/\s+/).filter(Boolean);
-  let taskId = normalizeTaskId(words[0] || '');
-  if (!taskId) {
-    const picked = await ctx.ui.select('哪个任务指定模型', TASK_MODELS.map((t) => t.label));
-    if (!picked) return;
-    taskId = normalizeTaskId(picked);
-  }
-  if (!taskId) {
-    ctx.ui.notify(`没认出任务。可选：${TASK_MODELS.map((t) => t.label).join('、')}`, 'error');
-    return;
-  }
-
-  let profileName = words[1] || '';
-  if (!profileName) {
-    const byName = new Map(saved.map((item) => [
-      formatProfileChoice(item, item.name === resolved.activeProfile),
-      item.name,
-    ]));
-    const picked = await ctx.ui.select(`${taskLabel(taskId)} 用哪个模型`, [
-      ...byName.keys(),
-      '沿用当前模型（不指定）',
-    ]);
-    if (!picked) return;
-    profileName = picked === '沿用当前模型（不指定）' ? '' : byName.get(picked) || '';
-  }
-
-  try {
-    const written = writeTaskModel({ ...storeContext, scope: 'user', task: taskId, profileName });
-    const task = TASK_MODELS.find((item) => item.id === taskId);
-    ctx.ui.notify(
-      profileName
-        ? `✅ ${task.label} 以后固定用 ${profileName}（${written.filePath}）`
-        : `✅ 已取消 ${task.label} 的指定模型，沿用当前模型`,
-      'info',
-    );
-  } catch (error) {
-    ctx.ui.notify(`❌ ${error.message}`, 'error');
-  }
-}
-
-function taskLabel(taskId) {
-  const task = TASK_MODELS.find((item) => item.id === taskId);
-  return task ? task.label : taskId;
-}
-
-/**
- * Apply the task's mapped profile before a step runs.
- *
- * Silent when a task has no mapping — that is the common case, and a model
- * change the user did not ask for should never be announced as one.
- */
-async function applyTaskModel(ctx, step) {
-  const task = taskForStep(step);
-  if (!task) return null;
-  let resolved;
-  try {
-    resolved = resolveLLMConfig({ cwd: ctx.cwd, homeDir: process.env.OPENTEST_HOME || undefined });
-  } catch {
-    return null;
-  }
-  const profileName = resolved.taskModels?.[task.id];
-  if (!profileName) return null;
-  const chosen = resolved.profiles.find((item) => item.name === profileName);
-  if (!chosen || !chosen.saved) return null;
-  const result = await activateProfile(ctx, profileName, chosen.model);
-  if (result.ok) {
-    ctx.ui.notify(`${task.label} 使用 ${profileName} · ${chosen.model}`, 'info');
-    return result;
-  }
-  return null;
-}
-
 async function runStep(pi, name, ctx) {
   const project = readProject(agentHome()).current;
   if (!project) {
@@ -286,7 +95,6 @@ async function runStep(pi, name, ctx) {
   
   // Special handling for explore command
   if (name === 'explore') {
-    await applyTaskModel(ctx, name);
     
     // Get sandbox URL (will use config or prompt user)
     const message = `启动智能探索：用户操作一遍浏览器，Agent 自动生成测试脚本。
@@ -308,9 +116,6 @@ async function runStep(pi, name, ctx) {
   }
   
   // Original logic for other steps
-  // Route before the choice prompt so the model is already correct even if the
-  // user takes a while to decide.
-  await applyTaskModel(ctx, name);
   const choice = await ctx.ui.select('这一步要做什么', CHOICES);
   if (!choice) return;
   const result = prepareStep({ name, choice, project });
@@ -419,14 +224,6 @@ function registerWorkflow(pi) {
   pi.registerCommand('project', {
     description: '切换当前项目，之后的步骤都在这个目录里',
     handler: (args, ctx) => switchProject(ctx, args),
-  });
-  // Deliberately NOT named `model`: Pi ships a built-in `/model` that already
-  // switches the live session, and an extension command of the same name is
-  // filtered out of autocomplete and flagged as a conflict. This one only adds
-  // task-level routing on top of it.
-  pi.registerCommand('task-model', {
-    description: '给某个测试任务指定模型（如需求分析用强模型、用例生成用便宜模型）',
-    handler: (args, ctx) => taskModel(ctx, args),
   });
   STEPS.forEach(([name, shortcut, title]) => {
     pi.registerCommand(name, {
@@ -619,7 +416,7 @@ module.exports = async function opentestExtension(pi) {
       
       // Resolve a real LLM client for HAR analysis; null when unconfigured,
       // which makes the analyzer fall back to rules instead of faking a reply.
-      const llmClient = createLLMClient({ cwd: ctx.cwd });
+      const llmClient = await createLLMClient();
       
       const result = await recordScenario({
         workspace,
@@ -864,7 +661,7 @@ module.exports = async function opentestExtension(pi) {
       }
       
       // Create LLM client for AI-enhanced analysis
-      const llmClient = await createLLMClient(workspace);
+      const llmClient = await createLLMClient();
       
       // Update last used URL
       if (url) {
@@ -919,9 +716,5 @@ module.exports = async function opentestExtension(pi) {
 
 module.exports.blockBuiltinPromptEdit = blockBuiltinPromptEdit;
 module.exports.switchProject = switchProject;
-module.exports.switchModel = switchModel;
-module.exports.taskModel = taskModel;
-module.exports.applyTaskModel = applyTaskModel;
-module.exports.activateProfile = activateProfile;
 module.exports.recordModelChange = recordModelChange;
 module.exports.modelHistorySnapshot = modelHistorySnapshot;
