@@ -507,7 +507,7 @@ module.exports = async function opentestExtension(pi) {
     promptGuidelines: ['Call task_checkpoint with action status before any task. Do not redo steps already marked done. Plan steps once, then complete or fail the current step.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       sourceFile: Type.Optional(Type.String({ description: 'Requirement file path' })),
       action: Type.Optional(Type.String({ description: 'status, plan, complete, or fail' })),
       task: Type.Optional(Type.String({ description: 'analysis, test-points, cases, record, heal, defects, report, signoff, or git-diff' })),
@@ -570,7 +570,7 @@ module.exports = async function opentestExtension(pi) {
     executionMode: 'sequential',
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       sandboxUrl: Type.Optional(Type.String({ description: 'Sandbox base URL (http or https). If not provided, will use configured default or prompt user.' })),
       caseId: Type.Optional(Type.String({ description: 'Functional case id to attach when several cases share the same wording' })),
       mode: Type.Optional(Type.String({ 
@@ -696,7 +696,7 @@ module.exports = async function opentestExtension(pi) {
     promptGuidelines: ['Use fetch_zentao_jira when the user asks for Zentao or Jira bugs. Do not invent defects when it reports that credentials are missing.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       source: Type.Optional(Type.String({ description: 'auto, zentao, or jira' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -727,7 +727,7 @@ module.exports = async function opentestExtension(pi) {
     promptGuidelines: ['Use write_executive_report after cases exist. Pass the visible product workspace. Do not invent pass rates.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       name: Type.Optional(Type.String({ description: 'Report file name without a directory' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
@@ -753,7 +753,7 @@ module.exports = async function opentestExtension(pi) {
     promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Pass taskStep only on the last batch of that section. Do not draft the whole graph in the reply.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       sourceFile: Type.String({ description: 'Requirement file path' }),
       graph: Type.Optional(Type.String({ description: 'One JSON batch. Do not put the entire graph in one call.' })),
       graphPath: Type.Optional(Type.String({ description: 'JSON file inside the product workspace, used instead of graph' })),
@@ -806,7 +806,7 @@ module.exports = async function opentestExtension(pi) {
     promptGuidelines: ['Use query_requirement_graph before writing cases. Do not add rules that are absent from the result.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
-      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       featureId: Type.Optional(Type.String({ description: 'Feature id for impact' })),
       featureName: Type.Optional(Type.String({ description: 'Feature name when the id is unknown' })),
       scenarioId: Type.Optional(Type.String({ description: 'Scenario id for case-writing context' })),

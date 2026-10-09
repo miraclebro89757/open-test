@@ -141,11 +141,11 @@ When a selector breaks during `/run`, the agent calls `heal_selector` immediatel
 Artifacts go to a visible folder next to your requirement document, named for the product. Hidden directories are refused.
 
 ```
-~/Desktop/易训/筑安通V1.1.3需求文档.md   →   ~/Desktop/易训/筑安通/
+~/Desktop/projects/MyProduct_V1.1.3_Requirements.md   →   ~/Desktop/projects/MyProduct/
 ```
 
 ```
-筑安通/
+MyProduct/
 ├── knowledge/      Rules, states, preconditions, open questions
 ├── graph/          Requirement graph (index.md + batches)
 ├── test-points/    Test points, one behavior per scenario
@@ -156,7 +156,7 @@ Artifacts go to a visible folder next to your requirement document, named for th
 └── tasks/          Checkpoint and progress
 ```
 
-Sibling products in the same folder each get their own directory — 绩效管理 does not leak into 筑安通.
+Sibling products in the same folder each get their own directory — ProductB does not leak into ProductA.
 
 Use `/project` to pin a working directory; after that, steps write there. The selection persists in `~/.opentest/project.json` along with your recent directories.
 
