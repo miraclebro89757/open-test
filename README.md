@@ -18,19 +18,42 @@ It is a terminal agent, not a web dashboard. You stay in your editor and your te
 
 ## 🚀 Quick Start
 
+### Terminal Agent (Quick)
+
 ```bash
 # 1. Configure a model (one-time)
-npx open-test config
+npx opentest-ai config
 
 # 2. Configure browser environment (one-time)
-npx open-test browser setup
+npx opentest-ai browser setup
 
 # 3. Open the agent anywhere
-npx open-test run
+npx opentest-ai run
 
 # 4. Point it at a requirement document
 > @/path/to/your/requirements.md
 ```
+
+### Web UI (Visual)
+
+Prefer a browser interface? Launch the Web UI:
+
+```bash
+# Launch Web UI on http://127.0.0.1:30141
+npx opentest-ai web
+
+# Or customize port and hostname
+npx opentest-ai web --port 8080 --hostname 0.0.0.0
+```
+
+The Web UI provides:
+- 📂 Visual file browser and editor
+- 🔄 Session management across all projects
+- ⚙️ Graphical model configuration
+- 🎯 Real-time agent interaction
+- 🌲 Git integration and diff viewer
+
+See [Web UI Guide](./docs/WEB_UI.md) for full documentation.
 
 ### Browser Setup
 
@@ -55,9 +78,9 @@ Pasted keys are cleaned before they are stored: a leading `Bearer `, surrounding
 To configure without the wizard:
 
 ```bash
-npx open-test config set --provider deepseek --api-key sk-xxxx --model deepseek-chat
-npx open-test config ping      # verify it can complete a request
-npx open-test config list      # profiles, keys masked
+npx opentest-ai config set --provider deepseek --api-key sk-xxxx --model deepseek-chat
+npx opentest-ai config ping      # verify it can complete a request
+npx opentest-ai config list      # profiles, keys masked
 ```
 
 ### Providers
@@ -191,9 +214,9 @@ Test points are written against a graph, not against the raw document. The agent
 Graphs go to Neo4j when it is running, and stay in `graph/` when it is not. The agent will not claim a graph reached Neo4j if it did not.
 
 ```bash
-npx open-test services up      # start the bundled Neo4j (Docker)
-npx open-test services logs
-npx open-test services stop
+npx opentest-ai services up      # start the bundled Neo4j (Docker)
+npx opentest-ai services logs
+npx opentest-ai services stop
 ```
 
 This writes a random password to `~/.opentest/services.json` (mode `0600`) and binds to loopback only — Bolt on `127.0.0.1:7687`, browser on `http://127.0.0.1:7474`. If Docker Hub times out, it retries from a mirror automatically.
@@ -201,29 +224,34 @@ This writes a random password to `~/.opentest/services.json` (mode `0600`) and b
 ## 🧰 Commands
 
 ```
-open-test run [prompt...]        Open the agent (same as `agent`)
-open-test agent [prompt...]      Open the agent
-  --print                        Run one turn and exit (for scripting)
-  --skip-browser-setup           Skip browser setup check
+opentest-ai run [prompt...]        Open the agent (same as `agent`)
+opentest-ai agent [prompt...]      Open the agent
+  --print                          Run one turn and exit (for scripting)
+  --skip-browser-setup             Skip browser setup check
 
-open-test browser setup          Configure browser environment
-  --force                        Force reconfiguration
-open-test browser status         Show browser configuration
-open-test browser verify         Verify browser works
-open-test browser detect         Detect available browsers
-open-test browser reset          Reset browser configuration
+opentest-ai web                    Launch Web UI (browser interface)
+  -p, --port <port>                Server port (default: 30141)
+  -H, --hostname <hostname>        Bind hostname (default: 127.0.0.1)
+  --no-open                        Don't open browser automatically
 
-open-test config                 Interactive provider wizard
-open-test config set             Write one provider profile
-open-test config use <profile>   Switch the active profile
-open-test config ping            Check the active profile can serve a request
-open-test config list            Show profiles with keys masked
+opentest-ai browser setup          Configure browser environment
+  --force                          Force reconfiguration
+opentest-ai browser status         Show browser configuration
+opentest-ai browser verify         Verify browser works
+opentest-ai browser detect         Detect available browsers
+opentest-ai browser reset          Reset browser configuration
 
-open-test services [up|stop|logs]   Bundled local Neo4j
+opentest-ai config                 Interactive provider wizard
+opentest-ai config set             Write one provider profile
+opentest-ai config use <profile>   Switch the active profile
+opentest-ai config ping            Check the active profile can serve a request
+opentest-ai config list            Show profiles with keys masked
 
-open-test install                Check and install host dependencies
-open-test doctor                 Dependency and update health check
-open-test update                 Check npm for a newer version
+opentest-ai services [up|stop|logs]   Bundled local Neo4j
+
+opentest-ai install                Check and install host dependencies
+opentest-ai doctor                 Dependency and update health check
+opentest-ai update                 Check npm for a newer version
 ```
 
 ### Inside the agent

@@ -8,6 +8,7 @@ const { checkForUpdates } = require('./update-checker');
 const { registerConfigCommand } = require('./commands/config');
 const { registerAgentCommand, startAgent } = require('./commands/agent');
 const { registerBrowserCommand } = require('./commands/browser');
+const { launchWeb } = require('./commands/web');
 const { startGraphService, stopGraphService, logGraphService } = require('./services/local');
 const { setupBrowserEnvironment } = require('./browser/setup');
 const { loadBrowserConfig } = require('./browser/config-store');
@@ -214,6 +215,18 @@ program
 registerConfigCommand(program);
 registerAgentCommand(program);
 registerBrowserCommand(program);
+
+// Command: web - Launch pi-web Web UI
+program
+  .command('web')
+  .description('🌐 Launch OpenTest Web UI (browser interface)')
+  .option('-p, --port <port>', 'Server port', '30141')
+  .option('-H, --hostname <hostname>', 'Bind hostname', '127.0.0.1')
+  .option('--no-open', 'Don\'t open browser automatically')
+  .action(async (options) => {
+    showBanner();
+    await launchWeb(options);
+  });
 
 if (process.argv.length === 2 && process.stdout.isTTY) {
   process.argv.push('agent');
