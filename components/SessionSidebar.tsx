@@ -904,26 +904,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return () => { cancelled = true; };
   }, [selectedCwd, wtRefreshKey, refreshKey]);
 
-  // Auto-select cwd and restore session from URL on first load
+  // Restore a session named by the URL. A visit that names neither a session
+  // nor a folder stays without a cwd: the path control asks the user to
+  // choose one. The most recent session's folder is not a default directory.
   useEffect(() => {
-    if (allSessions.length === 0 || skipInitialProjectSelection) return;
-
-    if (selectedCwd === null) {
-      // If restoring a session, set cwd to match that session
-      if (initialSessionId && !restoredRef.current) {
-        restoredRef.current = true;
-        const target = allSessions.find((s) => s.id === initialSessionId);
-        if (target) {
-          setSelectedCwd(target.cwd);
-          onSelectSession(target, true);
-          return;
-        }
-        // Session not found — notify parent so it can show the placeholder
-        onInitialRestoreDone?.();
-      }
-      const projects = getRecentProjects(allSessions);
-      if (projects.length > 0) setSelectedCwd(projects[0].root);
+    if (allSessions.length === 0 || skipInitialProjectSelection || !initialSessionId || restoredRef.current) return;
+    restoredRef.current = true;
+    if (selectedCwd !== null) return;
+    const target = allSessions.find((s) => s.id === initialSessionId);
+    if (target) {
+      setSelectedCwd(target.cwd);
+      onSelectSession(target, true);
+      return;
     }
+    onInitialRestoreDone?.();
   }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
 
   // Prefer an exact UI selection while a refetch is in flight. Once the
@@ -2170,7 +2164,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             context={newSessionContext ?? { project: null, worktrees: null, currentWorktreePath: null, projects: projectChoiceList }}
             mobile={isMobile}
             label={t("sidebar.projectAndWorktree")}
-            placeholder={initialSessionId && !restoredRef.current ? "" : t("sidebar.selectProject")}
+            placeholder={initialSessionId && !restoredRef.current ? "" : t("sidebar.chooseDirectory")}
             homeDir={homeDir}
             projectActivity={projectActivity}
             worktreeHint={inactiveWorktreeSelector}

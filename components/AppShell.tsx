@@ -2592,17 +2592,36 @@ export function AppShell() {
                  {translate("workspace.selectSession")}
               </div>
             ) : (
-              <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "flex-start", gap: 8, userSelect: "none", pointerEvents: "none" }}>
-                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7, flexShrink: 0 }}>
-                  <line x1="20" y1="12" x2="4" y2="12" /><polyline points="10 6 4 12 10 18" />
-                </svg>
-                <div>
-                   <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{translate("workspace.getStarted")}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
-                     <span style={{ color: "var(--text-dim)", marginRight: 6 }}>1.</span>{translate("workspace.selectProject")}<br />
-                     <span style={{ color: "var(--text-dim)", marginRight: 6 }}>2.</span>{translate("workspace.addModels")}
+              <div className="chat-content relative flex h-full min-w-0 flex-col overflow-hidden">
+                <div className="min-h-0 flex-1" />
+                <div className="relative shrink-0">
+                  <div className="new-session-hero" style={{ paddingLeft: 16, paddingRight: isMobile ? 16 : 52 }}>
+                    <div className="new-session-hero-row" style={{ maxWidth: "var(--chat-content-max-width, 820px)" }}>
+                      <div className="new-session-brand" style={{ gap: isMobile ? 7 : 10 }}>
+                        <img src="/icons/apple-touch-icon.png" width={32} height={32} alt="" style={{ flexShrink: 0 }} />
+                        <span className="new-session-brand-name">Pi Web</span>
+                      </div>
+                      <div className="new-session-context">
+                        <div className="project-picker is-inline" role="group" aria-label={translate("workspace.newSessionContext")}>
+                          <button
+                            type="button"
+                            className="project-picker-button is-project is-empty"
+                            title={translate("sidebar.chooseDirectory")}
+                            aria-haspopup="dialog"
+                            onClick={(event) => {
+                              sidebarControlRef.current?.openFolderForNewSession((target) => {
+                                sidebarControlRef.current?.startNewSessionIn(target);
+                              }, event.currentTarget);
+                            }}
+                          >
+                            <span className="project-picker-label">{translate("sidebar.chooseDirectory")}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
+                <div className="min-h-0 flex-1" />
               </div>
             )
           ) : null}

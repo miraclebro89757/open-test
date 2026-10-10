@@ -94,8 +94,10 @@ test("stacked: activity elsewhere shows a dot; the project in use does not count
 
 test("stacked: no project yet, and no worktree list", () => {
   const empty = render({ context: { project: null, worktrees: null, currentWorktreePath: null, projects: [] }, placeholder: "Select project…" });
-  assert.match(empty, /<button type="button" class="project-picker-button is-project is-empty" title="" aria-haspopup="menu" aria-expanded="false">/);
+  assert.match(empty, /<button type="button" class="project-picker-button is-project is-empty" title="Select project…" aria-haspopup="dialog">/);
+  assert.doesNotMatch(empty, /aria-expanded/);
   assert.match(empty, /<span class="project-picker-label">Select project…<\/span>/);
+  assert.match(source, /if \(!project\) \{\s*onOpenFolder\(event\.currentTarget\);\s*return;\s*\}/);
   assert.equal((empty.match(/<button /g) ?? []).length, 1);
 
   // A subdirectory or a non-git folder: a disabled row says why, out of the tab order.

@@ -28,6 +28,7 @@ import {
   replaceUploadFile,
   validateUploadFileNames,
 } from "@/lib/file-upload";
+import { runNativeUpload } from "@/lib/native-upload";
 import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { filePathFromApiSegments, samePath } from "@/lib/paths";
 import { hasParentDirectorySegment } from "@/lib/path-security";
@@ -166,6 +167,20 @@ export async function POST(
         return NextResponse.json({ error: validationError }, { status: 400 });
       }
       return NextResponse.json(inspectUploadTargets(directory, fileNames));
+    }
+
+    if (type === "native-upload") {
+      if (!hasJsonContentType(request)) {
+        return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+      }
+      const body = await request.json().catch(() => null);
+      const outcome = await runNativeUpload({
+        host: request.headers.get("host"),
+        directory,
+        body,
+        signal: request.signal,
+      });
+      return NextResponse.json(outcome.body, { status: outcome.status });
     }
 
     if (type !== "upload") {

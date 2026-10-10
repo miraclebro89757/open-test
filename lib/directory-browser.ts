@@ -14,8 +14,13 @@ export function shouldShowWindowsDrivePicker(
   return platform === "win32" && !directory;
 }
 
-export function getBrowseStartDirectory(directory?: string): string {
-  return directory || homedir();
+/** Where a picker opens when the caller did not name a folder. macOS and Linux start at `/`; Windows keeps the home folder because an empty path already shows the drive list. */
+export function getBrowseStartDirectory(
+  directory?: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (directory) return directory;
+  return platform === "win32" ? homedir() : "/";
 }
 
 export function getWindowsDriveCandidates(): BrowsableDirectory[] {

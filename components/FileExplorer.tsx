@@ -65,7 +65,7 @@ export interface FileExplorerHandle {
   openUploadPicker: () => void;
 }
 
-type UploadPhase = "idle" | "checking" | "uploading";
+type UploadPhase = "idle" | "checking" | "uploading" | "picking" | "copying";
 
 interface UploadSummary {
   uploaded: string[];
@@ -75,6 +75,7 @@ interface UploadSummary {
 
 interface PendingConflict {
   files: File[];
+  ticket?: string;
   conflicts: string[];
   nonReplaceable: string[];
 }
@@ -724,9 +725,23 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prevCwdRef = useRef<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [nativePicker, setNativePicker] = useState(false);
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
   const uploadBusy = uploadPhase !== "idle";
   const hasSearchQuery = searchQuery.trim().length > 0;
+
+  // Finder can only be raised by the computer running Pi Web. Until that is
+  // known, the button keeps the browser's own file dialog.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/native-file-picker")
+      .then((res) => (res.ok ? res.json() as Promise<{ supported?: boolean }> : null))
+      .then((data) => {
+        if (!cancelled && data?.supported) setNativePicker(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Reuse the cached, bounded file index used by @ mentions.
   useEffect(() => {
@@ -911,11 +926,83 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     void prepareUpload(files);
   }, [prepareUpload]);
 
+  const nativeErrorMessage = useCallback((data: { error?: string; detail?: string }, status: number) => {
+    if (data.error === "remote") return t("sidebar.openInExplorerRemoteOnly");
+    if (data.error === "unsupported-platform") return t("sidebar.openInExplorerUnsupported");
+    if (data.error === "upload-expired") return t("files.nativeUploadExpired");
+    if (data.error === "not-a-file") return t("files.onlyFilesCanUpload", { name: data.detail ?? "" });
+    if (data.error === "file-not-found") return t("files.uploadFileMissing", { name: data.detail ?? "" });
+    return data.error ?? `Upload failed (HTTP ${status})`;
+  }, [t]);
+
+  const postNativeUpload = useCallback(async (body: {
+    prompt?: string;
+    ticket?: string;
+    strategy?: UploadConflictStrategy;
+    release?: boolean;
+  }) => {
+    const res = await fetch(`/api/files/${encodeFilePathForApi(cwd)}?type=native-upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({})) as UploadResponse & {
+      cancelled?: boolean;
+      ticket?: string;
+      detail?: string;
+      released?: boolean;
+    };
+    return { status: res.status, data };
+  }, [cwd]);
+
+  const finishNativeUpload = useCallback(async (body: {
+    prompt?: string;
+    ticket?: string;
+    strategy?: UploadConflictStrategy;
+  }) => {
+    setPendingConflict(null);
+    setUploadError(null);
+    setUploadSummary(null);
+    setHighlightedPaths(new Set());
+    setUploadProgress(0);
+    setUploadPhase(body.ticket ? "copying" : "picking");
+    try {
+      const { status, data } = await postNativeUpload(body);
+      if (data.cancelled || data.released) return;
+      if (status === 409 && data.ticket && data.conflicts?.length) {
+        setPendingConflict({
+          files: [],
+          ticket: data.ticket,
+          conflicts: data.conflicts,
+          nonReplaceable: data.nonReplaceable ?? [],
+        });
+        return;
+      }
+      if (status < 200 || status >= 300) throw new Error(nativeErrorMessage(data, status));
+      applyUploadResult(data);
+    } catch (uploadFailure) {
+      setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
+    } finally {
+      setUploadPhase("idle");
+    }
+  }, [applyUploadResult, nativeErrorMessage, postNativeUpload]);
+
+  const dismissNativeConflict = useCallback((ticket: string | undefined) => {
+    setPendingConflict(null);
+    if (!ticket) return;
+    void postNativeUpload({ ticket, release: true }).catch(() => {});
+  }, [postNativeUpload]);
+
   useImperativeHandle(ref, () => ({
     openUploadPicker() {
-      if (!uploadBusy) uploadInputRef.current?.click();
+      if (uploadBusy) return;
+      if (nativePicker) {
+        void finishNativeUpload({ prompt: t("files.chooseUploadPrompt") });
+        return;
+      }
+      uploadInputRef.current?.click();
     },
-  }), [uploadBusy]);
+  }), [finishNativeUpload, nativePicker, t, uploadBusy]);
 
   useEffect(() => {
     onUploadBusyChange?.(uploadBusy);
@@ -971,6 +1058,13 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   }, [gitFiles, onChangesCountChange]);
 
   const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
+  const uploadStatusLabel = uploadPhase === "picking"
+    ? t("files.openingFinder")
+    : uploadPhase === "copying"
+      ? t("files.copyingLocal")
+      : uploadPhase === "checking"
+        ? t("files.checking")
+        : t("files.uploading", { progress: uploadProgress });
 
   const addUploadedFilesToChat = useCallback(() => {
     if (!uploadSummary || uploadSummary.uploaded.length === 0) return;
@@ -985,18 +1079,21 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       {showUploadFeedback && (
         <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
         {uploadBusy && (
-          <div role="status" aria-live="polite" aria-label={uploadPhase === "checking" ? t("files.checking") : t("files.uploading", { progress: uploadProgress })}>
+          <div role="status" aria-live="polite" aria-label={uploadStatusLabel}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 14, color: "var(--text-muted)" }}>
-              {uploadPhase === "checking" ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true">
-                  <path d="M21 12a9 9 0 1 1-5.7-8.4" />
-                </svg>
-              ) : (
+              {uploadPhase === "uploading" ? (
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 16V4" />
                   <path d="m7 9 5-5 5 5" />
                   <path d="M5 20h14" />
                 </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-5.7-8.4" />
+                </svg>
+              )}
+              {uploadPhase !== "uploading" && (
+                <span style={{ minWidth: 0, flex: 1, fontSize: 11 }}>{uploadStatusLabel}</span>
               )}
               {uploadPhase === "uploading" && <span style={{ fontSize: 10 }}>{uploadProgress}%</span>}
             </div>
@@ -1019,13 +1116,22 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               </div>
             )}
             <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "1px solid #ef4444", borderRadius: 4, background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => {
+                if (pendingConflict.ticket) void finishNativeUpload({ ticket: pendingConflict.ticket, strategy: "overwrite" });
+                else void performUpload(pendingConflict.files, "overwrite");
+              }} style={{ height: 22, padding: "0 7px", border: "1px solid #ef4444", borderRadius: 4, background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>
                 {t("files.replace")}
               </button>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => {
+                if (pendingConflict.ticket) void finishNativeUpload({ ticket: pendingConflict.ticket, strategy: "skip" });
+                else void performUpload(pendingConflict.files, "skip");
+              }} style={{ height: 22, padding: "0 7px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}>
                 {t("files.skipExisting")}
               </button>
-              <button type="button" onClick={() => setPendingConflict(null)} style={{ height: 22, padding: "0 7px", border: "none", borderRadius: 4, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => {
+                if (pendingConflict.ticket) dismissNativeConflict(pendingConflict.ticket);
+                else setPendingConflict(null);
+              }} style={{ height: 22, padding: "0 7px", border: "none", borderRadius: 4, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 10 }}>
                 {t("files.cancel")}
               </button>
             </div>

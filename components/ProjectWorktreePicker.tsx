@@ -497,10 +497,16 @@ export function ProjectWorktreePicker({
         ref={projectRef}
         type="button"
         className={project ? "project-picker-button is-project" : "project-picker-button is-project is-empty"}
-        title={project?.root ?? ""}
-        aria-haspopup="menu"
-        aria-expanded={menu?.kind === "project"}
-        onClick={(event) => openMenu("project", event.currentTarget)}
+        title={project ? project.root : placeholder}
+        aria-haspopup={project ? "menu" : "dialog"}
+        aria-expanded={project ? menu?.kind === "project" : undefined}
+        onClick={(event) => {
+          if (!project) {
+            onOpenFolder(event.currentTarget);
+            return;
+          }
+          openMenu("project", event.currentTarget);
+        }}
       >
         {/* The whole path, cut at its left: the folder name at its end is
             what tells paths apart. No icon and no chevron: the path is the box. */}
