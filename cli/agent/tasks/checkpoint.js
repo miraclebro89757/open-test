@@ -172,6 +172,14 @@ function setStep(task, stepId, status, note) {
 }
 
 function updateCheckpoint(workspace, { product, sourceFile, sources, action = 'status', task, steps, step, note } = {}) {
+  let guidance = '';
+  if (action === 'start') {
+    const name = String(step || '').trim();
+    guidance = name
+      ? `没有 start 这个动作，步骤「${name}」仍保持原状态。先把这一步的文件写完，再用 action complete、step 为「${name}」。`
+      : '没有 start 这个动作。action 用 status 看下一步，写完文件后用 complete。';
+    action = 'status';
+  }
   const state = loadState(workspace, product, sourceFile);
   if (product) state.product = product;
   if (sourceFile) state.sourceFile = sourceFile;
@@ -200,7 +208,8 @@ function updateCheckpoint(workspace, { product, sourceFile, sources, action = 's
     state.startedAt = new Date().toISOString();
   }
   saveState(workspace, state);
-  return { text: renderStatus(state), file: path.join(checkpointDir(workspace), 'status.md'), state };
+  const text = guidance ? `${guidance}\n\n${renderStatus(state)}` : renderStatus(state);
+  return { text, file: path.join(checkpointDir(workspace), 'status.md'), state };
 }
 
 module.exports = {

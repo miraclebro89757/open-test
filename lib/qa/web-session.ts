@@ -52,7 +52,7 @@ export function composeWebQaPrompt(sessionCwd: string): string {
     `这个会话打开的目录 ${sessionCwd} 就是产品工作目录。knowledge/、graph/、test-points/、cases/、automation/、defects/、reports/、tasks/ 都直接写在它下面，不要另建以产品命名的子目录，也不要写到别处。`,
     `调用 task_checkpoint、store_requirement_graph、query_requirement_graph、align_requirement_versions、query_baseline_feature、record_playwright_scenario、fetch_zentao_jira、write_executive_report 等工具时，requirementDir 传 ${requirementDir}，productName 传 ${productName}，这样工具得到的工作目录正是 ${sessionCwd}。`,
     "同一产品有基线和重构两份文档时，先调用 align_requirement_versions。它只生成待审核的迁移方案，不要覆盖图谱，也不要删除已有用例。新版没写到的功能不能当成删除。",
-    "需求文档用 @ 放进对话，先读再写。每个任务开始前调用 task_checkpoint 看进度，已完成的步骤不要重做。",
+    "需求文档用 @ 放进对话，先读再写。每个任务先调用 task_checkpoint，action 用 status 看进度，已完成的步骤不要重做。没有 start。当前这一步的文件写完后，action 用 complete。",
     "测试点要等人确认后才能写用例。选择器失效时调用 heal_selector，前后版本都留下，由用户决定保留哪一版。",
     "待澄清写在 knowledge/需求评审.md。标成忽略的不要再提起，已补充的以补充为准，待讨论的不要编造结论。写完一节的问题就停下来等人标记，不要改测试人员已经标过的条目。",
     "不要编造通过率、缺陷或外部同步结果，不要读取或打印 API key。用户要换模型时，让他用页面里的模型选择。",

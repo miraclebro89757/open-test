@@ -44,6 +44,27 @@ test('completed task steps stay done when the same plan is registered again', ()
   assert.match(again.text, /█/);
 });
 
+test('start does not finish the next test-point step', () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-task-'));
+  updateCheckpoint(workspace, {
+    product: '易训',
+    action: 'plan',
+    task: 'test-points',
+    steps: '项目巡检状态总览\n项目巡检计划列表',
+  });
+  updateCheckpoint(workspace, { action: 'complete', task: 'test-points', step: '项目巡检状态总览' });
+  const started = updateCheckpoint(workspace, {
+    action: 'start',
+    task: 'test-points',
+    step: '项目巡检计划列表',
+  });
+  assert.match(started.text, /没有 start/);
+  assert.match(started.text, /action complete/);
+  const saved = JSON.parse(fs.readFileSync(path.join(workspace, 'tasks', 'checkpoint.json'), 'utf8'));
+  assert.equal(saved.tasks['test-points'].steps.find((item) => item.id === '项目巡检状态总览').status, 'done');
+  assert.equal(saved.tasks['test-points'].steps.find((item) => item.id === '项目巡检计划列表').status, 'pending');
+});
+
 test('progress bar counts finished steps and chapters already read', () => {
   const line = renderBar('需求分析', 1, 4, {
     next: '作业管理',
