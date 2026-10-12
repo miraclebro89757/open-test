@@ -563,7 +563,7 @@ async function installOpentest(pi, options = {}) {
     label: 'Requirement graph',
     description: '把需求分析得到的功能、场景、规则和关系写成产品图谱。图太大时分批调用，后续批次用 append。',
     promptSnippet: 'Store a requirement graph in batches',
-    promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Pass taskStep only on the last batch of that section. Do not draft the whole graph in the reply.'],
+    promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Do not pass taskStep in that call. Append that section\'s new clarifications to knowledge/需求评审.md, then complete the section with task_checkpoint and stop for the tester. Do not draft the whole graph in the reply.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
@@ -571,7 +571,7 @@ async function installOpentest(pi, options = {}) {
       graph: Type.Optional(Type.String({ description: 'One JSON batch. Do not put the entire graph in one call.' })),
       graphPath: Type.Optional(Type.String({ description: 'JSON file inside the product workspace, used instead of graph' })),
       mode: Type.Optional(Type.String({ description: 'replace or append. Use append for later batches.' })),
-      taskStep: Type.Optional(Type.String({ description: 'Section title. Pass it only on the last batch of that section.' })),
+      taskStep: Type.Optional(Type.String({ description: 'Section title. Leave it empty while clarifications for this section are still unwritten.' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);

@@ -2744,6 +2744,8 @@ export function AppShell() {
               )}
               onMentionLines={rightPanelOpen ? handleFileLineMention : undefined}
               onAtMention={handleAtMention}
+              onAskAgent={handleQaAskAgent}
+              onChanged={refreshQa}
               onOpenFile={(filePath, page) => handleOpenFile(
                 filePath,
                 getFileName(filePath),

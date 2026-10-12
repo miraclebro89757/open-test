@@ -20,6 +20,9 @@ import {
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
+import { clarificationFileLocation, splitClarificationMarkdown } from "@/lib/qa/clarification-format";
+import type { QaAskAgent } from "@/lib/qa/client";
+import { ClarificationsPanel } from "./qa/panels/ClarificationsPanel";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
@@ -50,6 +53,9 @@ interface Props {
   initialState?: FileViewerState;
   onStateChange?: (state: FileViewerState) => void;
   watchEnabled?: boolean;
+  /** Present when this file is a clarification review, so preview can mark questions. */
+  onAskAgent?: QaAskAgent;
+  onChanged?: () => void;
 }
 
 interface FileData {
@@ -1109,6 +1115,8 @@ export function FileViewer({
   initialPage,
   onStateChange,
   watchEnabled = true,
+  onAskAgent,
+  onChanged,
 }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} watchEnabled={watchEnabled} />;
@@ -1135,7 +1143,70 @@ export function FileViewer({
       initialState={initialState}
       onStateChange={onStateChange}
       watchEnabled={watchEnabled}
+      onAskAgent={onAskAgent}
+      onChanged={onChanged}
     />
+  );
+}
+
+function MarkdownChunk({
+  text,
+  directory,
+  cwd,
+  sourceSessionId,
+  onOpenFile,
+}: {
+  text: string;
+  directory: string;
+  cwd?: string;
+  sourceSessionId?: string | null;
+  onOpenFile?: (filePath: string, page?: number) => void;
+}) {
+  if (!text.trim()) return null;
+  return (
+    <div className="markdown-body markdown-file-preview">
+      <ReactMarkdown
+        remarkPlugins={markdownPreviewRemarkPlugins}
+        rehypePlugins={markdownPreviewRehypePlugins}
+        urlTransform={onOpenFile ? markdownUrlTransform : undefined}
+        components={{
+          code({ className, children, ...props }) {
+            const lang = className?.replace("language-", "").toLowerCase() ?? "";
+            const raw = String(children);
+            const isBlock = className?.includes("language-") || raw.includes("\n");
+            if (isBlock) {
+              if (lang === "mermaid") return <MermaidBlock code={raw.replace(/\n$/, "")} defaultPreview />;
+              return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
+            }
+            return <code className={className} {...props}>{children}</code>;
+          },
+          pre({ children }) {
+            return <>{children}</>;
+          },
+          a({ href, children, ...props }) {
+            delete props.node;
+            const linkedFile = onOpenFile ? resolveLocalFileHref(href, directory, cwd ?? directory) : null;
+            if (!linkedFile || !onOpenFile) return <a href={href} {...props}>{children}</a>;
+            const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+              if (!shouldOpenLocalFileInApp(event)) return;
+              event.preventDefault();
+              onOpenFile(linkedFile, parsePdfPageFragment(href) ?? undefined);
+            };
+            return <a href={href} {...props} onClick={handleClick}>{children}</a>;
+          },
+          img({ src, alt, ...props }) {
+            delete props.node;
+            const imagePath = typeof src === "string" ? resolveLocalFileHref(src, directory, cwd ?? directory) : null;
+            const imageSrc = imagePath ? getFileApiUrl(imagePath, "read", sourceSessionId) : src;
+            // Dynamic local paths are served directly by the file API.
+            // eslint-disable-next-line @next/next/no-img-element
+            return <img src={imageSrc} alt={alt ?? ""} loading="lazy" {...props} />;
+          },
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -1151,6 +1222,8 @@ function TextFileViewer({
   initialState,
   onStateChange,
   watchEnabled = true,
+  onAskAgent,
+  onChanged,
 }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
@@ -1373,6 +1446,21 @@ function TextFileViewer({
   const markdownPreview = useMemo(
     () => (data?.language === "markdown" ? normalizeDisplayMath(data.content) : ""),
     [data],
+  );
+  const clarificationLocation = useMemo(
+    () => (data?.language === "markdown" ? clarificationFileLocation(filePath, cwd) : null),
+    [data?.language, filePath, cwd],
+  );
+  const clarificationSplit = useMemo(
+    () => (clarificationLocation && data?.language === "markdown"
+      ? splitClarificationMarkdown(normalizeDisplayMath(data.content), clarificationLocation.file)
+      : null),
+    [clarificationLocation, data],
+  );
+  const showClarificationCards = Boolean(
+    clarificationSplit
+    && clarificationLocation
+    && (clarificationSplit.document.items.length > 0 || clarificationSplit.document.legacy),
   );
 
   const frontmatter = useMemo(
@@ -1729,70 +1817,25 @@ function TextFileViewer({
              title={t("i18n.htmlPreview")}
           />
         ) : isMarkdown && effectiveDisplayMode === "preview" ? (
-          <div
-            className="markdown-body markdown-file-preview"
-            style={{ padding: "24px 32px" }}
-          >
+          <div style={{ padding: "24px 32px" }}>
             {frontmatter?.data && <FrontmatterCard data={frontmatter.data} />}
-            <ReactMarkdown
-              remarkPlugins={markdownPreviewRemarkPlugins}
-              rehypePlugins={markdownPreviewRehypePlugins}
-              urlTransform={onOpenFile ? markdownUrlTransform : undefined}
-              components={{
-                code({ className, children, ...props }) {
-                  const lang = className?.replace("language-", "").toLowerCase() ?? "";
-                  const raw = String(children);
-                  const isBlock = className?.includes("language-") || raw.includes("\n");
-                  if (isBlock) {
-                    if (lang === "mermaid") {
-                      return <MermaidBlock code={raw.replace(/\n$/, "")} defaultPreview />;
-                    }
-                    return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
-                  }
-                  return (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-                pre({ children }) {
-                  // Render the code block directly — CodeBlock provides its own wrapping.
-                  // For non-mermaid blocks, pass through to default pre rendering.
-                  return <>{children}</>;
-                },
-                a({ href, children, ...props }) {
-                  delete props.node;
-                  const linkedFile = onOpenFile
-                    ? resolveLocalFileHref(href, markdownDirectory, cwd ?? markdownDirectory)
-                    : null;
-                  if (!linkedFile || !onOpenFile) {
-                    return <a href={href} {...props}>{children}</a>;
-                  }
-
-                  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-                    if (!shouldOpenLocalFileInApp(event)) return;
-                    event.preventDefault();
-                    onOpenFile(linkedFile, parsePdfPageFragment(href) ?? undefined);
-                  };
-
-                  return <a href={href} {...props} onClick={handleClick}>{children}</a>;
-                },
-                img({ src, alt, ...props }) {
-                  delete props.node;
-                  const imagePath = typeof src === "string"
-                    ? resolveLocalFileHref(src, markdownDirectory, cwd ?? markdownDirectory)
-                    : null;
-                  const imageSrc = imagePath
-                    ? getFileApiUrl(imagePath, "read", sourceSessionId)
-                    : src;
-                  // Dynamic local paths are served directly by the file API.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  return <img src={imageSrc} alt={alt ?? ""} loading="lazy" {...props} />;
-                },
-              }}
-            >
-              {markdownPreview}
-            </ReactMarkdown>
+            {showClarificationCards && clarificationSplit && clarificationLocation ? (
+              <>
+                <MarkdownChunk text={clarificationSplit.before} directory={markdownDirectory} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} />
+                <ClarificationsPanel
+                  cwd={clarificationLocation.workspace}
+                  file={clarificationLocation.file}
+                  embedded
+                  refreshKey={gitRefreshKey ?? 0}
+                  onAskAgent={onAskAgent ?? (() => "unavailable")}
+                  onOpenFile={(absolutePath) => onOpenFile?.(absolutePath)}
+                  onChanged={onChanged ?? (() => {})}
+                />
+                <MarkdownChunk text={clarificationSplit.after} directory={markdownDirectory} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} />
+              </>
+            ) : (
+              <MarkdownChunk text={markdownPreview} directory={markdownDirectory} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} />
+            )}
           </div>
         ) : useLightweightSource ? (
           <div

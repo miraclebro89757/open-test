@@ -46,15 +46,30 @@ export interface QaAgentRequest {
 
 export type QaAskAgent = (request: QaAgentRequest) => "sent" | "composed" | "unavailable";
 
+/** What the page sends so the agent reads the file instead of a pasted copy. */
+export function clarificationSubmitText(files: string[]): string {
+  const list = files.length ? files.join("、") : "knowledge/需求评审.md";
+  return [
+    `请阅读 ${list} 里的待澄清条目，按每条的状态继续。不要删除条目，也不要改写测试人员已经标过的状态和补充。`,
+    "忽略：这是理解错误，不要再提起，也不要据此写测试。",
+    "已补充：以该条「补充」里的说法为准，不要再用原来的理解。",
+    "待讨论：先搁置，不要编造结论，依赖它的用例先不写。其余部分可以继续。",
+    "待处理：还没有人看，先不要当成已经确认。",
+  ].join("\n");
+}
+
 export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
-  analysis: { mode: "compose", text: "请分析这份需求文档，按 opentest-qa 技能写需求知识和图谱：@" },
+  analysis: {
+    mode: "compose",
+    text: "请分析这份需求文档，按 opentest-qa 技能写需求知识和图谱：@\n写完一节就把这一节的待澄清追加到 knowledge/需求评审.md，然后停下等我标记。不要删除我已经标成忽略、已补充或待讨论的条目。",
+  },
   "test-points": {
     mode: "send",
     text: "根据需求图谱为当前产品写测试点。按功能分批，每个测试点用 ### TP编号 标题，并写优先级和状态：待确认。写完一个功能就停下，等我确认。",
   },
   cases: {
     mode: "send",
-    text: "测试点已经确认。请为已确认的测试点写功能用例，每条包含编号、标题、优先级、自动化、前置条件、步骤、期望结果，新用例的自动化写成否。",
+    text: "测试点已经确认。请为已确认的测试点写功能用例，每条包含编号、标题、优先级、自动化、前置条件、步骤、期望结果，新用例的自动化写成否。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。",
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
   run: { mode: "send", text: "运行 automation 目录里的自动化脚本，选择器失效时自愈，然后汇报每条用例的结果。" },

@@ -8,6 +8,7 @@ import { EmptyState, buttonStyle } from "./qa-ui";
 import { useAskFeedback } from "./useAskFeedback";
 import { AssetFilesPanel } from "./panels/AssetFilesPanel";
 import { OverviewPanel } from "./panels/OverviewPanel";
+import { ClarificationsPanel } from "./panels/ClarificationsPanel";
 import { TestPointsPanel } from "./panels/TestPointsPanel";
 import { CasesPanel } from "./panels/CasesPanel";
 import { RecordPanel } from "./panels/RecordPanel";
@@ -102,6 +103,8 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
       <div style={{ flex: 1, minHeight: 0 }}>
         {panel === "overview" || !folder ? (
           <OverviewPanel overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} />
+        ) : panel === "knowledge" ? (
+          <ClarificationsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "test-points" ? (
           <TestPointsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "cases" ? (
