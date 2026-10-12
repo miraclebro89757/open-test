@@ -22,7 +22,7 @@ function emptyState(product, sourceFile) {
   TASKS.forEach(([id, title]) => {
     tasks[id] = { id, title, status: 'pending', steps: [] };
   });
-  return { product: product || '', sourceFile: sourceFile || '', startedAt: '', tasks };
+  return { product: product || '', sourceFile: sourceFile || '', sources: [], startedAt: '', tasks };
 }
 
 function loadState(workspace, product, sourceFile) {
@@ -31,6 +31,7 @@ function loadState(workspace, product, sourceFile) {
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   const state = emptyState(saved.product || product, saved.sourceFile || sourceFile);
   state.startedAt = saved.startedAt || '';
+  state.sources = Array.isArray(saved.sources) ? saved.sources.filter(Boolean) : [];
   TASKS.forEach(([id, title]) => {
     const task = saved.tasks && saved.tasks[id];
     if (!task) return;
@@ -112,7 +113,8 @@ function renderBars(state, now = Date.now()) {
 }
 
 function renderStatus(state, now = Date.now()) {
-  const lines = [...renderBars(state, now), '', `# ${state.product || '产品'} 任务进度`, '', `来源：${state.sourceFile || '未记录'}`, ''];
+  const listed = state.sources && state.sources.length ? state.sources.join('；') : (state.sourceFile || '未记录');
+  const lines = [...renderBars(state, now), '', `# ${state.product || '产品'} 任务进度`, '', `来源：${listed}`, ''];
   const resume = [];
   TASKS.forEach(([id, title]) => {
     const task = state.tasks[id];
@@ -169,10 +171,18 @@ function setStep(task, stepId, status, note) {
   refresh(task);
 }
 
-function updateCheckpoint(workspace, { product, sourceFile, action = 'status', task, steps, step, note } = {}) {
+function updateCheckpoint(workspace, { product, sourceFile, sources, action = 'status', task, steps, step, note } = {}) {
   const state = loadState(workspace, product, sourceFile);
   if (product) state.product = product;
   if (sourceFile) state.sourceFile = sourceFile;
+  if (Array.isArray(sources)) {
+    const merged = [...(state.sources || [])];
+    sources.forEach((item) => {
+      const value = String(item || '').trim();
+      if (value && !merged.includes(value)) merged.push(value);
+    });
+    state.sources = merged;
+  }
   if (action === 'plan') {
     planSteps(taskOf(state, task), parseSteps(steps));
   } else if (action === 'complete') {

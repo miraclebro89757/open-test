@@ -9,6 +9,7 @@ import { useAskFeedback } from "./useAskFeedback";
 import { AssetFilesPanel } from "./panels/AssetFilesPanel";
 import { OverviewPanel } from "./panels/OverviewPanel";
 import { ClarificationsPanel } from "./panels/ClarificationsPanel";
+import { EvolutionPanel } from "./panels/EvolutionPanel";
 import { TestPointsPanel } from "./panels/TestPointsPanel";
 import { CasesPanel } from "./panels/CasesPanel";
 import { RecordPanel } from "./panels/RecordPanel";
@@ -31,7 +32,7 @@ interface Props {
   onChanged: () => void;
 }
 
-const NAV: QaPanelId[] = ["overview", "knowledge", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report"];
+const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report"];
 
 interface FolderPanel {
   dir: WorkspaceDir;
@@ -105,6 +106,8 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
           <OverviewPanel overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} />
         ) : panel === "knowledge" ? (
           <ClarificationsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
+        ) : panel === "evolution" ? (
+          <EvolutionPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
         ) : panel === "test-points" ? (
           <TestPointsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "cases" ? (

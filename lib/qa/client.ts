@@ -11,6 +11,7 @@ export function parseQaMode(value: string | null | undefined): QaMode {
 export type QaPanelId =
   | "overview"
   | "knowledge"
+  | "evolution"
   | "graph"
   | "test-points"
   | "cases"
@@ -24,6 +25,7 @@ export type QaPanelId =
 export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   overview: "总览",
   knowledge: "需求知识",
+  evolution: "版本演进",
   graph: "需求图谱",
   "test-points": "测试点",
   cases: "用例",

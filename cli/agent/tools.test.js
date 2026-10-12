@@ -250,6 +250,8 @@ test('extension registers the terminal tools', async () => {
     'write_executive_report',
     'store_requirement_graph',
     'query_requirement_graph',
+    'align_requirement_versions',
+    'query_baseline_feature',
     'explore_and_generate',
   ]);
   assert.deepEqual(commands, [

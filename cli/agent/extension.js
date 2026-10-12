@@ -20,6 +20,7 @@ const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
 const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
+const { alignRequirementVersions, queryBaselineFeature } = require('./evolution');
 const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
 const { readProject, setProject } = require('./project');
@@ -634,6 +635,79 @@ async function installOpentest(pi, options = {}) {
         activeRules: result.activeRules,
         affectedTestSpecs: result.affectedTestSpecs,
       }, null, 2);
+      return textResult(text, result);
+    },
+  });
+
+  pi.registerTool({
+    name: 'align_requirement_versions',
+    label: 'Align versions',
+    description: '把同一产品的基线文档和重构文档对齐成待审核的版本演进方案。不覆盖图谱，也不改已有用例。',
+    promptSnippet: 'Align a baseline PRD with a newer delta PRD in one product workspace',
+    promptGuidelines: [
+      'Call align_requirement_versions when the user gives both a baseline document and a refactor or delta document.',
+      'Pass both file paths. Do not read only the newer file. Different products stay in different workspaces.',
+      'The tool writes a review plan under knowledge/evolution/. It does not overwrite the graph or edit existing cases.',
+      'A feature missing from the new document is unmentioned, not deleted. Deprecation waits for a person to confirm.',
+      'Use query_baseline_feature when the delta names a feature without rules. Same-page “与某某一致” is not a baseline lookup.',
+    ],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
+      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      baselinePath: Type.String({ description: 'Older full PRD path, such as V1.1.3' }),
+      deltaPath: Type.String({ description: 'Newer refactor or delta PRD path' }),
+      baselineVersion: Type.Optional(Type.String({ description: 'Baseline version. Read from 产品版本 when omitted.' })),
+      deltaVersion: Type.Optional(Type.String({ description: 'Delta version. Read from 产品版本 when omitted.' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = await alignRequirementVersions({
+        workspace,
+        product: params.productName,
+        baselinePath: params.baselinePath,
+        deltaPath: params.deltaPath,
+        baselineVersion: params.baselineVersion,
+        deltaVersion: params.deltaVersion,
+      });
+      showProgress(ctx, workspace);
+      return textResult(result.summary, {
+        workspace,
+        evolutionId: result.plan.evolution_id,
+        status: result.plan.status,
+        baselineVersion: result.baselineVersion,
+        deltaVersion: result.deltaVersion,
+        unmentioned: result.plan.requirement_changes.filter((item) => item.change_type === 'unmentioned').map((item) => item.name),
+        pendingAssets: result.plan.test_asset_actions.filter((item) => item.requires_review).map((item) => item.asset_id),
+      });
+    },
+  });
+
+  pi.registerTool({
+    name: 'query_baseline_feature',
+    label: 'Baseline lookup',
+    description: '从当前产品版本包里的基线文档检索一个功能的规则。只读这份基线，不读别的产品。',
+    promptSnippet: 'Look up a feature in the baseline PRD recorded for this product',
+    promptGuidelines: [
+      'Call query_baseline_feature when the delta names a feature but does not restate its rules, or when it says 沿用当前.',
+      'Do not use it for comparisons that point at another heading in the same delta, such as 与添加人员一致.',
+      'The tool reads only the baseline path stored in this workspace version pack.',
+    ],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
+      productName: Type.String({ description: 'Visible product name, such as 筑安通' }),
+      module: Type.String({ description: 'Feature name, such as 巡检管理 or 人员导入' }),
+      aspect: Type.Optional(Type.String({ description: 'Slice to retrieve, such as 日/周/月 or 批量导入异常' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, _ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = queryBaselineFeature({
+        workspace,
+        module: params.module,
+        aspect: params.aspect,
+      });
+      const text = result.found
+        ? [`【基线】${result.heading}`, ...result.rules.map((rule, index) => `${index + 1}. ${rule}`)].join('\n')
+        : `基线里没有定位到 ${params.module}${params.aspect ? ` / ${params.aspect}` : ''}。不要把缺失补成已确认规则。`;
       return textResult(text, result);
     },
   });

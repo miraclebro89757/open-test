@@ -29,6 +29,7 @@ export function QaAssetTree({ overview, activePanel, onOpenPanel }: Props) {
   const pending = counts ? counts.points - counts.pointsConfirmed : 0;
   const rows: Row[] = [
     { panel: "knowledge", label: "需求知识", count: counts?.knowledge ?? null },
+    { panel: "evolution", label: "版本演进", count: null },
     { panel: "graph", label: "需求图谱（节点）", count: counts?.graphNodes ?? null },
     {
       panel: "test-points", label: "测试点", count: counts?.points ?? null,

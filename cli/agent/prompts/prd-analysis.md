@@ -79,7 +79,11 @@ argument-hint: "[需求文档]"
 
 reviewVerdict 只有在核心流程没有未澄清项时才写 PASS。待澄清项只放在 knowledge，不要放进图谱。
 
-## 5. 图谱
+## 5. 跨版本
+
+同一产品有基线文档和重构或增量文档时，先调用 `align_requirement_versions`。它只生成待审核的迁移方案，不覆盖图谱，也不改已有用例。新版没写到的旧功能不能当成删除。下线和废弃都要等人确认。重构稿没有细则时调用 `query_baseline_feature`，只查这个产品版本包里的基线。
+
+## 6. 图谱
 
 开始前调用 `task_checkpoint`，action 为 status。已完成的章节不要重做。
 
