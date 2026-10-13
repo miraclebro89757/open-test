@@ -21,7 +21,8 @@ export type QaPanelId =
   | "heal"
   | "defects"
   | "report"
-  | "reviews";
+  | "reviews"
+  | "lessons";
 
 export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   overview: "总览",
@@ -37,6 +38,7 @@ export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   defects: "缺陷",
   report: "报告",
   reviews: "待审核",
+  lessons: "审核经验",
 };
 
 export type WorkPolicy = "guided" | "balanced" | "autonomous";

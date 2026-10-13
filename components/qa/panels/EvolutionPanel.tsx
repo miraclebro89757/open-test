@@ -22,6 +22,7 @@ interface AssetAction {
 }
 
 interface Regression {
+  requirement_id?: string;
   name: string;
   tier: string;
   automation_recommendation: string;
@@ -77,7 +78,7 @@ function choicesFor(action: string): { action: string; label: string }[] {
 }
 
 /** Review a saved migration. Nothing here rewrites a case until the person applies a decision. */
-export function EvolutionPanel({ cwd, refreshKey, onChanged }: { cwd: string; refreshKey: number; onAskAgent: QaAskAgent; onChanged: () => void }) {
+export function EvolutionPanel({ cwd, refreshKey, onChanged }: { cwd: string; refreshKey: number; onChanged: () => void }) {
   const { data, error, post } = useQaData<{ plan: Plan | null }>("/api/qa/evolution", cwd, refreshKey);
   const [tab, setTab] = useState<Tab>("changes");
   const [choices, setChoices] = useState<Record<string, string>>({});

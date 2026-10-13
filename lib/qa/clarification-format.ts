@@ -18,6 +18,10 @@ export interface ClarificationItem {
   understanding: string;
   /** The tester's answer. Used only when status is 已补充. */
   supplement: string;
+  /** Set when the agent marked the item by a review lesson, e.g. 审核经验 R001. */
+  basis?: string;
+  /** 已认可 once a person has checked an item the agent marked. */
+  review?: string;
   file: string;
   /** Section heading, such as "A. 附件依赖". */
   group?: string;
@@ -55,20 +59,39 @@ function asStatus(value: string): ClarificationStatus {
   return CLARIFICATION_STATUSES.includes(value as ClarificationStatus) ? value as ClarificationStatus : "待处理";
 }
 
-function readFields(body: string): { source: string; understanding: string; status: string; supplement: string } {
+interface ItemFields {
+  source: string;
+  understanding: string;
+  status: string;
+  supplement: string;
+  basis: string;
+  review: string;
+}
+
+/** These two may follow 补充 without becoming part of it. */
+const META_FIELDS = new Set(["依据", "复核"]);
+
+function readFields(body: string): ItemFields {
   const source: string[] = [];
   const understanding: string[] = [];
   let status = "";
+  let basis = "";
+  let review = "";
   let supplement: string | null = null;
   const supplementLines: string[] = [];
   for (const line of body.split("\n")) {
+    const match = FIELD_LINE.exec(line.trim());
+    const name = match?.[1].trim() ?? "";
+    if (match && META_FIELDS.has(name)) {
+      if (name === "依据" && !basis) basis = match[2].trim();
+      if (name === "复核" && !review) review = match[2].trim();
+      continue;
+    }
     if (supplement !== null) {
       supplementLines.push(line);
       continue;
     }
-    const match = FIELD_LINE.exec(line.trim());
     if (!match) continue;
-    const name = match[1].trim();
     const value = match[2].trim();
     if (name === "补充") {
       supplement = value;
@@ -80,7 +103,7 @@ function readFields(body: string): { source: string; understanding: string; stat
   }
   const extra = supplementLines.join("\n").replace(/^\n+/, "").replace(/\s+$/, "");
   const text = [supplement ?? "", extra].filter((part) => part.length > 0).join("\n");
-  return { status, source: source.join(""), understanding: understanding.join(""), supplement: text };
+  return { status, source: source.join(""), understanding: understanding.join(""), supplement: text, basis, review };
 }
 
 function numberedItems(sectionText: string, file: string): ClarificationItem[] {
@@ -108,6 +131,8 @@ function structuredItems(sectionText: string, file: string): ClarificationItem[]
       source: fields.source,
       understanding: fields.understanding,
       supplement: fields.supplement,
+      ...(fields.basis ? { basis: fields.basis } : {}),
+      ...(fields.review ? { review: fields.review } : {}),
       file,
     };
   });
@@ -234,13 +259,15 @@ export function clarificationFileLocation(filePath: string, sessionCwd?: string)
   };
 }
 
-function itemBody(item: Pick<ClarificationItem, "status" | "source" | "understanding" | "supplement">): string {
+function itemBody(item: Pick<ClarificationItem, "status" | "source" | "understanding" | "supplement" | "basis" | "review">): string {
   const supplement = item.supplement.replace(/\r\n/g, "\n").replace(/\n+$/, "");
   const lines = [
     `- 状态：${item.status}`,
     `- 原文：${oneLine(item.source)}`,
     `- Agent理解：${oneLine(item.understanding)}`,
   ];
+  if (item.basis) lines.push(`- 依据：${oneLine(item.basis)}`);
+  if (item.review) lines.push(`- 复核：${oneLine(item.review)}`);
   if (!supplement) lines.push("- 补充：");
   else {
     const [first, ...rest] = supplement.split("\n");
@@ -254,6 +281,27 @@ function renderItem(item: ClarificationItem): string {
   return `### ${item.id} ${oneLine(item.title)}${itemBody(item)}`;
 }
 
+export interface ClarificationPatch {
+  status: ClarificationStatus;
+  supplement: string;
+  /** A string sets it, null removes it. Left out, it stays only while status and supplement stay. */
+  basis?: string | null;
+  review?: string | null;
+}
+
+function patchedBody(fields: ItemFields, patch: ClarificationPatch): string {
+  const unchanged = fields.status === patch.status && fields.supplement === patch.supplement.replace(/\n+$/, "");
+  const pick = (value: string | null | undefined, current: string) => (value === undefined ? (unchanged ? current : "") : value ?? "");
+  return itemBody({
+    status: patch.status,
+    source: fields.source,
+    understanding: fields.understanding,
+    supplement: patch.supplement,
+    basis: pick(patch.basis, fields.basis),
+    review: pick(patch.review, fields.review),
+  });
+}
+
 /**
  * Rewrite one item's status and supplement. 原文 and Agent理解 stay.
  * A numbered list is rewritten into ### items on the first mark, and the other questions stay.
@@ -262,7 +310,7 @@ function renderItem(item: ClarificationItem): string {
 export function updateClarificationMarkdown(
   markdown: string,
   id: string,
-  patch: { status: ClarificationStatus; supplement: string },
+  patch: ClarificationPatch,
 ): string | null {
   const section = clarificationSection(markdown);
   if (!section) {
@@ -273,7 +321,7 @@ export function updateClarificationMarkdown(
       if (!questions.some((item) => item.id === id)) continue;
       if (!blockHasNumberedId(block, index, id)) break;
       const rewritten = questions.map((item) => renderItem(item.id === id
-        ? { ...item, status: patch.status, supplement: patch.supplement }
+        ? { ...item, status: patch.status, supplement: patch.supplement, basis: patch.basis ?? undefined, review: patch.review ?? undefined }
         : item)).join("");
       return markdown.slice(0, block.contentStart) + `\n${rewritten}` + markdown.slice(block.end);
     }
@@ -282,33 +330,21 @@ export function updateClarificationMarkdown(
   const structured = parseItems(section.text);
   const current = structured.find((candidate) => candidate.id === id);
   if (current) {
-    const fields = readFields(current.body);
-    const next = itemBody({
-      status: patch.status,
-      source: fields.source,
-      understanding: fields.understanding,
-      supplement: patch.supplement,
-    });
+    const next = patchedBody(readFields(current.body), patch);
     return markdown.slice(0, section.start + current.headingEnd) + next + markdown.slice(section.start + current.end);
   }
   const numbered = numberedItems(section.text, "");
   if (!numbered.some((item) => item.id === id)) return null;
   const blocks = numbered.map((item) => renderItem(item.id === id
-    ? { ...item, status: patch.status, supplement: patch.supplement }
+    ? { ...item, status: patch.status, supplement: patch.supplement, basis: patch.basis ?? undefined, review: patch.review ?? undefined }
     : item)).join("");
   return markdown.slice(0, section.start) + `\n${blocks}` + markdown.slice(section.end);
 }
 
-function updateMarkedItem(markdown: string, id: string, patch: { status: ClarificationStatus; supplement: string }): string | null {
+function updateMarkedItem(markdown: string, id: string, patch: ClarificationPatch): string | null {
   const current = parseItems(markdown).find((candidate) => candidate.id === id);
   if (!current) return null;
-  const fields = readFields(current.body);
-  const next = itemBody({
-    status: patch.status,
-    source: fields.source,
-    understanding: fields.understanding,
-    supplement: patch.supplement,
-  });
+  const next = patchedBody(readFields(current.body), patch);
   const boundary = markdown.slice(current.headingEnd, current.end).search(/\n##\s+/);
   const end = boundary === -1 ? current.end : current.headingEnd + boundary;
   return markdown.slice(0, current.headingEnd) + next + markdown.slice(end);

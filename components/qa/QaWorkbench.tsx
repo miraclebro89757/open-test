@@ -18,6 +18,7 @@ import { HealPanel } from "./panels/HealPanel";
 import { ReportPanel } from "./panels/ReportPanel";
 import { DefectsPanel } from "./panels/DefectsPanel";
 import { ReviewsPanel } from "./panels/ReviewsPanel";
+import { LessonsPanel } from "./panels/LessonsPanel";
 
 interface Props {
   cwd: string | null;
@@ -33,7 +34,7 @@ interface Props {
   onChanged: () => void;
 }
 
-const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report", "reviews"];
+const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report", "reviews", "lessons"];
 
 interface FolderPanel {
   dir: WorkspaceDir;
@@ -106,6 +107,8 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
       <div style={{ flex: 1, minHeight: 0 }}>
         {panel === "reviews" ? (
           <ReviewsPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
+        ) : panel === "lessons" ? (
+          <LessonsPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
         ) : panel === "overview" || !folder ? (
           <OverviewPanel cwd={cwd} overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "knowledge" ? (

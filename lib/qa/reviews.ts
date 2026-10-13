@@ -4,13 +4,34 @@ import path from "node:path";
 import { STATUS_CONFIRMED, STATUS_PENDING, readCases, readTestPoints } from "./assets";
 import { applyClarificationUpdate, readClarificationDocuments } from "./clarifications";
 import { applyEvolutionPlan, readEvolutionPlan } from "./evolution";
+import {
+  compactIfDue,
+  feedbackToLesson,
+  findLesson,
+  lessonIdFromBasis,
+  lessonMatches,
+  readLessons,
+  recordFeedback,
+  recordLessonHit,
+  recordLessonOverturn,
+  setLessonStatus,
+  PRODUCT_LESSON_FILE,
+  type Lesson,
+} from "./lessons";
 import { setItemField } from "./markdown";
 import { applyPointAction, ReviewError } from "./review";
 import { keepHeal, listPendingHeals } from "./runner";
 
 export type ReviewLevel = "L2" | "L3" | "L4";
-export type ReviewGroup = "required" | "sample" | "bulk";
-export type ReviewSource = "clarification" | "test-point" | "case" | "evolution" | "heal" | "baseline";
+export type ReviewGroup = "required" | "lesson" | "auto" | "sample" | "bulk";
+export type ReviewSource = "clarification" | "auto" | "lesson" | "test-point" | "case" | "evolution" | "heal" | "baseline";
+
+export interface LessonHint {
+  id: string;
+  title: string;
+  decision: string;
+  action: string;
+}
 
 export interface ReviewItem {
   id: string;
@@ -30,6 +51,8 @@ export interface ReviewItem {
   file: string;
   itemId: string;
   fingerprint: string;
+  /** Enabled lessons whose keywords all appear in a pending clarification. */
+  lessons: LessonHint[];
 }
 
 const HIGH_RISK = /下线|废弃|疑似删除|当成删除|已经删除|视为删除|互相矛盾|互相冲突|规则缺失|没有可执行规则|缺少判定|新版未提及|对不上|核心回归/;
@@ -52,10 +75,32 @@ function featureFromFile(relative: string): string {
   return path.basename(relative, path.extname(relative));
 }
 
-function appendLog(workspace: string, event: Record<string, unknown>): void {
+export function appendReviewLog(workspace: string, event: Record<string, unknown>): void {
   const dir = path.join(workspace, "tasks");
   fs.mkdirSync(dir, { recursive: true });
   fs.appendFileSync(path.join(dir, "review-log.jsonl"), `${JSON.stringify({ at: new Date().toISOString(), actorType: "user", ...event })}\n`);
+}
+
+function appendLog(workspace: string, event: Record<string, unknown>): void {
+  appendReviewLog(workspace, event);
+}
+
+/** What the agent needs later to see a pattern in the decisions. */
+function logEntry(item: ReviewItem, decision: string, note: string): Record<string, unknown> {
+  return {
+    id: item.id,
+    source: item.source,
+    decision,
+    title: item.title,
+    feature: item.feature,
+    level: item.level,
+    evidence: item.evidence.slice(0, 300),
+    ...(note.trim() ? { note: note.trim().slice(0, 500) } : {}),
+  };
+}
+
+function hint(lesson: Lesson): LessonHint {
+  return { id: lesson.id, title: lesson.title, decision: lesson.decision, action: lesson.action };
 }
 
 function assertFingerprint(current: string, expected: unknown): void {
@@ -91,34 +136,93 @@ function evolutionLevel(action: EvolutionAction, change?: EvolutionChange): Revi
 
 export function listReviews(workspace: string): ReviewItem[] {
   const items: ReviewItem[] = [];
+  const lessons = readLessons(workspace);
 
   for (const document of readClarificationDocuments(workspace)) {
     const fingerprint = hashOf(workspace, document.file);
     for (const item of document.items) {
-      if (item.status !== "待处理") continue;
       const text = `${item.title}\n${item.source}\n${item.understanding}`;
       const level = riskLevel(text);
       const feature = item.group || item.title;
+      const byLesson = lessonIdFromBasis(item.basis);
+      if (item.status !== "待处理" && byLesson && !item.review) {
+        // The agent marked this by a lesson. A person spot-checks it; a high-risk one is not settled until a person looks.
+        items.push({
+          id: `auto:${document.file}:${item.id}`,
+          source: "auto",
+          title: item.title,
+          feature,
+          level,
+          group: level === "L3" ? "required" : "auto",
+          reason: level === "L3"
+            ? `Agent 按审核经验 ${byLesson} 处理了这条，但它涉及删除、矛盾或缺失规则，经验不能替人决定。`
+            : `Agent 按审核经验 ${byLesson} 处理了这条。看一眼，不对就推翻。`,
+          evidence: item.source || item.understanding,
+          before: "待处理",
+          after: item.supplement ? `${item.status}：${item.supplement}` : item.status,
+          impact: level === "L3" ? `挡住「${feature}」的用例` : "不挡住其他功能",
+          blocking: level === "L3",
+          bulkEligible: level !== "L3",
+          suggested: "认可",
+          file: document.file,
+          itemId: item.id,
+          fingerprint,
+          lessons: [],
+        });
+        continue;
+      }
+      if (item.status !== "待处理") continue;
+      const matched = lessons.filter((lesson) => lessonMatches(lesson, text)).map(hint);
       items.push({
         id: `clarification:${document.file}:${item.id}`,
         source: "clarification",
         title: item.title,
         feature,
         level,
-        group: level === "L3" ? "required" : "sample",
-        reason: level === "L3" ? "这条歧义涉及删除、矛盾或缺失规则，不能自动当真。" : "需求里有歧义，需要人决定怎么理解。",
+        group: level === "L3" ? "required" : matched.length ? "lesson" : "sample",
+        reason: level === "L3"
+          ? "这条歧义涉及删除、矛盾或缺失规则，不能自动当真。"
+          : matched.length
+            ? `和审核经验 ${matched[0].id} 相符，可以照它处理。`
+            : "需求里有歧义，需要人决定怎么理解。",
         evidence: item.source || item.understanding,
         before: "待处理",
-        after: "忽略、已补充或待讨论",
+        after: matched.length ? `${matched[0].decision}：${matched[0].action}` : "忽略、已补充或待讨论",
         impact: level === "L3" ? `挡住「${feature}」的用例` : "不挡住其他功能",
         blocking: level === "L3",
         bulkEligible: false,
-        suggested: "逐项决定",
+        suggested: matched.length ? `按经验 ${matched[0].id}` : "逐项决定",
         file: document.file,
         itemId: item.id,
         fingerprint,
+        lessons: matched,
       });
     }
+  }
+
+  const lessonFingerprint = hashOf(workspace, PRODUCT_LESSON_FILE);
+  for (const lesson of lessons) {
+    if (lesson.status !== "待确认") continue;
+    items.push({
+      id: `lesson:${lesson.id}`,
+      source: "lesson",
+      title: `${lesson.id} ${lesson.title}`,
+      feature: lesson.target,
+      level: "L2",
+      group: "sample",
+      reason: "Agent 从你过去的决定里总结出这条经验。启用后，相似的条目会照它处理。",
+      evidence: `条件：${lesson.condition}\n做法：${lesson.action}${lesson.keywords.length ? `\n关键词：${lesson.keywords.join("、")}` : ""}`,
+      before: "待确认",
+      after: "已启用",
+      impact: lesson.scope === "全部产品" ? "所有产品" : "只在这个产品",
+      blocking: false,
+      bulkEligible: false,
+      suggested: "启用",
+      file: lesson.scope === "全部产品" ? "" : PRODUCT_LESSON_FILE,
+      itemId: lesson.id,
+      fingerprint: lesson.scope === "全部产品" ? "" : lessonFingerprint,
+      lessons: [],
+    });
   }
 
   for (const file of readTestPoints(workspace)) {
@@ -144,6 +248,7 @@ export function listReviews(workspace: string): ReviewItem[] {
         file: file.file,
         itemId: item.id,
         fingerprint,
+        lessons: [],
       });
     }
   }
@@ -171,6 +276,7 @@ export function listReviews(workspace: string): ReviewItem[] {
         file: file.file,
         itemId: item.id,
         fingerprint,
+        lessons: [],
       });
     }
   }
@@ -209,6 +315,7 @@ export function listReviews(workspace: string): ReviewItem[] {
         file: "knowledge/evolution/current.json",
         itemId: action.asset_id,
         fingerprint,
+        lessons: [],
       });
     }
     items.push({
@@ -229,6 +336,7 @@ export function listReviews(workspace: string): ReviewItem[] {
       file: "knowledge/evolution/current.json",
       itemId: plan.evolution_id || "current",
       fingerprint,
+      lessons: [],
     });
   }
 
@@ -251,6 +359,7 @@ export function listReviews(workspace: string): ReviewItem[] {
       file: entry.relativeFile,
       itemId: entry.before,
       fingerprint: fs.existsSync(entry.before) ? fileHash(entry.before) : "",
+      lessons: [],
     });
   }
 
@@ -286,22 +395,78 @@ function saveEvolutionChoice(workspace: string, assetId: string, action: string)
   fs.writeFileSync(absolute, `${JSON.stringify(plan, null, 2)}\n`);
 }
 
-export function decideReview(workspace: string, id: string, decision: string, note: string, fingerprint: string): ReviewItem | null {
-  const current = listReviews(workspace).find((item) => item.id === id);
+function clarificationItem(workspace: string, file: string, itemId: string) {
+  const item = readClarificationDocuments(workspace).find((document) => document.file === file)?.items.find((entry) => entry.id === itemId);
+  if (!item) throw new ReviewError("事项不存在", 404);
+  return item;
+}
+
+/** A person chose to settle this clarification the way the lesson says. */
+function applyLessonTo(workspace: string, item: ReviewItem, lessonId: string, reviewed = false): void {
+  const lesson = findLesson(workspace, lessonId);
+  if (lesson.status !== "已启用" || lesson.target !== "待澄清") throw new ReviewError(`经验 ${lessonId} 没有启用`);
+  applyClarificationUpdate(workspace, item.file, item.itemId, lesson.decision, lesson.decision === "已补充" ? lesson.action : "", {
+    basis: `审核经验 ${lesson.id}`,
+    review: reviewed ? "已认可" : null,
+  });
+  recordLessonHit(workspace, lesson.id);
+}
+
+/** Global conventions spread to the other pending items; product rules stay until a person (or the agent) uses them. */
+export function spreadRecordedLesson(workspace: string, lesson: Lesson | null): { applied: number; skipped: number } {
+  if (!lesson || lesson.scope !== "全部产品" || !lesson.keywords.length) return { applied: 0, skipped: 0 };
+  return applyLesson(workspace, lesson.id);
+}
+
+function recordAssetReturn(workspace: string, item: ReviewItem, decision: string, note: string): Lesson | null {
+  const draft = feedbackToLesson({
+    decision,
+    note,
+    title: item.title,
+    evidence: item.evidence,
+    target: item.source === "case" ? "用例" : "测试点",
+    origin: `${item.itemId} ${decision}`,
+  });
+  return draft ? recordFeedback(workspace, draft, `${item.title}\n${item.evidence}`) : null;
+}
+
+export function decideReview(workspace: string, id: string, decision: string, note: string, fingerprint: string): { item: ReviewItem | null; lesson: Lesson | null } {
+  const current = listReviews(workspace).find((entry) => entry.id === id);
   if (!current) throw new ReviewError("事项不存在或已经处理过", 404);
   assertFingerprint(current.fingerprint, fingerprint);
+  let recorded: Lesson | null = null;
   if (current.source === "clarification") {
-    if (decision === "已补充" && !note.trim()) throw new ReviewError("已补充的条目需要写上补充内容");
-    applyClarificationUpdate(workspace, current.file, current.itemId, decision, note);
+    if (decision.startsWith("lesson:")) applyLessonTo(workspace, current, decision.slice("lesson:".length), true);
+    else {
+      if (decision === "已补充" && !note.trim()) throw new ReviewError("已补充的条目需要写上补充内容");
+      recorded = applyClarificationUpdate(workspace, current.file, current.itemId, decision, note).lesson;
+    }
+  } else if (current.source === "auto") {
+    const item = clarificationItem(workspace, current.file, current.itemId);
+    const lessonId = lessonIdFromBasis(item.basis);
+    if (decision === "认可") {
+      applyClarificationUpdate(workspace, current.file, current.itemId, item.status, item.supplement, { basis: item.basis ?? null, review: "已认可" });
+      if (lessonId) recordLessonHit(workspace, lessonId);
+    } else if (decision === "推翻") {
+      applyClarificationUpdate(workspace, current.file, current.itemId, "待处理", "", { basis: null, review: null });
+      if (lessonId) recordLessonOverturn(workspace, lessonId);
+    } else throw new ReviewError("不支持这个决定");
+  } else if (current.source === "lesson") {
+    if (decision === "启用") setLessonStatus(workspace, current.itemId, "已启用");
+    else if (decision === "不采纳") setLessonStatus(workspace, current.itemId, "停用");
+    else throw new ReviewError("不支持这个决定");
   } else if (current.source === "test-point") {
     if (decision === "确认") applyPointAction(workspace, current.file, { action: "confirm", ids: [current.itemId] });
-    else if (decision === "退回") writeField(workspace, "test-points", current.file, current.itemId, "退回说明", note || "退回");
-    else throw new ReviewError("不支持这个决定");
+    else if (decision === "退回") {
+      writeField(workspace, "test-points", current.file, current.itemId, "退回说明", note || "退回");
+      recorded = recordAssetReturn(workspace, current, decision, note);
+    } else throw new ReviewError("不支持这个决定");
   } else if (current.source === "case") {
     if (decision === "接受") writeField(workspace, "cases", current.file, current.itemId, "状态", "已接受");
     else if (decision === "退回") {
       writeField(workspace, "cases", current.file, current.itemId, "状态", "退回");
       writeField(workspace, "cases", current.file, current.itemId, "退回说明", note || "退回");
+      recorded = recordAssetReturn(workspace, current, decision, note);
     } else throw new ReviewError("不支持这个决定");
   } else if (current.source === "evolution") {
     saveEvolutionChoice(workspace, current.itemId, decision);
@@ -311,8 +476,27 @@ export function decideReview(workspace: string, id: string, decision: string, no
   } else if (current.source === "baseline") {
     throw new ReviewError("应用基线要单独授权");
   }
-  appendLog(workspace, { id, source: current.source, decision });
-  return listReviews(workspace).find((item) => item.id === id) ?? null;
+  appendLog(workspace, logEntry(current, decision, note));
+  compactIfDue(workspace);
+  if (recorded) spreadRecordedLesson(workspace, recorded);
+  return { item: listReviews(workspace).find((entry) => entry.id === id) ?? null, lesson: recorded };
+}
+
+/**
+ * Settle every pending clarification this lesson matches. High-risk ones stay
+ * for a person to open one by one, even when the keywords match.
+ */
+export function applyLesson(workspace: string, lessonId: string): { applied: number; skipped: number } {
+  const matching = listReviews(workspace).filter((item) => item.source === "clarification" && item.lessons.some((lesson) => lesson.id === lessonId));
+  let applied = 0;
+  for (const item of matching) {
+    if (item.level !== "L2") continue;
+    applyLessonTo(workspace, item, lessonId);
+    applied += 1;
+  }
+  const skipped = matching.length - applied;
+  if (applied) appendLog(workspace, { id: `lesson:${lessonId}`, source: "lesson", decision: "apply-lesson", applied, skipped });
+  return { applied, skipped };
 }
 
 export function acceptBulk(workspace: string): { accepted: number; excluded: number } {
@@ -329,6 +513,9 @@ export function acceptBulk(workspace: string): { accepted: number; excluded: num
       accepted += result.changed;
     } else if (item.source === "case") {
       writeField(workspace, "cases", item.file, item.itemId, "状态", "已接受");
+      accepted += 1;
+    } else if (item.source === "auto") {
+      decideReview(workspace, item.id, "认可", "", "");
       accepted += 1;
     } else if (item.source === "evolution") {
       saveEvolutionChoice(workspace, item.itemId, item.suggested);

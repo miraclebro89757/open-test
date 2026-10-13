@@ -91,7 +91,7 @@ reviewVerdict 只有在核心流程没有未澄清项时才写 PASS。待澄清�
 
 1. 用 read 的 offset 和 limit 读这一节。
 2. 立刻调用 `store_requirement_graph`。graph.json 里还没有节点时，第一节 mode 为 replace；已经有节点，或不是第一节时，mode 为 append。这一批最多 20 个节点和 20 条关系。这一批不要带 taskStep。
-3. 把这一节新的待澄清追加到 `knowledge/需求评审.md` 的 `## 待澄清问题` 下。每条用 `### Q编号 标题`，状态写 `待处理`，并写原文、Agent理解和空的补充。已经标成忽略、已补充或待讨论的条目不要改、不要删。忽略过的问题不要再写一条。
+3. 把这一节新的待澄清追加到 `knowledge/需求评审.md` 的 `## 待澄清问题` 下。每条用 `### Q编号 标题`，状态写 `待处理`，并写原文、Agent理解和空的补充。和 `knowledge/审核经验.md` 或 `~/.pi/agent/opentest/审核经验.md` 里已启用的待澄清经验相符、且不涉及下线、疑似删除、互相矛盾、规则缺失或新版未提及时，状态改写经验的决定，补充写经验的做法，并在补充前加 `- 依据：审核经验 编号`。已经标成忽略、已补充或待讨论的条目不要改、不要删。忽略过的问题不要再写一条。
 4. 调用 `task_checkpoint`，action 为 complete，step 为这一节的标题。若 tasks/policy.json 的 mode 是 guided，停下来等测试人员标记后再读下一节。没有这个文件，或 mode 是 balanced、autonomous 时，继续下一节，不要问要不要继续。
 
 只放入文档已经写明的节点。待澄清项留在 knowledge，节点不要设成已确认。一个节点只写一件事，不要粘贴原文。

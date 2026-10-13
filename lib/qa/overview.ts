@@ -2,6 +2,7 @@ import path from "node:path";
 import type { WorkPolicy } from "./client";
 import { readCheckpoint, type CheckpointTask } from "./checkpoint";
 import { readPolicy } from "./policy";
+import { readLessons } from "./lessons";
 import { listReviews, type ReviewSource } from "./reviews";
 import {
   STATUS_CONFIRMED,
@@ -54,6 +55,7 @@ export interface QaCounts {
   reports: number;
   reviewPending: number;
   reviewHigh: number;
+  lessons: number;
 }
 
 export interface QaOverview {
@@ -114,10 +116,12 @@ export function readQaOverview(workspace: string): QaOverview {
     reports: listMarkdownFiles(workspace, "reports").filter(isReportFile).length,
     reviewPending: 0,
     reviewHigh: 0,
+    lessons: 0,
   };
   const reviews = listReviews(workspace);
   counts.reviewPending = reviews.length;
   counts.reviewHigh = reviews.filter((item) => item.level === "L3" || item.level === "L4").length;
+  counts.lessons = readLessons(workspace).filter((item) => item.status === "已启用").length;
   const reviewStages = new Set(reviews.map((item) => REVIEW_STAGE[item.source]).filter(Boolean));
 
   const filesFor: Record<PipelineId, boolean> = {

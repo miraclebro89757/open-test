@@ -5,9 +5,11 @@ import {
   CLARIFICATION_STATUSES,
   parseClarificationDocument,
   updateClarificationMarkdown,
+  type ClarificationDocument,
   type ClarificationItem,
   type ClarificationStatus,
 } from "./clarification-format";
+import { feedbackToLesson, recordFeedback, type Lesson } from "./lessons";
 import { ReviewError } from "./review";
 
 export {
@@ -48,7 +50,8 @@ export function applyClarificationUpdate(
   id: string,
   status: unknown,
   supplement: unknown,
-): ClarificationItem {
+  meta: { basis?: string | null; review?: string | null } = {},
+): { item: ClarificationItem; lesson: Lesson | null } {
   if (typeof id !== "string" || !id.trim()) throw new ReviewError("id is required");
   if (typeof status !== "string" || !CLARIFICATION_STATUSES.includes(status as ClarificationStatus)) {
     throw new ReviewError("status must be 待处理, 忽略, 已补充 or 待讨论");
@@ -58,12 +61,24 @@ export function applyClarificationUpdate(
   const safeNote = note.replace(/\0/g, "").replace(/^###\s+/gm, "");
   const absolute = knowledgeFile(workspace, file);
   const markdown = fs.readFileSync(absolute, "utf8");
-  const next = updateClarificationMarkdown(markdown, id, { status: status as ClarificationStatus, supplement: safeNote });
+  const next = updateClarificationMarkdown(markdown, id, { status: status as ClarificationStatus, supplement: safeNote, ...meta });
   if (next === null) throw new ReviewError("clarification not found", 404);
   const temporary = `${absolute}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, next);
   fs.renameSync(temporary, absolute);
   const updated = parseClarificationDocument(next, file)?.items.find((item) => item.id === id);
   if (!updated) throw new ReviewError("clarification not found", 404);
-  return updated;
+  let lesson: Lesson | null = null;
+  if (!meta.basis && !meta.review && (status === "已补充" || status === "忽略")) {
+    const draft = feedbackToLesson({
+      decision: status as string,
+      note: safeNote,
+      title: updated.title,
+      evidence: updated.source || updated.understanding,
+      target: "待澄清",
+      origin: `${id} ${status}`,
+    });
+    if (draft) lesson = recordFeedback(workspace, draft, `${updated.title}\n${updated.source}\n${updated.understanding}`);
+  }
+  return { item: updated, lesson };
 }

@@ -53,6 +53,7 @@ export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, o
 
   const cards: Array<{ panel: QaPanelId; label: string; value: string; note?: string }> = [
     { panel: "knowledge", label: "需求知识", value: String(counts.knowledge), note: counts.graphNodes ? `图谱节点 ${counts.graphNodes}` : undefined },
+    { panel: "lessons", label: "审核经验", value: String(counts.lessons), note: counts.lessons ? "可查看和修改" : undefined },
     { panel: "test-points", label: "测试点", value: String(counts.points), note: counts.points ? `已确认 ${counts.pointsConfirmed}` : undefined },
     { panel: "cases", label: "用例", value: String(counts.cases), note: counts.cases ? `自动化 ${counts.casesAutomated}/${counts.cases}` : undefined },
     { panel: "automation", label: "自动化脚本", value: String(counts.uiScripts + counts.apiScripts), note: `UI ${counts.uiScripts} · API ${counts.apiScripts}` },

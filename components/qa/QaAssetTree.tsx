@@ -32,6 +32,7 @@ export function QaAssetTree({ overview, activePanel, onOpenPanel }: Props) {
       panel: "reviews", label: "待审核", count: counts?.reviewPending ?? null,
       badges: counts && counts.reviewHigh > 0 ? <Badge tone="bad">高风险 {counts.reviewHigh}</Badge> : null,
     },
+    { panel: "lessons", label: "审核经验", count: counts?.lessons ?? null },
     { panel: "knowledge", label: "需求知识", count: counts?.knowledge ?? null },
     { panel: "evolution", label: "版本演进", count: null },
     { panel: "graph", label: "需求图谱（节点）", count: counts?.graphNodes ?? null },
