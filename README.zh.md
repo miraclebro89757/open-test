@@ -210,6 +210,8 @@ MyProduct/
 
 测试点是针对图谱编写的，而不是针对原始文档。Agent 分批存储图谱（每次调用最多 20 个节点 / 20 个关系），因此长文档保持可处理，并在编写用例前查询它：
 
+- `ingest_requirement_sources` — 从钉钉文档 MCP 采集根文档和直接关联，写成 `knowledge/source-pack/`。分析只读源包，不再现场拉钉钉
+- `sync_case_sheet` — 把本地用例推到钉钉个人空间表格（`dingtalk-excel`），或把表格上的人工修改收回；表格改动记成待确认经验
 - `store_requirement_graph` — 写入批次（第一批使用 `replace`，之后使用 `append`）
 - `query_requirement_graph` — 读取特性的前置条件、规则和状态
 

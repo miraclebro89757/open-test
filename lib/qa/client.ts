@@ -72,6 +72,13 @@ export function clarificationSubmitText(files: string[]): string {
   ].join("\n");
 }
 
+export function analysisFromPackRequest(): QaAgentRequest {
+  return {
+    mode: "send",
+    text: "knowledge/source-pack/ 里已经有钉钉需求源包。请按 opentest-qa 读 manifest.json 和 docs/ 里的 Markdown，按节写图谱和待澄清。不要再去钉钉拉正文，也不要用 replace 覆盖已有图谱。",
+  };
+}
+
 export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   analysis: {
     mode: "compose",
@@ -83,7 +90,7 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   },
   cases: {
     mode: "send",
-    text: "测试点已经确认。请为已确认的测试点写功能用例，每条包含编号、标题、优先级、自动化、前置条件、步骤、期望结果，新用例的自动化写成否。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。",
+    text: "测试点已经确认。请为已确认的测试点写功能用例，每条包含编号、标题、需求版本、优先级、自动化、前置条件、步骤、期望结果，新用例的自动化写成否，并写当前需求版本。写完后调用 sync_case_sheet 推到钉钉表格。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。",
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
   run: { mode: "send", text: "运行 automation 目录里的自动化脚本，选择器失效时自愈，然后汇报每条用例的结果。" },

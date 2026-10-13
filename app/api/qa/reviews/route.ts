@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       lesson?: unknown;
       lessonId?: string;
       source?: string;
+      version?: string;
     };
     const resolved = await resolveQaWorkspace(request, payload.cwd);
     if ("response" in resolved) return resolved.response;
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(acceptBulk(resolved.workspace));
     }
     if (payload.action === "accept-kind") {
-      return NextResponse.json(acceptKind(resolved.workspace, String(payload.source ?? "")));
+      const version = typeof payload.version === "string" ? payload.version : "";
+      return NextResponse.json(acceptKind(resolved.workspace, String(payload.source ?? ""), version ? { version } : {}));
     }
     if (payload.action === "save-lesson") {
       const lesson = saveLesson(resolved.workspace, lessonInput(payload.lesson));

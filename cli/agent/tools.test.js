@@ -248,6 +248,8 @@ test('extension registers the terminal tools', async () => {
     'heal_selector',
     'fetch_zentao_jira',
     'write_executive_report',
+    'ingest_requirement_sources',
+    'sync_case_sheet',
     'store_requirement_graph',
     'query_requirement_graph',
     'align_requirement_versions',

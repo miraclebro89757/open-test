@@ -6,6 +6,7 @@ import type { ClarificationItem, ClarificationStatus } from "@/lib/qa/clarificat
 import { Badge, EmptyState, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
 import { useQaData } from "../useQaData";
+import { SourcePackPanel } from "./SourcePackPanel";
 
 interface Document {
   file: string;
@@ -141,6 +142,11 @@ export function ClarificationsPanel({
           {message ?? feedback}
         </div>
       ) : null}
+      {embedded || file ? null : (
+        <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
+          <SourcePackPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} onAskAgent={onAskAgent} />
+        </div>
+      )}
       <div style={{ flex: embedded ? undefined : 1, minHeight: embedded ? undefined : 0, overflowY: embedded ? "visible" : "auto" }}>
         {documents.length === 0 && otherFiles.length === 0 ? (
           <EmptyState title="还没有待澄清" hint="分析需求时，Agent 会把待澄清写进 knowledge/需求评审.md。标好之后提交，Agent 按忽略、已补充、待讨论继续。" />

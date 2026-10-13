@@ -7,6 +7,7 @@ import type { QaFile, QaItem } from "@/lib/qa/assets";
 import { Badge, EmptyState, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
 import { useQaData } from "../useQaData";
+import { CaseSheetPanel } from "./CaseSheetPanel";
 import { ItemEditor } from "./ItemEditor";
 
 interface Props {
@@ -24,6 +25,10 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
   const { data, error, post } = useQaData<{ files: QaFile[] }>("/api/qa/cases", cwd, refreshKey);
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const [priority, setPriority] = useState("");
+  const [version, setVersion] = useState("");
+  const [moduleName, setModuleName] = useState("");
+  const [lifecycle, setLifecycle] = useState("");
+  const [runResult, setRunResult] = useState("");
   const [automation, setAutomation] = useState<AutomationFilter>("all");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -31,9 +36,15 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
 
   const all = useMemo(() => (data?.files ?? []).flatMap((file) => file.items), [data]);
   const priorities = useMemo(() => [...new Set(all.map((item) => item.priority).filter(Boolean))], [all]);
+  const versions = useMemo(() => [...new Set(all.map((item) => item.requirementVersion).filter(Boolean))] as string[], [all]);
+  const modules = useMemo(() => [...new Set(all.map((item) => item.module).filter(Boolean))] as string[], [all]);
   const automated = all.filter((item) => item.automated).length;
   const visible = all.filter((item) => {
     if (priority && item.priority !== priority) return false;
+    if (version && item.requirementVersion !== version) return false;
+    if (moduleName && item.module !== moduleName) return false;
+    if (lifecycle && item.lifecycle !== lifecycle) return false;
+    if (runResult && item.runResult !== runResult) return false;
     if (automation === "yes" && !item.automated) return false;
     if (automation === "no" && item.automated) return false;
     const needle = query.trim().toLowerCase();
@@ -73,6 +84,23 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
             aria-label="搜索用例"
             style={{ ...selectStyle, flex: 1, minWidth: 100, padding: "0 8px" }}
           />
+          <select value={version} onChange={(event) => setVersion(event.target.value)} aria-label="需求版本" style={selectStyle}>
+            <option value="">需求版本：全部</option>
+            {versions.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={moduleName} onChange={(event) => setModuleName(event.target.value)} aria-label="模块" style={selectStyle}>
+            <option value="">模块：全部</option>
+            {modules.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={lifecycle} onChange={(event) => setLifecycle(event.target.value)} aria-label="用例状态" style={selectStyle}>
+            <option value="">状态：全部</option>
+            <option value="正常">正常</option>
+            <option value="废弃">废弃</option>
+          </select>
+          <select value={runResult} onChange={(event) => setRunResult(event.target.value)} aria-label="执行结果" style={selectStyle}>
+            <option value="">执行结果：全部</option>
+            {["未执行", "通过", "失败", "跳过"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
           <select value={priority} onChange={(event) => setPriority(event.target.value)} aria-label="优先级" style={selectStyle}>
             <option value="">优先级：全部</option>
             {priorities.map((value) => <option key={value} value={value}>{value}</option>)}
@@ -83,6 +111,7 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
             <option value="no">自动化：否</option>
           </select>
         </div>
+        <CaseSheetPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
         {feedback ? <div role="status" style={{ fontSize: 12, color: "var(--text-muted)" }}>{feedback}</div> : null}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
@@ -101,6 +130,10 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
                   <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{item.id}</span>
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.title}>{item.title}</span>
                 </button>
+                {item.module ? <Badge>{item.module}</Badge> : null}
+                {item.requirementVersion ? <Badge>{item.requirementVersion}</Badge> : null}
+                <Badge tone={item.lifecycle === "废弃" ? "bad" : "ok"}>{item.lifecycle || "正常"}</Badge>
+                <Badge tone={item.runResult === "失败" ? "bad" : item.runResult === "通过" ? "ok" : "muted"}>{item.runResult || "未执行"}</Badge>
                 {item.priority ? <Badge>{item.priority}</Badge> : null}
                 <Badge tone={item.automated ? "ok" : "muted"}>{item.automated ? "已自动化" : "手工"}</Badge>
                 {item.automated ? (

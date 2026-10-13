@@ -6,11 +6,13 @@ import { WORK_POLICY_LABEL, stageRequest } from "@/lib/qa/client";
 import type { QaOverview } from "@/lib/qa/overview";
 import { Badge, EmptyState, STAGE_STATUS_LABEL, StageMark, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
+import { SourcePackPanel } from "./SourcePackPanel";
 
 interface Props {
   cwd: string;
   overview: QaOverview | null;
   error: string | null;
+  refreshKey: number;
   onOpenPanel: (panel: QaPanelId) => void;
   onAskAgent: QaAskAgent;
   onChanged: () => void;
@@ -18,7 +20,7 @@ interface Props {
 
 const ALWAYS_STAGED = new Set(["record", "run", "heal", "defects", "report"]);
 
-export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, onChanged }: Props) {
+export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, onAskAgent, onChanged }: Props) {
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const [policyError, setPolicyError] = useState("");
   if (error) return <EmptyState title="读取测试进度失败" hint={error} />;
@@ -29,7 +31,7 @@ export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, o
   const current = stages.find((stage) => stage.id === overview.currentStage);
   const stageId = current?.id ?? "analysis";
   const request = stageRequest(stageId, mode);
-  const empty = counts.knowledge + counts.graphNodes + counts.points + counts.cases + counts.uiScripts + counts.apiScripts === 0;
+  const empty = counts.knowledge + counts.sourcePack + counts.graphNodes + counts.points + counts.cases + counts.uiScripts + counts.apiScripts === 0;
   const wholeBatch = mode !== "guided" && !ALWAYS_STAGED.has(stageId);
 
   async function choosePolicy(next: WorkPolicy) {
@@ -52,7 +54,7 @@ export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, o
   }
 
   const cards: Array<{ panel: QaPanelId; label: string; value: string; note?: string }> = [
-    { panel: "knowledge", label: "需求知识", value: String(counts.knowledge), note: counts.graphNodes ? `图谱节点 ${counts.graphNodes}` : undefined },
+    { panel: "knowledge", label: "需求知识", value: String(counts.knowledge), note: counts.sourcePack ? `源包 ${counts.sourcePack} 篇` : counts.graphNodes ? `图谱节点 ${counts.graphNodes}` : undefined },
     { panel: "lessons", label: "审核经验", value: String(counts.lessons), note: counts.lessons ? "可查看和修改" : undefined },
     { panel: "test-points", label: "测试点", value: String(counts.points), note: counts.points ? `已确认 ${counts.pointsConfirmed}` : undefined },
     { panel: "cases", label: "用例", value: String(counts.cases), note: counts.cases ? `自动化 ${counts.casesAutomated}/${counts.cases}` : undefined },
@@ -70,7 +72,7 @@ export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, o
         </div>
         {empty ? (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
-            这个目录还没有测试产物。把需求文档用 @ 放进对话，Agent 会按需求、测试点、用例的顺序往下做，产物都会写在这个目录里。
+            这个目录还没有测试产物。把需求文档用 @ 放进对话，或把钉钉文档链接贴到下面的源包栏采集，Agent 会按需求、测试点、用例的顺序往下做。
           </p>
         ) : current ? (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
@@ -111,6 +113,8 @@ export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, o
           </div>
         ) : null}
       </section>
+
+      <SourcePackPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} onAskAgent={onAskAgent} />
 
       <section>
         <h3 style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>流程</h3>

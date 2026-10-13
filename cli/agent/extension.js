@@ -21,6 +21,8 @@ const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
 const { installDocumentAutocomplete } = require('./document-complete');
 const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
 const { alignRequirementVersions, queryBaselineFeature } = require('./evolution');
+const { ingestRequirementSources } = require('./sources/ingest');
+const { syncCaseSheet } = require('./sources/case-sheet');
 const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
 const { readProject, setProject } = require('./project');
@@ -560,11 +562,86 @@ async function installOpentest(pi, options = {}) {
   });
 
   pi.registerTool({
+    name: 'ingest_requirement_sources',
+    label: 'Ingest sources',
+    description: '从钉钉文档 MCP 采集根文档和直接关联文档，写成 knowledge/source-pack/。不覆盖图谱，也不下载整座知识库。',
+    promptSnippet: 'Ingest a DingTalk requirement tree into a frozen source pack',
+    promptGuidelines: [
+      'Call ingest_requirement_sources when the user gives a DingTalk docs URL instead of a local file.',
+      'Do not download nested documents by hand. After the pack exists, read knowledge/source-pack/ and stop calling DingTalk during analysis.',
+      'Depth 2 means the root plus directly linked documents. Unreadable links become clarifications.',
+    ],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the product workspace parent' }),
+      productName: Type.String({ description: 'Visible product name, such as 易训' }),
+      url: Type.String({ description: 'Root DingTalk document URL' }),
+      depth: Type.Optional(Type.Number({ description: 'Document levels to ingest. Default 2: root plus direct links.' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = await ingestRequirementSources({
+        workspace,
+        product: params.productName,
+        url: params.url,
+        depth: params.depth,
+      });
+      updateCheckpoint(workspace, { product: params.productName, sourceFile: params.url, action: 'status' });
+      showProgress(ctx, workspace);
+      const unread = result.unread ? `，${result.unread} 条没读到的关联已写入待澄清` : '';
+      return textResult(
+        `已采集 ${result.ingested} 篇文档到 knowledge/source-pack/${unread}。分析时读这份源包，不要再去钉钉拉正文。`,
+        result,
+      );
+    },
+  });
+
+  pi.registerTool({
+    name: 'sync_case_sheet',
+    label: 'Sync case sheet',
+    description: '把本地功能用例推到钉钉个人空间表格，或把表格上的人工修改收回本地。不要用钉钉文档 MCP 写表格。',
+    promptSnippet: 'Push or pull cases through the DingTalk spreadsheet MCP dingtalk-excel',
+    promptGuidelines: [
+      'Call sync_case_sheet with action push after writing or updating cases, so the tester can review them in 钉钉表格.',
+      'The sheet status column is only 正常 or 废弃. Local 待确认/已接受 stay review marks and show as 正常. 模块 is the case filename. 执行结果 comes from the latest run, do not type it.',
+      'Call action pull after the tester edits the sheet. Apply those edits to cases/*.md. Table-derived lessons stay 待确认; do not enable them.',
+      'If local markdown and the sheet both changed since the last push, write 待澄清 and do not merge. Do not delete local cases when a row disappears.',
+    ],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the product workspace parent' }),
+      productName: Type.String({ description: 'Visible product name, such as 易训' }),
+      action: Type.Optional(Type.String({ description: 'push writes cases to the personal-space sheet. pull reads human edits back. Default push.' })),
+      url: Type.Optional(Type.String({ description: 'Existing DingTalk spreadsheet URL. Omit to create one in 我的文档.' })),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = await syncCaseSheet({
+        workspace,
+        product: params.productName,
+        action: params.action,
+        url: params.url,
+      });
+      showProgress(ctx, workspace);
+      if (result.action === 'pull') {
+        const conflict = result.conflicts ? `，${result.conflicts} 条两边都改了已写入待澄清` : '';
+        const lesson = result.lessons ? `，${result.lessons} 条表格改动记成待确认的用例经验` : '';
+        return textResult(
+          `已从钉钉表格收回 ${result.updated} 条修改${result.imported ? `，新导入 ${result.imported} 条` : ''}${conflict}${lesson}。本地 cases/*.md 仍是准。`,
+          result,
+        );
+      }
+      return textResult(
+        `已把 ${result.written} 条用例推到钉钉个人空间表格。用表格筛选「需求版本」做评审，改完后再 pull。${result.url || ''}`,
+        result,
+      );
+    },
+  });
+
+  pi.registerTool({
     name: 'store_requirement_graph',
     label: 'Requirement graph',
     description: '把需求分析得到的功能、场景、规则和关系写成产品图谱。图太大时分批调用，后续批次用 append。',
     promptSnippet: 'Store a requirement graph in batches',
-    promptGuidelines: ['Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Do not pass taskStep in that call. Append that section\'s new clarifications to knowledge/需求评审.md, then complete the section with task_checkpoint and stop for the tester. Do not draft the whole graph in the reply.'],
+    promptGuidelines: ['If knowledge/source-pack/ exists, read that pack instead of live DingTalk. Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Do not pass taskStep in that call. Append that section\'s new clarifications to knowledge/需求评审.md, then complete the section with task_checkpoint and stop for the tester. Do not draft the whole graph in the reply.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),

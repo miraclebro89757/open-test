@@ -29,6 +29,7 @@ interface ReviewItem {
   itemId: string;
   fingerprint: string;
   lessons: LessonHint[];
+  requirementVersion?: string;
 }
 
 interface ReviewKind {
@@ -82,6 +83,40 @@ function takesNote(item: ReviewItem): boolean {
   return item.source === "clarification" || item.source === "test-point" || item.source === "case";
 }
 
+function ReviewRow({
+  item,
+  kindLabel,
+  selected,
+  onSelect,
+}: {
+  item: ReviewItem;
+  kindLabel: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      style={{
+        display: "block", width: "100%", textAlign: "left", marginBottom: 6, padding: "8px 10px",
+        borderRadius: 8, cursor: "pointer",
+        border: "1px solid var(--border)",
+        background: selected ? "var(--bg-selected, var(--bg-panel))" : "var(--bg)",
+        color: "var(--text)",
+      }}
+    >
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <Badge>{kindLabel}</Badge>
+        <Badge tone={LEVEL_TONE[item.level]}>{item.level}</Badge>
+        {item.requirementVersion ? <Badge>{item.requirementVersion}</Badge> : null}
+        <strong style={{ fontSize: 12.5, fontWeight: 600 }}>{item.title}</strong>
+      </div>
+      <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--text-muted)" }}>{item.feature} · {item.reason}</div>
+    </button>
+  );
+}
+
 export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refreshKey: number; onChanged: () => void }) {
   const { data, error, post } = useQaData<{ items: ReviewItem[]; blocked: string[]; kinds?: ReviewKind[] }>("/api/qa/reviews", cwd, refreshKey);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -116,11 +151,12 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
     setNote("");
   }
 
-  async function applyKind(source: string, label: string) {
-    const body = await run({ action: "accept-kind", source });
+  async function applyKind(source: string, label: string, version?: string) {
+    const body = await run({ action: "accept-kind", source, ...(version ? { version } : {}) });
     if (!body) return;
     const skipped = Number(body.skipped ?? 0);
-    setMessage(`已一键处理「${label}」${Number(body.accepted ?? 0)} 条。${skipped ? `${skipped} 条高风险仍逐条看。` : ""}逐条的忽略、已补充、确认还可以继续用。`);
+    const versionNote = version ? `（${version}）` : "";
+    setMessage(`已一键处理「${label}」${versionNote}${Number(body.accepted ?? 0)} 条。${skipped ? `${skipped} 条高风险仍逐条看。` : ""}逐条的忽略、已补充、确认还可以继续用。`);
   }
 
   if (error) return <EmptyState title="读取待审核失败" hint={error} />;
@@ -164,6 +200,9 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
           if (!rows.length) return null;
           const fallback = KIND_FALLBACK[kind.source];
           const bulkLabel = kind.bulkLabel || fallback?.bulkLabel || "";
+          const versionGroups = kind.source === "case"
+            ? [...new Set(rows.map((item) => item.requirementVersion || "未标明"))]
+            : [];
           return (
             <section key={kind.source} style={{ marginTop: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
@@ -177,26 +216,26 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
                   </button>
                 ) : null}
               </div>
-              {rows.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => { setSelectedId(item.id); setNote(""); }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "left", marginBottom: 6, padding: "8px 10px",
-                    borderRadius: 8, cursor: "pointer",
-                    border: "1px solid var(--border)",
-                    background: selected?.id === item.id ? "var(--bg-selected, var(--bg-panel))" : "var(--bg)",
-                    color: "var(--text)",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <Badge>{kind.label}</Badge>
-                    <Badge tone={LEVEL_TONE[item.level]}>{item.level}</Badge>
-                    <strong style={{ fontSize: 12.5, fontWeight: 600 }}>{item.title}</strong>
+              {versionGroups.length > 1 ? versionGroups.map((version) => {
+                const grouped = rows.filter((item) => (item.requirementVersion || "未标明") === version);
+                const bulkable = grouped.filter((item) => item.bulkEligible).length;
+                return (
+                  <div key={version} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                      <Badge>{version}</Badge>
+                      {bulkLabel && bulkable > 0 ? (
+                        <button type="button" style={buttonStyle()} onClick={() => void applyKind(kind.source, kind.label, version)}>
+                          {version} {bulkLabel} {bulkable}
+                        </button>
+                      ) : null}
+                    </div>
+                    {grouped.map((item) => (
+                      <ReviewRow key={item.id} item={item} kindLabel={kind.label} selected={selected?.id === item.id} onSelect={() => { setSelectedId(item.id); setNote(""); }} />
+                    ))}
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--text-muted)" }}>{item.feature} · {item.reason}</div>
-                </button>
+                );
+              }) : rows.map((item) => (
+                <ReviewRow key={item.id} item={item} kindLabel={kind.label} selected={selected?.id === item.id} onSelect={() => { setSelectedId(item.id); setNote(""); }} />
               ))}
             </section>
           );
@@ -208,6 +247,7 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
               <Badge>{KIND_FALLBACK[selected.source]?.label || selected.source}</Badge>
               <Badge tone={LEVEL_TONE[selected.level]}>{selected.level}</Badge>
+              {selected.requirementVersion ? <Badge>{selected.requirementVersion}</Badge> : null}
             </div>
             <h2 style={{ margin: "0 0 8px", fontSize: 14 }}>{selected.title}</h2>
             <p style={{ margin: "0 0 8px" }}>{selected.reason}</p>

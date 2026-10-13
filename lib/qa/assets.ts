@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pointsConfirmedInCheckpoint } from "./checkpoint";
+import { loadAgentModule } from "./legacy";
 import { parseItems } from "./markdown";
 
 /** Sub-directories of a product workspace, as the opentest-qa skill lays them out. */
@@ -30,6 +31,14 @@ export interface QaItem {
   body: string;
   /** File the item lives in, relative to the workspace. */
   file: string;
+  /** Requirement version this case currently asserts against, such as V1.1.3. */
+  requirementVersion?: string;
+  /** Feature file the case lives in, without .md. */
+  module?: string;
+  /** Case lifecycle on the sheet: 正常 or 废弃. */
+  lifecycle?: "正常" | "废弃";
+  /** Latest run result: 通过, 失败, 跳过, or 未执行. */
+  runResult?: string;
 }
 
 export interface QaFile {
@@ -62,7 +71,7 @@ function listFiles(dir: string, filter: (name: string) => boolean, depth = 4): s
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
         // The healing history under versions/ is not a script of its own.
-        if (level < depth && entry.name !== "versions" && entry.name !== "node_modules") walk(full, level + 1);
+        if (level < depth && entry.name !== "versions" && entry.name !== "node_modules" && entry.name !== "source-pack") walk(full, level + 1);
       } else if (filter(entry.name)) {
         found.push(full);
       }
@@ -86,7 +95,25 @@ function splitScripts(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function readQaFiles(workspace: string, dir: "test-points" | "cases", defaultStatus: string): QaFile[] {
+function normalizeVersion(value: string | undefined): string {
+  const match = String(value || "").match(/V?(\d+\.\d+(?:\.\d+)?)/i);
+  return match ? `V${match[1]}` : "";
+}
+
+function caseSheetModule(): {
+  inferWorkspaceVersion: (dir: string) => string;
+  latestCaseResults: (dir: string) => Record<string, string>;
+  caseLifecycle: (status: string) => "正常" | "废弃";
+  caseModule: (relative: string) => string;
+} {
+  return loadAgentModule("sources/case-sheet.js");
+}
+
+function workspaceRequirementVersion(workspace: string): string {
+  return caseSheetModule().inferWorkspaceVersion(workspace);
+}
+
+function readQaFiles(workspace: string, dir: "test-points" | "cases", defaultStatus: string, versionFallback = ""): QaFile[] {
   return listMarkdownFiles(workspace, dir).map((relative) => {
     const markdown = fs.readFileSync(path.join(workspace, relative), "utf8");
     const items = parseItems(markdown).map<QaItem>((item) => ({
@@ -98,6 +125,7 @@ function readQaFiles(workspace: string, dir: "test-points" | "cases", defaultSta
       scripts: splitScripts(item.fields["脚本"]),
       body: item.body.replace(/^\n+/, "").replace(/\s+$/, ""),
       file: relative,
+      requirementVersion: normalizeVersion(item.fields["需求版本"]) || versionFallback,
     }));
     return { file: relative, items };
   });
@@ -109,7 +137,18 @@ export function readTestPoints(workspace: string): QaFile[] {
 }
 
 export function readCases(workspace: string): QaFile[] {
-  return readQaFiles(workspace, "cases", "");
+  const sheet = caseSheetModule();
+  const fallback = sheet.inferWorkspaceVersion(workspace);
+  const results = sheet.latestCaseResults(workspace);
+  return readQaFiles(workspace, "cases", "", fallback).map((file) => ({
+    ...file,
+    items: file.items.map((item) => ({
+      ...item,
+      module: sheet.caseModule(file.file),
+      lifecycle: sheet.caseLifecycle(item.status),
+      runResult: results[item.id] || "未执行",
+    })),
+  }));
 }
 
 export interface AutomationScript {

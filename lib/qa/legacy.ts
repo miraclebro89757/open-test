@@ -9,7 +9,16 @@ import { opentestRoot } from "./web-session";
  */
 export function loadAgentModule<T>(relativePath: string): T {
   const root = opentestRoot();
-  return createRequire(join(root, "package.json"))(join(root, "cli", "agent", relativePath)) as T;
+  const requireAgent = createRequire(join(root, "package.json"));
+  const absolute = join(root, "cli", "agent", relativePath);
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      delete requireAgent.cache[requireAgent.resolve(absolute)];
+    } catch {
+      // The file may not have been loaded yet.
+    }
+  }
+  return requireAgent(absolute) as T;
 }
 
 export interface CheckpointModule {

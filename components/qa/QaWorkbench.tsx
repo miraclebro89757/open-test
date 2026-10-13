@@ -45,7 +45,7 @@ interface FolderPanel {
 }
 
 const FOLDER_PANELS: Partial<Record<QaPanelId, FolderPanel>> = {
-  knowledge: { dir: "knowledge", emptyTitle: "还没有需求知识", emptyHint: "用 @ 把需求文档放进对话，Agent 会把待澄清项和知识写到 knowledge/。", stage: "analysis", action: "分析需求文档" },
+  knowledge: { dir: "knowledge", emptyTitle: "还没有需求知识", emptyHint: "用 @ 把需求文档放进对话，或把钉钉文档链接贴到源包栏采集。Agent 会把待澄清和知识写到 knowledge/。", stage: "analysis", action: "分析需求文档" },
   graph: { dir: "graph", emptyTitle: "还没有需求图谱", emptyHint: "需求分析完成后，图谱写在 graph/。" },
   "test-points": { dir: "test-points", emptyTitle: "还没有测试点", emptyHint: "需求分析之后，让 Agent 按功能写测试点，写完等你确认。", stage: "test-points", action: "生成测试点" },
   cases: { dir: "cases", emptyTitle: "还没有用例", emptyHint: "测试点确认之后才能写用例。", stage: "cases", action: "生成用例" },
@@ -110,7 +110,7 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
         ) : panel === "lessons" ? (
           <LessonsPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
         ) : panel === "overview" || !folder ? (
-          <OverviewPanel cwd={cwd} overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} onChanged={onChanged} />
+          <OverviewPanel cwd={cwd} overview={overview} error={error} refreshKey={refreshKey} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "knowledge" ? (
           <ClarificationsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "evolution" ? (

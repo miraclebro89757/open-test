@@ -183,6 +183,8 @@ OpenTest does not keep a second copy of any of this. The launcher never writes `
 
 Test points are written against a graph, not against the raw document. The agent stores the graph in batches (max 20 nodes / 20 relationships per call) so long documents stay tractable, and queries it before writing cases:
 
+- `ingest_requirement_sources` — freeze a DingTalk tree (root plus direct links) into `knowledge/source-pack/`; analysis reads the pack, not live DingTalk
+- `sync_case_sheet` — push local cases to a DingTalk spreadsheet in personal space (`dingtalk-excel`) or pull human edits back; table-derived lessons stay pending
 - `store_requirement_graph` — write a batch (`replace` for the first batch, `append` after)
 - `query_requirement_graph` — read preconditions, rules, and states for a feature
 

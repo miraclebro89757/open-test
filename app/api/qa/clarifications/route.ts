@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     if ("response" in resolved) return resolved.response;
     const documents = readClarificationDocuments(resolved.workspace);
     const marked = new Set(documents.map((document) => document.file));
-    const otherFiles = listMarkdownFiles(resolved.workspace, "knowledge").filter((file) => !marked.has(file));
+    const otherFiles = listMarkdownFiles(resolved.workspace, "knowledge").filter((file) => {
+      const relative = file.replace(/\\/g, "/");
+      return !marked.has(file) && !relative.includes("/source-pack/");
+    });
     return NextResponse.json({ documents, otherFiles });
   } catch (error) {
     return qaError(error);

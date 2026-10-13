@@ -78,6 +78,8 @@ export interface ReviewItem {
   fingerprint: string;
   /** Enabled lessons whose keywords all appear in a pending clarification. */
   lessons: LessonHint[];
+  /** Cases: the requirement version this draft currently asserts against. */
+  requirementVersion?: string;
 }
 
 const HIGH_RISK = /下线|废弃|疑似删除|当成删除|已经删除|视为删除|互相矛盾|互相冲突|规则缺失|没有可执行规则|缺少判定|新版未提及|对不上|核心回归/;
@@ -302,6 +304,7 @@ export function listReviews(workspace: string): ReviewItem[] {
         itemId: item.id,
         fingerprint,
         lessons: [],
+        requirementVersion: item.requirementVersion || "",
       });
     }
   }
@@ -551,10 +554,18 @@ export function reviewKinds(items: ReviewItem[]): ReviewKindSummary[] {
  * One-click for a single task type. L3/L4 stay for a person to open one by one.
  * Per-item 忽略 / 已补充 / 确认 / 退回 still work afterwards on whatever remains.
  */
-export function acceptKind(workspace: string, source: string): { accepted: number; skipped: number } {
+export function acceptKind(workspace: string, source: string, options: { version?: string } = {}): { accepted: number; skipped: number } {
   if (source === "baseline") throw new ReviewError("应用基线要单独授权");
   if (!(source in REVIEW_KIND_LABEL)) throw new ReviewError("不支持这个任务类型");
-  const items = listReviews(workspace).filter((item) => item.source === source);
+  const wanted = options.version?.trim() || "";
+  const items = listReviews(workspace).filter((item) => {
+    if (item.source !== source) return false;
+    if (source === "case" && wanted) {
+      if (wanted === "未标明") return !item.requirementVersion;
+      return item.requirementVersion === wanted;
+    }
+    return true;
+  });
   let accepted = 0;
   let skipped = 0;
   const seenFiles = new Set<string>();

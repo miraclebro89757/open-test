@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { WorkPolicy } from "./client";
 import { readCheckpoint, type CheckpointTask } from "./checkpoint";
@@ -44,6 +45,7 @@ export interface StageOverview {
 
 export interface QaCounts {
   knowledge: number;
+  sourcePack: number;
   graphNodes: number;
   points: number;
   pointsConfirmed: number;
@@ -97,6 +99,17 @@ export function isReportFile(file: string): boolean {
   return !file.split(path.sep).includes("runs");
 }
 
+function sourcePackCount(workspace: string): number {
+  const file = path.join(workspace, "knowledge", "source-pack", "manifest.json");
+  if (!fs.existsSync(file)) return 0;
+  try {
+    const pack = JSON.parse(fs.readFileSync(file, "utf8")) as { nodes?: Array<{ role?: string; extension?: string }> };
+    return (pack.nodes ?? []).filter((node) => (node.role === "root" || node.role === "linked") && node.extension === "adoc").length;
+  } catch {
+    return 0;
+  }
+}
+
 export function readQaOverview(workspace: string): QaOverview {
   const checkpoint = readCheckpoint(workspace);
   const points = readTestPoints(workspace).flatMap((file) => file.items);
@@ -105,6 +118,7 @@ export function readQaOverview(workspace: string): QaOverview {
   const runState = latestRunState(workspace);
   const counts: QaCounts = {
     knowledge: listMarkdownFiles(workspace, "knowledge").length,
+    sourcePack: sourcePackCount(workspace),
     graphNodes: readGraphSummary(workspace)?.nodes ?? 0,
     points: points.length,
     pointsConfirmed: points.filter((point) => point.status === STATUS_CONFIRMED).length,
