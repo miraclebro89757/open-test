@@ -167,6 +167,30 @@ test('append keeps earlier nodes and adds later relationships', async () => {
   assert.equal(saved.scenarios[0].name, '新建计划');
 });
 
+test('replace is refused once the product graph already has nodes', async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-replace-'));
+  await storeRequirementGraph({
+    workspace,
+    product: '筑安通',
+    sourceFile: '/tmp/req.md',
+    graph: { features: [{ id: 'FEAT_01', name: '巡检计划' }] },
+    env: {},
+  });
+  await assert.rejects(
+    () => storeRequirementGraph({
+      workspace,
+      product: '筑安通',
+      sourceFile: '/tmp/req.md',
+      mode: 'replace',
+      graph: { features: [{ id: 'FEAT_02', name: '另一功能' }] },
+      env: {},
+    }),
+    /不能用 replace 覆盖/,
+  );
+  const saved = JSON.parse(fs.readFileSync(path.join(workspace, 'graph', 'graph.json'), 'utf8'));
+  assert.equal(saved.features[0].id, 'FEAT_01');
+});
+
 test('a batch that plans the whole document is rejected', async () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-batch-'));
   const rules = Array.from({ length: 41 }, (_item, index) => ({

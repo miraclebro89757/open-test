@@ -90,9 +90,9 @@ reviewVerdict 只有在核心流程没有未澄清项时才写 PASS。待澄清�
 还没有步骤时，用 action plan、task analysis，把文档标题一行一个放进 steps。然后只处理下一步：
 
 1. 用 read 的 offset 和 limit 读这一节。
-2. 立刻调用 `store_requirement_graph`。第一节 mode 为 replace，之后为 append。这一批最多 20 个节点和 20 条关系。这一批不要带 taskStep。
+2. 立刻调用 `store_requirement_graph`。graph.json 里还没有节点时，第一节 mode 为 replace；已经有节点，或不是第一节时，mode 为 append。这一批最多 20 个节点和 20 条关系。这一批不要带 taskStep。
 3. 把这一节新的待澄清追加到 `knowledge/需求评审.md` 的 `## 待澄清问题` 下。每条用 `### Q编号 标题`，状态写 `待处理`，并写原文、Agent理解和空的补充。已经标成忽略、已补充或待讨论的条目不要改、不要删。忽略过的问题不要再写一条。
-4. 调用 `task_checkpoint`，action 为 complete，step 为这一节的标题。然后停下来，等测试人员标记后再读下一节。
+4. 调用 `task_checkpoint`，action 为 complete，step 为这一节的标题。若 tasks/policy.json 的 mode 是 guided，停下来等测试人员标记后再读下一节。没有这个文件，或 mode 是 balanced、autonomous 时，继续下一节，不要问要不要继续。
 
 只放入文档已经写明的节点。待澄清项留在 knowledge，节点不要设成已确认。一个节点只写一件事，不要粘贴原文。
 
@@ -120,4 +120,4 @@ JSON 形状：
 
 功能之间有依赖时用 `DEPENDS_ON`。文档没写的依赖不要连。
 
-禁止在回复里估算整图字数、列出后续章节的规则，或先起草完整 JSON。写完一节的图谱和待澄清就停下来，不要接着读下一节。一批被拒绝或会话中断时，下次从 `tasks/status.md` 的下一步继续，不要从头再来，也不要删掉已经确认的关系，也不要改测试人员标过的待澄清。
+禁止在回复里估算整图字数、列出后续章节的规则，或先起草完整 JSON。guided 写完一节的图谱和待澄清就停下来，不要接着读下一节。其他模式按节连续写完。一批被拒绝或会话中断时，下次从 `tasks/status.md` 的下一步继续，不要从头再来，也不要删掉已经确认的关系，也不要改测试人员标过的待澄清。

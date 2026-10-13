@@ -138,6 +138,9 @@ async function storeRequirementGraph({
   }
   const rawText = graphPath ? null : (typeof graph === 'string' ? graph : null);
   assertBatchSize(rawText, parsed);
+  if (mode === 'replace' && batchItemCount(readGraph(workspace)) > 0) {
+    throw new Error('图谱里已经有内容，不能用 replace 覆盖。这一批请用 append。');
+  }
   if (mode === 'append') {
     const existing = readGraph(workspace);
     if (existing) parsed = mergeGraphs(existing, parsed);

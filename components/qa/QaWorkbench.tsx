@@ -1,7 +1,7 @@
 "use client";
 
 import type { QaAskAgent, QaPanelId } from "@/lib/qa/client";
-import { QA_PANEL_TITLES, STAGE_REQUESTS } from "@/lib/qa/client";
+import { QA_PANEL_TITLES, STAGE_REQUESTS, stageRequest, type WorkPolicy } from "@/lib/qa/client";
 import type { QaOverview } from "@/lib/qa/overview";
 import type { WorkspaceDir } from "@/lib/qa/assets";
 import { EmptyState, buttonStyle } from "./qa-ui";
@@ -17,6 +17,7 @@ import { RunPanel } from "./panels/RunPanel";
 import { HealPanel } from "./panels/HealPanel";
 import { ReportPanel } from "./panels/ReportPanel";
 import { DefectsPanel } from "./panels/DefectsPanel";
+import { ReviewsPanel } from "./panels/ReviewsPanel";
 
 interface Props {
   cwd: string | null;
@@ -32,7 +33,7 @@ interface Props {
   onChanged: () => void;
 }
 
-const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report"];
+const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report", "reviews"];
 
 interface FolderPanel {
   dir: WorkspaceDir;
@@ -55,11 +56,12 @@ const FOLDER_PANELS: Partial<Record<QaPanelId, FolderPanel>> = {
   report: { dir: "reports", emptyTitle: "还没有报告", emptyHint: "用例写好后，让 Agent 写测试简报。", stage: "report", action: "生成测试简报" },
 };
 
-function StageAction({ stage, label, onAskAgent }: { stage: keyof typeof STAGE_REQUESTS; label: string; onAskAgent: QaAskAgent }) {
+function StageAction({ stage, label, mode, onAskAgent }: { stage: keyof typeof STAGE_REQUESTS; label: string; mode: WorkPolicy; onAskAgent: QaAskAgent }) {
   const { ask, feedback } = useAskFeedback(onAskAgent);
+  const request = stageRequest(stage, mode);
   return (
     <>
-      <button type="button" style={buttonStyle("primary")} onClick={() => ask(STAGE_REQUESTS[stage])}>{label}</button>
+      <button type="button" style={buttonStyle("primary")} onClick={() => ask(request)}>{mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "heal" && stage !== "defects" && stage !== "report" ? "开始整批任务" : label}</button>
       {feedback ? <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-muted)" }}>{feedback}</span> : null}
     </>
   );
@@ -102,8 +104,10 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
         })}
       </nav>
       <div style={{ flex: 1, minHeight: 0 }}>
-        {panel === "overview" || !folder ? (
-          <OverviewPanel overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} />
+        {panel === "reviews" ? (
+          <ReviewsPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
+        ) : panel === "overview" || !folder ? (
+          <OverviewPanel cwd={cwd} overview={overview} error={error} onOpenPanel={onPanelChange} onAskAgent={onAskAgent} onChanged={onChanged} />
         ) : panel === "knowledge" ? (
           <ClarificationsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "evolution" ? (
@@ -132,7 +136,7 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
             refreshKey={refreshKey}
             onOpenFile={onOpenFile}
             actions={folder.stage && folder.action
-              ? <StageAction stage={folder.stage} label={folder.action} onAskAgent={onAskAgent} />
+              ? <StageAction stage={folder.stage} label={folder.action} mode={overview?.policy.mode ?? "balanced"} onAskAgent={onAskAgent} />
               : undefined}
           />
         )}

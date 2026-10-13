@@ -64,6 +64,20 @@ export function QaPipelineBar({ overview, hasProject, activePanel, onOpenPanel }
           );
         })}
       </nav>
+      {overview && overview.counts.reviewPending > 0 ? (
+        <button
+          type="button"
+          onClick={() => onOpenPanel("reviews")}
+          style={{
+            flexShrink: 0, height: 26, padding: "0 8px", borderRadius: 13, cursor: "pointer", fontSize: 12,
+            border: activePanel === "reviews" ? "1px solid var(--accent)" : "1px solid var(--border)",
+            background: activePanel === "reviews" ? "var(--bg-selected)" : "transparent",
+            color: "var(--text)",
+          }}
+        >
+          待审核 {overview.counts.reviewPending}
+        </button>
+      ) : null}
       {current ? (
         <span style={{ flexShrink: 0, color: "var(--text-muted)" }} title={current.nextStep ? `下一步 ${current.nextStep}` : undefined}>
           {current.nextStep ? `下一步 ${current.nextStep}` : `当前：${current.label}`}

@@ -1,27 +1,55 @@
 "use client";
 
-import type { QaAskAgent, QaPanelId } from "@/lib/qa/client";
-import { STAGE_REQUESTS } from "@/lib/qa/client";
+import { useState } from "react";
+import type { QaAskAgent, QaPanelId, WorkPolicy } from "@/lib/qa/client";
+import { WORK_POLICY_LABEL, stageRequest } from "@/lib/qa/client";
 import type { QaOverview } from "@/lib/qa/overview";
 import { Badge, EmptyState, STAGE_STATUS_LABEL, StageMark, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
 
 interface Props {
+  cwd: string;
   overview: QaOverview | null;
   error: string | null;
   onOpenPanel: (panel: QaPanelId) => void;
   onAskAgent: QaAskAgent;
+  onChanged: () => void;
 }
 
-export function OverviewPanel({ overview, error, onOpenPanel, onAskAgent }: Props) {
+const ALWAYS_STAGED = new Set(["record", "run", "heal", "defects", "report"]);
+
+export function OverviewPanel({ cwd, overview, error, onOpenPanel, onAskAgent, onChanged }: Props) {
   const { ask, feedback } = useAskFeedback(onAskAgent);
+  const [policyError, setPolicyError] = useState("");
   if (error) return <EmptyState title="读取测试进度失败" hint={error} />;
   if (!overview) return <EmptyState title="读取测试进度…" />;
 
   const { counts, stages } = overview;
+  const mode = overview.policy.mode;
   const current = stages.find((stage) => stage.id === overview.currentStage);
-  const request = current ? STAGE_REQUESTS[current.id] : undefined;
+  const stageId = current?.id ?? "analysis";
+  const request = stageRequest(stageId, mode);
   const empty = counts.knowledge + counts.graphNodes + counts.points + counts.cases + counts.uiScripts + counts.apiScripts === 0;
+  const wholeBatch = mode !== "guided" && !ALWAYS_STAGED.has(stageId);
+
+  async function choosePolicy(next: WorkPolicy) {
+    setPolicyError("");
+    try {
+      const response = await fetch("/api/qa/policy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd, mode: next }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setPolicyError(body.error ?? "没有切换成功");
+        return;
+      }
+      onChanged();
+    } catch (changeError) {
+      setPolicyError(changeError instanceof Error ? changeError.message : String(changeError));
+    }
+  }
 
   const cards: Array<{ panel: QaPanelId; label: string; value: string; note?: string }> = [
     { panel: "knowledge", label: "需求知识", value: String(counts.knowledge), note: counts.graphNodes ? `图谱节点 ${counts.graphNodes}` : undefined },
@@ -51,15 +79,33 @@ export function OverviewPanel({ overview, error, onOpenPanel, onAskAgent }: Prop
         ) : (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)" }}>七个阶段都已完成。</p>
         )}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {(Object.keys(WORK_POLICY_LABEL) as WorkPolicy[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              style={buttonStyle(item === mode ? "primary" : "plain")}
+              onClick={() => void choosePolicy(item)}
+            >
+              {WORK_POLICY_LABEL[item]}
+            </button>
+          ))}
+        </div>
+        {policyError ? <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--qa-bad, #d14343)" }}>{policyError}</p> : null}
         {request && (empty || current) ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
               style={buttonStyle("primary")}
-              onClick={() => ask(empty ? STAGE_REQUESTS.analysis : request)}
+              onClick={() => ask(request)}
             >
-              {(empty ? STAGE_REQUESTS.analysis : request).mode === "send" ? "让 Agent 做这一步" : "在输入框里补全后发送"}
+              {wholeBatch ? "开始整批任务" : request.mode === "send" ? "让 Agent 做这一步" : "在输入框里补全后发送"}
             </button>
+            {counts.reviewPending > 0 ? (
+              <button type="button" style={buttonStyle("plain")} onClick={() => onOpenPanel("reviews")}>
+                待审核 {counts.reviewPending}
+              </button>
+            ) : null}
             {feedback ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{feedback}</span> : null}
           </div>
         ) : null}
@@ -81,6 +127,7 @@ export function OverviewPanel({ overview, error, onOpenPanel, onAskAgent }: Prop
               >
                 <StageMark status={stage.status} />
                 <span style={{ flex: 1 }}>{index + 1}. {stage.label}</span>
+                {stage.awaitingReview ? <Badge tone="warn">有待审</Badge> : null}
                 {stage.stepsTotal ? <Badge>{stage.stepsDone}/{stage.stepsTotal} 步</Badge> : null}
                 <span style={{ color: "var(--text-dim)", fontSize: 11.5 }}>{STAGE_STATUS_LABEL[stage.status]}</span>
               </button>

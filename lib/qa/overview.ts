@@ -1,5 +1,8 @@
 import path from "node:path";
+import type { WorkPolicy } from "./client";
 import { readCheckpoint, type CheckpointTask } from "./checkpoint";
+import { readPolicy } from "./policy";
+import { listReviews, type ReviewSource } from "./reviews";
 import {
   STATUS_CONFIRMED,
   listAutomationScripts,
@@ -34,6 +37,8 @@ export interface StageOverview {
   stepsTotal: number;
   /** The step the agent would resume from. */
   nextStep: string;
+  /** Open review items for this stage. The stage itself can keep moving. */
+  awaitingReview: boolean;
 }
 
 export interface QaCounts {
@@ -47,11 +52,14 @@ export interface QaCounts {
   apiScripts: number;
   defects: number;
   reports: number;
+  reviewPending: number;
+  reviewHigh: number;
 }
 
 export interface QaOverview {
   workspace: string;
   product: string;
+  policy: { mode: WorkPolicy; setAt: string };
   stages: StageOverview[];
   /** First stage that is not done, or null once everything is. */
   currentStage: PipelineId | null;
@@ -70,8 +78,17 @@ function taskStage(task: CheckpointTask | undefined, fallbackHasFiles: boolean):
   } else {
     status = fallbackHasFiles ? "in_progress" : "pending";
   }
-  return { status, stepsDone, stepsTotal: steps.length, nextStep: next?.id ?? "" };
+  return { status, stepsDone, stepsTotal: steps.length, nextStep: next?.id ?? "", awaitingReview: false };
 }
+
+const REVIEW_STAGE: Partial<Record<ReviewSource, PipelineId>> = {
+  clarification: "analysis",
+  "test-point": "test-points",
+  case: "cases",
+  evolution: "cases",
+  baseline: "cases",
+  heal: "run",
+};
 
 /** Run records live under reports/runs/; they are results, not reports. */
 export function isReportFile(file: string): boolean {
@@ -95,7 +112,13 @@ export function readQaOverview(workspace: string): QaOverview {
     apiScripts: scripts.filter((script) => script.kind === "api").length,
     defects: listMarkdownFiles(workspace, "defects").length,
     reports: listMarkdownFiles(workspace, "reports").filter(isReportFile).length,
+    reviewPending: 0,
+    reviewHigh: 0,
   };
+  const reviews = listReviews(workspace);
+  counts.reviewPending = reviews.length;
+  counts.reviewHigh = reviews.filter((item) => item.level === "L3" || item.level === "L4").length;
+  const reviewStages = new Set(reviews.map((item) => REVIEW_STAGE[item.source]).filter(Boolean));
 
   const filesFor: Record<PipelineId, boolean> = {
     analysis: counts.knowledge > 0 || counts.graphNodes > 0,
@@ -118,12 +141,13 @@ export function readQaOverview(workspace: string): QaOverview {
     if (stage.id === "run" && runState !== "none") {
       overview = { ...overview, status: runState === "passed" ? "done" : runState === "failed" ? "failed" : "in_progress" };
     }
-    return { id: stage.id, label: stage.label, panel: stage.panel, ...overview };
+    return { id: stage.id, label: stage.label, panel: stage.panel, ...overview, awaitingReview: reviewStages.has(stage.id) };
   });
 
   return {
     workspace,
     product: checkpoint?.product || path.basename(workspace),
+    policy: readPolicy(workspace),
     stages,
     currentStage: stages.find((stage) => stage.status !== "done")?.id ?? null,
     counts,

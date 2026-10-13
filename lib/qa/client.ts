@@ -20,7 +20,8 @@ export type QaPanelId =
   | "run"
   | "heal"
   | "defects"
-  | "report";
+  | "report"
+  | "reviews";
 
 export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   overview: "总览",
@@ -35,6 +36,15 @@ export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   heal: "自愈",
   defects: "缺陷",
   report: "报告",
+  reviews: "待审核",
+};
+
+export type WorkPolicy = "guided" | "balanced" | "autonomous";
+
+export const WORK_POLICY_LABEL: Record<WorkPolicy, string> = {
+  guided: "逐步引导",
+  balanced: "智能协作",
+  autonomous: "自主执行",
 };
 
 /** The tab id of the workbench in the right panel. */
@@ -79,3 +89,21 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   defects: { mode: "send", text: "读取禅道或 Jira 的缺陷，写入 defects 目录。没有配置就告诉我缺哪些环境变量。" },
   report: { mode: "send", text: "根据已经写好的用例和缺陷写测试简报。不要编造通过率。" },
 };
+
+const BATCH_REQUEST: QaAgentRequest = {
+  mode: "send",
+  text: [
+    "请先读 tasks/policy.json 和 tasks/status.md。没有 policy 文件时按智能协作。已完成的步骤不要重做。图谱里已经有内容时，store_requirement_graph 只能用 append。",
+    "按节把需求图谱和待澄清写完，再按功能把测试点连续写完，每条状态仍是待确认。结构完整、且没有高风险待澄清挡住的功能，接着写用例草稿，每条加「- 状态：待确认」，自动化写否。",
+    "下线、疑似删除、互相矛盾、规则缺失、新版未提及、废弃核心用例只挡住该功能的用例，其他功能继续。",
+    "写完后汇报完成了哪些功能、几项必须逐项看、几项可以批量看，请我打开待审核。不要问要不要继续。录制、共享环境执行和应用版本演进基线要等我明确授权。",
+  ].join("\n"),
+};
+
+/** Guided mode keeps one stage per click. The other two start the whole batch. */
+export function stageRequest(stage: string, mode: WorkPolicy): QaAgentRequest {
+  if (mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "heal" && stage !== "defects" && stage !== "report") {
+    return BATCH_REQUEST;
+  }
+  return STAGE_REQUESTS[stage] ?? STAGE_REQUESTS.analysis;
+}
