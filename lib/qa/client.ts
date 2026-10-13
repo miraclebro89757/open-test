@@ -1,5 +1,7 @@
 // Client-safe pieces of the QA workbench: no node imports, so components can use them.
 
+import { CASE_TEMPLATE_RULE } from "./case-format";
+
 export type QaMode = "test" | "dev";
 export const QA_MODE_KEY = "opentest-mode";
 export const DEFAULT_QA_MODE: QaMode = "test";
@@ -69,7 +71,13 @@ export function clarificationSubmitText(files: string[]): string {
     "已补充：以该条「补充」里的说法为准，不要再用原来的理解。",
     "待讨论：先搁置，不要编造结论，依赖它的用例先不写。其余部分可以继续。",
     "待处理：还没有人看，先不要当成已经确认。",
+    "已完成的测试点和用例不要重做。被这些条目挡住的功能，以及当前需求版本图谱里还没有测试点或用例的功能，按标记补测试点和用例草稿。写完后调用 sync_case_sheet 推到钉钉表格。不要问要不要继续。不要开始录制或跑共享环境。",
+    CASE_TEMPLATE_RULE,
   ].join("\n");
+}
+
+export function clarificationContinueRequest(files: string[]): QaAgentRequest {
+  return { mode: "send", text: clarificationSubmitText(files) };
 }
 
 export function analysisFromPackRequest(): QaAgentRequest {
@@ -90,7 +98,7 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   },
   cases: {
     mode: "send",
-    text: "测试点已经确认。请为已确认的测试点写功能用例，每条包含编号、标题、需求版本、优先级、自动化、前置条件、步骤、期望结果，新用例的自动化写成否，并写当前需求版本。写完后调用 sync_case_sheet 推到钉钉表格。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。",
+    text: `测试点已经确认。请为已确认的测试点写功能用例。${CASE_TEMPLATE_RULE}写完后调用 sync_case_sheet 推到钉钉表格。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。`,
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
   run: { mode: "send", text: "运行 automation 目录里的自动化脚本，选择器失效时自愈，然后汇报每条用例的结果。" },
@@ -104,6 +112,7 @@ const BATCH_REQUEST: QaAgentRequest = {
   text: [
     "请先读 tasks/policy.json 和 tasks/status.md。没有 policy 文件时按智能协作。已完成的步骤不要重做。图谱里已经有内容时，store_requirement_graph 只能用 append。",
     "按节把需求图谱和待澄清写完，再按功能把测试点连续写完，每条状态仍是待确认。结构完整、且没有高风险待澄清挡住的功能，接着写用例草稿，每条加「- 状态：待确认」，自动化写否。",
+    CASE_TEMPLATE_RULE,
     "下线、疑似删除、互相矛盾、规则缺失、新版未提及、废弃核心用例只挡住该功能的用例，其他功能继续。",
     "写完后汇报完成了哪些功能、几项必须逐项看、几项可以批量看，请我打开待审核。不要问要不要继续。录制、共享环境执行和应用版本演进基线要等我明确授权。",
   ].join("\n"),

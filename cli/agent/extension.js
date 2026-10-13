@@ -602,6 +602,7 @@ async function installOpentest(pi, options = {}) {
     promptSnippet: 'Push or pull cases through the DingTalk spreadsheet MCP dingtalk-excel',
     promptGuidelines: [
       'Call sync_case_sheet with action push after writing or updating cases, so the tester can review them in 钉钉表格.',
+      'Sheet headers are fixed, in this order: 编号、标题、模块、需求版本、优先级、对应测试点、前置条件、步骤、期望结果、状态、执行结果. Do not invent 用例编号、所属功能 or 自动化 as sheet columns. Do not create a second spreadsheet when knowledge/case-sheet.json already binds one.',
       'The sheet status column is only 正常 or 废弃. Local 待确认/已接受 stay review marks and show as 正常. 模块 is the case filename. 执行结果 comes from the latest run, do not type it.',
       'Call action pull after the tester edits the sheet. Apply those edits to cases/*.md. Table-derived lessons stay 待确认; do not enable them.',
       'If local markdown and the sheet both changed since the last push, write 待澄清 and do not merge. Do not delete local cases when a row disappears.',

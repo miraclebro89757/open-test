@@ -14,6 +14,7 @@ import {
   readTestPoints,
 } from "./assets";
 import { latestRunState } from "./runs";
+import { readClarificationDocuments } from "./clarifications";
 
 /** The seven stages shown in the pipeline bar, in order. */
 export const PIPELINE = [
@@ -68,6 +69,8 @@ export interface QaOverview {
   /** First stage that is not done, or null once everything is. */
   currentStage: PipelineId | null;
   counts: QaCounts;
+  /** Marks are newer than the checkpoint; the next click should hand them to the agent. */
+  clarificationContinue: { files: string[] } | null;
 }
 
 function taskStage(task: CheckpointTask | undefined, fallbackHasFiles: boolean): Omit<StageOverview, "id" | "label" | "panel"> {
@@ -97,6 +100,46 @@ const REVIEW_STAGE: Partial<Record<ReviewSource, PipelineId>> = {
 /** Run records live under reports/runs/; they are results, not reports. */
 export function isReportFile(file: string): boolean {
   return !file.split(path.sep).includes("runs");
+}
+
+function lastClarificationDecisionAt(workspace: string): number {
+  const file = path.join(workspace, "tasks", "review-log.jsonl");
+  if (!fs.existsSync(file)) return 0;
+  let latest = 0;
+  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line) as { source?: string; at?: string };
+      if (event.source !== "clarification" || !event.at) continue;
+      const at = Date.parse(event.at);
+      if (Number.isFinite(at) && at > latest) latest = at;
+    } catch {
+      // A broken log line should not hide the rest of the handoff.
+    }
+  }
+  return latest;
+}
+
+function clarificationContinue(workspace: string): { files: string[] } | null {
+  const documents = readClarificationDocuments(workspace);
+  const items = documents.flatMap((document) => document.items);
+  if (!items.length || items.some((item) => item.status === "待处理")) return null;
+  const decided = items.filter((item) => item.status !== "待处理");
+  if (!decided.length) return null;
+  const checkpoint = path.join(workspace, "tasks", "checkpoint.json");
+  const checkpointAt = fs.existsSync(checkpoint) ? fs.statSync(checkpoint).mtimeMs : 0;
+  let decidedAt = lastClarificationDecisionAt(workspace);
+  if (!decidedAt) {
+    decidedAt = Math.max(
+      0,
+      ...documents.map((document) => {
+        const absolute = path.join(workspace, document.file);
+        return fs.existsSync(absolute) ? fs.statSync(absolute).mtimeMs : 0;
+      }),
+    );
+  }
+  if (decidedAt <= checkpointAt) return null;
+  return { files: [...new Set(decided.map((item) => item.file))] };
 }
 
 function sourcePackCount(workspace: string): number {
@@ -169,5 +212,6 @@ export function readQaOverview(workspace: string): QaOverview {
     stages,
     currentStage: stages.find((stage) => stage.status !== "done")?.id ?? null,
     counts,
+    clarificationContinue: clarificationContinue(workspace),
   };
 }

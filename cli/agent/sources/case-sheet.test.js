@@ -11,6 +11,7 @@ const {
   inferWorkspaceVersion,
   parseCaseRecord,
   readCaseSheetBinding,
+  recordsFromTable,
   rowHash,
   syncCaseSheet,
 } = require('./case-sheet');
@@ -87,6 +88,38 @@ test('parses numbered steps as one cell and stamps the requirement version', () 
   assert.equal(row[0], 'TC001');
   assert.equal(row[CASE_SHEET_COLUMNS.indexOf('需求版本')], 'V1.1.3');
   assert.equal(row[CASE_SHEET_COLUMNS.indexOf('模块')], '巡检');
+});
+
+test('maps 用例编号 and 所属功能 headers onto the canonical 11 columns', () => {
+  const records = recordsFromTable(
+    ['用例编号', '所属功能', '标题', '优先级', '自动化', '状态', '对应测试点', '前置条件', '步骤', '期望结果', '需求版本'],
+    [['TC159', '系统管理-人员管理', '检索', '中', '否', '待确认', 'TP159', '已有人员', '1. 搜索', '命中', 'V1.1.4']],
+  );
+  assert.equal(records.length, 1);
+  assert.equal(records[0]['编号'], 'TC159');
+  assert.equal(records[0]['标题'], '检索');
+  assert.equal(records[0]['模块'], '系统管理-人员管理');
+  assert.equal(records[0]['需求版本'], 'V1.1.4');
+  assert.equal(records[0]['状态'], '正常');
+  assert.equal(records[0]['执行结果'], '未执行');
+  assert.equal(records[0]['对应测试点'], 'TP159');
+});
+
+test('push stamps 需求版本 from the matching test-points file and keeps the 11-column header', async () => {
+  const root = workspace();
+  write(root, 'graph/graph.json', JSON.stringify({ sourceFile: '易训V1.1.3需求文档.md' }));
+  write(root, 'test-points/系统管理-人员管理.md', '# 测试点：系统管理-人员管理（V1.1.4重构）\n');
+  write(root, 'cases/系统管理-人员管理.md', SAMPLE.replace(/TC001/g, 'TC159'));
+  const excel = memoryExcel();
+  await syncCaseSheet({ workspace: root, product: '易训', action: 'push', excel });
+  const binding = readCaseSheetBinding(root);
+  const table = await excel.readTable(binding.nodeId, binding.sheetId);
+  assert.deepEqual(table.columns, CASE_SHEET_COLUMNS);
+  assert.equal(table.rows[0][0], 'TC159');
+  assert.equal(table.rows[0][CASE_SHEET_COLUMNS.indexOf('模块')], '系统管理-人员管理');
+  assert.equal(table.rows[0][CASE_SHEET_COLUMNS.indexOf('需求版本')], 'V1.1.4');
+  assert.equal(table.rows[0][CASE_SHEET_COLUMNS.indexOf('状态')], '正常');
+  assert.equal(table.rows[0][CASE_SHEET_COLUMNS.indexOf('执行结果')], '未执行');
 });
 
 test('sheet status is 正常 or 废弃, and 待确认 stays a review mark locally', () => {

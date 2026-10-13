@@ -104,6 +104,9 @@ test('default analysis prompt is a read-only version selected with /', () => {
   assert.match(text, /只读/);
   assert.equal(text.includes('$1'), false);
   assert.match(skill, /~\/\.pi\/agent\/prompts/);
+  assert.match(skill, /项目巡检/);
+  assert.match(skill, /禁止写成 `- 步骤：1 x；2 y`/);
+  assert.match(skill, /编号\t标题\t模块\t需求版本\t优先级\t对应测试点\t前置条件\t步骤\t期望结果\t状态\t执行结果/);
   const prompt = composeSystemPrompt('只做测试', {
     version: DEFAULT_ANALYSIS_PROMPT,
     promptFile: file,

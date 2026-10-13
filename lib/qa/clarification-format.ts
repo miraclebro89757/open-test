@@ -4,7 +4,7 @@ import { parseItems } from "./markdown";
 export const CLARIFICATION_STATUSES = ["待处理", "忽略", "已补充", "待讨论"] as const;
 export type ClarificationStatus = (typeof CLARIFICATION_STATUSES)[number];
 
-const SECTION_HEADING = /^##\s+(?:\d+\.\s*)?待澄清(?:问题|项)?\s*$/m;
+const SECTION_HEADING = /^##\s+(?![^\n]*不列[为成]待澄清)[^\n]*待澄清(?:问题|项)?\s*$/m;
 const FIELD_LINE = /^[-*]\s*([^：:\n]{1,12})[：:]\s*(.*)$/;
 const NUMBERED_LINE = /^(\d{1,4})\.\s+(\S.*)$/;
 
@@ -39,6 +39,7 @@ interface SectionSpan {
   start: number;
   end: number;
   text: string;
+  heading: string;
 }
 
 function clarificationSection(markdown: string): SectionSpan | null {
@@ -48,7 +49,13 @@ function clarificationSection(markdown: string): SectionSpan | null {
   const rest = markdown.slice(start);
   const next = rest.search(/\n##\s+/);
   const end = next === -1 ? markdown.length : start + next;
-  return { headingStart: match.index, start, end, text: markdown.slice(start, end) };
+  return {
+    headingStart: match.index,
+    start,
+    end,
+    text: markdown.slice(start, end),
+    heading: match[0].replace(/^##\s+/, "").trim(),
+  };
 }
 
 function oneLine(value: string): string {
@@ -56,7 +63,11 @@ function oneLine(value: string): string {
 }
 
 function asStatus(value: string): ClarificationStatus {
-  return CLARIFICATION_STATUSES.includes(value as ClarificationStatus) ? value as ClarificationStatus : "待处理";
+  const raw = String(value || "").trim();
+  for (const status of CLARIFICATION_STATUSES) {
+    if (raw === status || raw.startsWith(`${status}（`) || raw.startsWith(`${status}(`)) return status;
+  }
+  return "待处理";
 }
 
 interface ItemFields {
@@ -99,7 +110,7 @@ function readFields(body: string): ItemFields {
     }
     if (name === "状态" && !status) status = value;
     else if (name === "原文" && source.length === 0) source.push(value);
-    else if (name === "Agent理解" && understanding.length === 0) understanding.push(value);
+    else if ((name === "Agent理解" || name === "影响") && understanding.length === 0) understanding.push(value);
   }
   const extra = supplementLines.join("\n").replace(/^\n+/, "").replace(/\s+$/, "");
   const text = [supplement ?? "", extra].filter((part) => part.length > 0).join("\n");
@@ -207,7 +218,9 @@ export function parseClarificationDocument(markdown: string, file: string): Clar
   const section = clarificationSection(markdown);
   if (section) {
     const structured = structuredItems(section.text, file);
-    const items = structured.length > 0 ? structured : numberedItems(section.text, file);
+    const parsed = structured.length > 0 ? structured : numberedItems(section.text, file);
+    const group = /^(?:\d+\.\s*)?待澄清(?:问题|项)?$/.test(section.heading) ? "" : section.heading;
+    const items = parsed.map((item) => (group ? { ...item, group } : item));
     return { file, legacy: items.length === 0 && section.text.trim().length > 0, items };
   }
   if (!fileIsClarificationList(markdown, file)) return null;

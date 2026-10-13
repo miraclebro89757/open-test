@@ -7,7 +7,12 @@
  *     ### TC001 用户登录
  *     - 优先级：高
  *     - 自动化：否
- *     - 步骤：打开登录页，输入账号密码
+ *     - 对应测试点：TP001
+ *     - 前置条件：已登录
+ *     - 步骤：
+ *       1. 打开登录页
+ *       2. 输入账号密码
+ *     - 期望结果：进入首页
  *
  * A heading starts an item and `- 名称：值` lines are its fields. The UI only
  * ever rewrites a single field line, so whatever else the agent wrote around it

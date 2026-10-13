@@ -174,10 +174,13 @@ function createDingTalkExcel(options) {
               startCell: 'A1',
             }],
           });
-          return;
         } catch {
           // Some workbooks reject the dataframe write; fall back to a range update.
         }
+      }
+      if (!picked.updateRange) {
+        if (!picked.tablePut) throw new Error('钉钉表格 MCP 没有写入工具');
+        return;
       }
       await call('updateRange', {
         nodeId,

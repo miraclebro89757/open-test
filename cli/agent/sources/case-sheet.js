@@ -6,6 +6,23 @@ const path = require('path');
 const { createDingTalkExcelFromConfig, nodeIdFromRef } = require('./dingtalk-excel');
 
 const CASE_SHEET_COLUMNS = ['编号', '标题', '模块', '需求版本', '优先级', '对应测试点', '前置条件', '步骤', '期望结果', '状态', '执行结果'];
+const COLUMN_ALIASES = {
+  用例编号: '编号',
+  案例编号: '编号',
+  所属功能: '模块',
+  功能: '模块',
+  模块名称: '模块',
+  版本: '需求版本',
+  对应TP: '对应测试点',
+  前置: '前置条件',
+  期望: '期望结果',
+};
+
+function canonicalColumn(name) {
+  const trimmed = String(name || '').trim();
+  if (CASE_SHEET_COLUMNS.includes(trimmed)) return trimmed;
+  return COLUMN_ALIASES[trimmed] || trimmed;
+}
 const REVIEW_STATUSES = new Set(['待确认', '已确认', '已接受']);
 const RESULT_RANK = { 未执行: 0, 通过: 1, 跳过: 2, 失败: 3 };
 const BINDING_FILE = path.join('knowledge', 'case-sheet.json');
@@ -242,6 +259,21 @@ function listCaseFiles(workspace) {
   return found;
 }
 
+function inferCaseVersion(workspace, relative, body) {
+  const fromField = normalizeVersion(parseNamedFields(body)['需求版本']);
+  if (fromField) return fromField;
+  const testPoint = path.join(workspace, 'test-points', path.basename(relative));
+  try {
+    if (fs.existsSync(testPoint)) {
+      const fromFile = versionFromText(fs.readFileSync(testPoint, 'utf8').slice(0, 800));
+      if (fromFile) return fromFile;
+    }
+  } catch {
+    // Missing test-points files fall through to the workspace version.
+  }
+  return '';
+}
+
 function loadLocalCases(workspace) {
   const fallback = inferWorkspaceVersion(workspace);
   const results = latestCaseResults(workspace);
@@ -251,7 +283,7 @@ function loadLocalCases(workspace) {
     const relative = path.relative(workspace, absolute);
     for (const item of parseItems(markdown)) {
       const record = parseCaseRecord(item.body, item, {
-        version: fallback,
+        version: inferCaseVersion(workspace, relative, item.body) || fallback,
         module: caseModule(relative),
         execution: results[item.id] || '',
       });
@@ -398,7 +430,7 @@ function draftCaseLesson(workspace, record, changed) {
 }
 
 function recordsFromTable(columns, rows) {
-  const names = (columns || []).map((name) => String(name || '').trim());
+  const names = (columns || []).map((name) => canonicalColumn(name));
   const index = {};
   names.forEach((name, offset) => {
     if (name && !(name in index)) index[name] = offset;
@@ -628,13 +660,16 @@ async function syncCaseSheet(options) {
 module.exports = {
   BINDING_FILE,
   CASE_SHEET_COLUMNS,
+  canonicalColumn,
   caseLifecycle,
   caseModule,
   encodeCaseRow,
   inferWorkspaceVersion,
   latestCaseResults,
+  loadLocalCases,
   parseCaseRecord,
   readCaseSheetBinding,
+  recordsFromTable,
   rowHash,
   syncCaseSheet,
 };

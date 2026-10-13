@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { QaAskAgent, QaPanelId, WorkPolicy } from "@/lib/qa/client";
-import { WORK_POLICY_LABEL, stageRequest } from "@/lib/qa/client";
+import { WORK_POLICY_LABEL, clarificationContinueRequest, stageRequest } from "@/lib/qa/client";
 import type { QaOverview } from "@/lib/qa/overview";
 import { Badge, EmptyState, STAGE_STATUS_LABEL, StageMark, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
@@ -30,9 +30,12 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
   const mode = overview.policy.mode;
   const current = stages.find((stage) => stage.id === overview.currentStage);
   const stageId = current?.id ?? "analysis";
-  const request = stageRequest(stageId, mode);
+  const continueMarks = overview.clarificationContinue;
+  const request = continueMarks
+    ? clarificationContinueRequest(continueMarks.files)
+    : stageRequest(stageId, mode);
   const empty = counts.knowledge + counts.sourcePack + counts.graphNodes + counts.points + counts.cases + counts.uiScripts + counts.apiScripts === 0;
-  const wholeBatch = mode !== "guided" && !ALWAYS_STAGED.has(stageId);
+  const wholeBatch = !continueMarks && mode !== "guided" && !ALWAYS_STAGED.has(stageId);
 
   async function choosePolicy(next: WorkPolicy) {
     setPolicyError("");
@@ -76,17 +79,23 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
           </p>
         ) : current ? (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
-            当前阶段：<strong style={{ color: "var(--text)" }}>{current.label}</strong>（{STAGE_STATUS_LABEL[current.status]}）
-            {current.nextStep ? `，下一步 ${current.nextStep}` : ""}
+            {continueMarks
+              ? <>待澄清已经标完。点「按标记继续」发给 Agent，按忽略、已补充、待讨论往下写。不要重做已经完成的功能。</>
+              : <>当前阶段：<strong style={{ color: "var(--text)" }}>{current.label}</strong>（{STAGE_STATUS_LABEL[current.status]}）{current.nextStep ? `，下一步 ${current.nextStep}` : ""}</>}
+          </p>
+        ) : continueMarks ? (
+          <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
+            待澄清已经标完。点「按标记继续」发给 Agent。
           </p>
         ) : (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)" }}>七个阶段都已完成。</p>
         )}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
           {(Object.keys(WORK_POLICY_LABEL) as WorkPolicy[]).map((item) => (
             <button
               key={item}
               type="button"
+              title="只切换协作方式，不会发给 Agent"
               style={buttonStyle(item === mode ? "primary" : "plain")}
               onClick={() => void choosePolicy(item)}
             >
@@ -94,15 +103,18 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
             </button>
           ))}
         </div>
+        <p style={{ margin: "0 0 10px", fontSize: 11.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
+          逐步引导 / 智能协作 / 自主执行只是协作方式，点它们不会发给 Agent。
+        </p>
         {policyError ? <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--qa-bad, #d14343)" }}>{policyError}</p> : null}
-        {request && (empty || current) ? (
+        {request && (empty || current || continueMarks) ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
               style={buttonStyle("primary")}
               onClick={() => ask(request)}
             >
-              {wholeBatch ? "开始整批任务" : request.mode === "send" ? "让 Agent 做这一步" : "在输入框里补全后发送"}
+              {continueMarks ? "按标记继续" : wholeBatch ? "开始整批任务" : request.mode === "send" ? "让 Agent 做这一步" : "在输入框里补全后发送"}
             </button>
             {counts.reviewPending > 0 ? (
               <button type="button" style={buttonStyle("plain")} onClick={() => onOpenPanel("reviews")}>

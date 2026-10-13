@@ -8,7 +8,7 @@ const STEPS = [
   ['status', 'ctrl+shift+0', '进度', ['tasks'], '读取任务进度，从失败或未完成的步骤继续。不要重做已完成步骤。'],
   ['analyze', 'ctrl+shift+1', '需求分析', ['knowledge', 'graph'], '只做需求分析，按断点继续。不要写测试点，不要写用例。'],
   ['points', 'ctrl+shift+2', '测试点', ['test-points'], '只根据图谱写测试点。写完停下来等人确认。不要写用例。'],
-  ['cases', 'ctrl+shift+3', '功能用例', ['cases'], '测试点已经确认。只写功能用例，新用例的自动化写成否。不要改测试点。'],
+  ['cases', 'ctrl+shift+3', '功能用例', ['cases'], '测试点已经确认。只写功能用例，正文对齐巡检模版，步骤换行编号，新用例的自动化写成否。不要改测试点。'],
   ['explore', 'ctrl+shift+4', '智能探索', ['automation', 'cases'], '启动浏览器让用户操作一遍，Agent 自动分析并生成测试脚本。使用 explore_and_generate 工具。'],
   ['record', 'ctrl+shift+5', '录制', ['automation', 'cases'], '先问沙箱的 http 或 https 地址，再录制并把结果对上功能用例。不要编造地址。'],
   ['run', 'ctrl+shift+6', '跑自动化', ['automation'], '跑当前项目 automation 里的脚本。选择器失败时立刻调用 heal_selector，不要停下来问。跑完不要自己决定留哪一版。'],
