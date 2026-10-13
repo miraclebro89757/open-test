@@ -26,6 +26,31 @@ export type ReviewLevel = "L2" | "L3" | "L4";
 export type ReviewGroup = "required" | "lesson" | "auto" | "sample" | "bulk";
 export type ReviewSource = "clarification" | "auto" | "lesson" | "test-point" | "case" | "evolution" | "heal" | "baseline";
 
+export const REVIEW_KIND_LABEL: Record<ReviewSource, string> = {
+  clarification: "待澄清",
+  auto: "经验抽查",
+  lesson: "待启用经验",
+  "test-point": "测试点",
+  case: "用例草稿",
+  evolution: "版本演进",
+  heal: "选择器自愈",
+  baseline: "应用基线",
+};
+
+export const REVIEW_KIND_BULK: Partial<Record<ReviewSource, string>> = {
+  clarification: "本类已补充",
+  auto: "本类认可",
+  lesson: "本类启用",
+  "test-point": "本类确认",
+  case: "本类接受",
+  evolution: "本类按建议处理",
+  heal: "本类留下新选择器",
+};
+
+export const REVIEW_KIND_ORDER: ReviewSource[] = [
+  "clarification", "auto", "lesson", "test-point", "case", "evolution", "heal", "baseline",
+];
+
 export interface LessonHint {
   id: string;
   title: string;
@@ -190,7 +215,7 @@ export function listReviews(workspace: string): ReviewItem[] {
         after: matched.length ? `${matched[0].decision}：${matched[0].action}` : "忽略、已补充或待讨论",
         impact: level === "L3" ? `挡住「${feature}」的用例` : "不挡住其他功能",
         blocking: level === "L3",
-        bulkEligible: false,
+        bulkEligible: level !== "L3",
         suggested: matched.length ? `按经验 ${matched[0].id}` : "逐项决定",
         file: document.file,
         itemId: item.id,
@@ -216,7 +241,7 @@ export function listReviews(workspace: string): ReviewItem[] {
       after: "已启用",
       impact: lesson.scope === "全部产品" ? "所有产品" : "只在这个产品",
       blocking: false,
-      bulkEligible: false,
+      bulkEligible: true,
       suggested: "启用",
       file: lesson.scope === "全部产品" ? "" : PRODUCT_LESSON_FILE,
       itemId: lesson.id,
@@ -310,7 +335,7 @@ export function listReviews(workspace: string): ReviewItem[] {
         after: action.action,
         impact: level === "L3" ? `挡住「${feature}」当成删除或废弃` : "不挡住其他功能",
         blocking: level === "L3",
-        bulkEligible: false,
+        bulkEligible: level !== "L3",
         suggested: action.action,
         file: "knowledge/evolution/current.json",
         itemId: action.asset_id,
@@ -354,7 +379,7 @@ export function listReviews(workspace: string): ReviewItem[] {
       after: entry.newSelector,
       impact: "不挡住其他功能",
       blocking: false,
-      bulkEligible: false,
+      bulkEligible: true,
       suggested: "留下新选择器",
       file: entry.relativeFile,
       itemId: entry.before,
@@ -499,28 +524,87 @@ export function applyLesson(workspace: string, lessonId: string): { applied: num
   return { applied, skipped };
 }
 
-export function acceptBulk(workspace: string): { accepted: number; excluded: number } {
-  const items = listReviews(workspace);
-  const excluded = items.filter((item) => !item.bulkEligible).length;
+export interface ReviewKindSummary {
+  source: ReviewSource;
+  label: string;
+  bulkLabel: string;
+  count: number;
+  high: number;
+  bulkable: number;
+}
+
+export function reviewKinds(items: ReviewItem[]): ReviewKindSummary[] {
+  return REVIEW_KIND_ORDER.map((source) => {
+    const rows = items.filter((item) => item.source === source);
+    return {
+      source,
+      label: REVIEW_KIND_LABEL[source],
+      bulkLabel: REVIEW_KIND_BULK[source] ?? "",
+      count: rows.length,
+      high: rows.filter((item) => item.level === "L3" || item.level === "L4").length,
+      bulkable: rows.filter((item) => item.bulkEligible).length,
+    };
+  }).filter((kind) => kind.count > 0);
+}
+
+/**
+ * One-click for a single task type. L3/L4 stay for a person to open one by one.
+ * Per-item 忽略 / 已补充 / 确认 / 退回 still work afterwards on whatever remains.
+ */
+export function acceptKind(workspace: string, source: string): { accepted: number; skipped: number } {
+  if (source === "baseline") throw new ReviewError("应用基线要单独授权");
+  if (!(source in REVIEW_KIND_LABEL)) throw new ReviewError("不支持这个任务类型");
+  const items = listReviews(workspace).filter((item) => item.source === source);
   let accepted = 0;
+  let skipped = 0;
   const seenFiles = new Set<string>();
   for (const item of items) {
-    if (!item.bulkEligible) continue;
-    if (item.source === "test-point") {
+    if (!item.bulkEligible || item.level === "L3" || item.level === "L4") {
+      skipped += 1;
+      continue;
+    }
+    if (item.source === "clarification") {
+      if (item.lessons[0]) applyLessonTo(workspace, item, item.lessons[0].id);
+      else {
+        const current = clarificationItem(workspace, item.file, item.itemId);
+        const note = (current.understanding || current.source || item.title).slice(0, 4000);
+        applyClarificationUpdate(workspace, item.file, item.itemId, "已补充", note || "按原文理解", { skipLesson: true });
+      }
+      accepted += 1;
+    } else if (item.source === "test-point") {
       if (seenFiles.has(item.file)) continue;
       seenFiles.add(item.file);
-      const result = applyPointAction(workspace, item.file, { action: "confirm-all" });
-      accepted += result.changed;
+      accepted += applyPointAction(workspace, item.file, { action: "confirm-all" }).changed;
     } else if (item.source === "case") {
       writeField(workspace, "cases", item.file, item.itemId, "状态", "已接受");
       accepted += 1;
     } else if (item.source === "auto") {
       decideReview(workspace, item.id, "认可", "", "");
       accepted += 1;
+    } else if (item.source === "lesson") {
+      setLessonStatus(workspace, item.itemId, "已启用");
+      accepted += 1;
     } else if (item.source === "evolution") {
       saveEvolutionChoice(workspace, item.itemId, item.suggested);
       accepted += 1;
-    }
+    } else if (item.source === "heal") {
+      keepHeal(workspace, item.itemId, "after");
+      accepted += 1;
+    } else skipped += 1;
+  }
+  if (accepted) appendLog(workspace, { id: `kind:${source}`, source, decision: "accept-kind", accepted, skipped });
+  return { accepted, skipped };
+}
+
+const ACCEPT_KIND_ORDER: ReviewSource[] = ["lesson", "clarification", "auto", "test-point", "case", "evolution", "heal"];
+
+export function acceptBulk(workspace: string): { accepted: number; excluded: number } {
+  const items = listReviews(workspace);
+  const excluded = items.filter((item) => !item.bulkEligible).length;
+  let accepted = 0;
+  for (const source of ACCEPT_KIND_ORDER) {
+    if (!items.some((item) => item.source === source)) continue;
+    accepted += acceptKind(workspace, source).accepted;
   }
   if (accepted) appendLog(workspace, { id: "bulk", decision: "accept-bulk", accepted, excluded });
   return { accepted, excluded };

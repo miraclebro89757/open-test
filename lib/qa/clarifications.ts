@@ -50,7 +50,7 @@ export function applyClarificationUpdate(
   id: string,
   status: unknown,
   supplement: unknown,
-  meta: { basis?: string | null; review?: string | null } = {},
+  meta: { basis?: string | null; review?: string | null; skipLesson?: boolean } = {},
 ): { item: ClarificationItem; lesson: Lesson | null } {
   if (typeof id !== "string" || !id.trim()) throw new ReviewError("id is required");
   if (typeof status !== "string" || !CLARIFICATION_STATUSES.includes(status as ClarificationStatus)) {
@@ -69,7 +69,7 @@ export function applyClarificationUpdate(
   const updated = parseClarificationDocument(next, file)?.items.find((item) => item.id === id);
   if (!updated) throw new ReviewError("clarification not found", 404);
   let lesson: Lesson | null = null;
-  if (!meta.basis && !meta.review && (status === "已补充" || status === "忽略")) {
+  if (!meta.skipLesson && !meta.basis && !meta.review && (status === "已补充" || status === "忽略")) {
     const draft = feedbackToLesson({
       decision: status as string,
       note: safeNote,

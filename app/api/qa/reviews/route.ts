@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { qaError, resolveQaWorkspace } from "@/lib/qa/access";
 import { saveLesson, splitKeywords, type LessonInput } from "@/lib/qa/lessons";
 import { ReviewError } from "@/lib/qa/review";
-import { acceptBulk, applyBaseline, applyLesson, blockedFeatureNames, decideReview, listReviews } from "@/lib/qa/reviews";
+import { acceptBulk, acceptKind, applyBaseline, applyLesson, blockedFeatureNames, decideReview, listReviews, reviewKinds } from "@/lib/qa/reviews";
 
 function lessonInput(raw: unknown): LessonInput {
   const value = (raw ?? {}) as Record<string, unknown>;
@@ -24,15 +24,15 @@ export async function GET(request: NextRequest) {
     const resolved = await resolveQaWorkspace(request);
     if ("response" in resolved) return resolved.response;
     const items = listReviews(resolved.workspace);
-    return NextResponse.json({ items, blocked: blockedFeatureNames(items) });
+    return NextResponse.json({ items, blocked: blockedFeatureNames(items), kinds: reviewKinds(items) });
   } catch (error) {
     return qaError(error);
   }
 }
 
 /**
- * Body: { cwd, action, id?, decision?, note?, fingerprint? }.
- * action is decide, accept-bulk, or apply-baseline.
+ * Body: { cwd, action, id?, decision?, note?, fingerprint?, source? }.
+ * action is decide, accept-bulk, accept-kind, save-lesson, apply-lesson or apply-baseline.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -45,11 +45,15 @@ export async function POST(request: NextRequest) {
       fingerprint?: string;
       lesson?: unknown;
       lessonId?: string;
+      source?: string;
     };
     const resolved = await resolveQaWorkspace(request, payload.cwd);
     if ("response" in resolved) return resolved.response;
     if (payload.action === "accept-bulk") {
       return NextResponse.json(acceptBulk(resolved.workspace));
+    }
+    if (payload.action === "accept-kind") {
+      return NextResponse.json(acceptKind(resolved.workspace, String(payload.source ?? "")));
     }
     if (payload.action === "save-lesson") {
       const lesson = saveLesson(resolved.workspace, lessonInput(payload.lesson));
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
       );
       return NextResponse.json(result);
     }
-    return NextResponse.json({ error: "action 必须是 decide、accept-bulk、save-lesson、apply-lesson 或 apply-baseline" }, { status: 400 });
+    return NextResponse.json({ error: "action 必须是 decide、accept-bulk、accept-kind、save-lesson、apply-lesson 或 apply-baseline" }, { status: 400 });
   } catch (error) {
     return qaError(error, error instanceof ReviewError ? error.status : 409);
   }
