@@ -83,7 +83,7 @@ export function clarificationContinueRequest(files: string[]): QaAgentRequest {
 export function analysisFromPackRequest(): QaAgentRequest {
   return {
     mode: "send",
-    text: "knowledge/source-pack/ 里已经有钉钉需求源包。请按 opentest-qa 读 manifest.json 和 docs/ 里的 Markdown，按节写图谱和待澄清。不要再去钉钉拉正文，也不要用 replace 覆盖已有图谱。",
+    text: "knowledge/source-pack/ 里已经有钉钉需求源包。请按 opentest-qa 读 manifest.json 和 docs/ 里的 Markdown，按节写图谱和待澄清。不要再去钉钉拉正文。这一节有图时先调用 read_requirement_figures，用当时有效的图地址连同正文一起看，图没读完不要写这一节图谱。图和正文不一致就写成待澄清，两边都留下，不要选一边。不要用 replace 覆盖已有图谱。",
   };
 }
 
@@ -110,7 +110,7 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
 const BATCH_REQUEST: QaAgentRequest = {
   mode: "send",
   text: [
-    "请先读 tasks/policy.json 和 tasks/status.md。没有 policy 文件时按智能协作。已完成的步骤不要重做。图谱里已经有内容时，store_requirement_graph 只能用 append。",
+    "请先读 tasks/policy.json 和 tasks/status.md。没有 policy 文件时按智能协作。已完成的步骤不要重做。图谱里已经有内容时，store_requirement_graph 只能用 append。这一节有图时先调用 read_requirement_figures，图没读完不要写这一节图谱。图和正文不一致就写成待澄清，两边都留下，不要选一边。",
     "按节把需求图谱和待澄清写完，再按功能把测试点连续写完，每条状态仍是待确认。结构完整、且没有高风险待澄清挡住的功能，接着写用例草稿，每条加「- 状态：待确认」，自动化写否。",
     CASE_TEMPLATE_RULE,
     "下线、疑似删除、互相矛盾、规则缺失、新版未提及、废弃核心用例只挡住该功能的用例，其他功能继续。",

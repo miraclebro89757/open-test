@@ -22,6 +22,7 @@ const { installDocumentAutocomplete } = require('./document-complete');
 const { readGraph, storeRequirementGraph, queryRequirementGraph } = require('./graph/store');
 const { alignRequirementVersions, queryBaselineFeature } = require('./evolution');
 const { ingestRequirementSources } = require('./sources/ingest');
+const { readRequirementFigures, formatFigureResult, createVisionReader, assertAnalysisStepFiguresRead } = require('./sources/figures');
 const { syncCaseSheet } = require('./sources/case-sheet');
 const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
@@ -319,7 +320,7 @@ async function installOpentest(pi, options = {}) {
     label: 'Task checkpoint',
     description: '查看或更新产品任务断点。分析、测试点、用例、录制、自愈、缺陷和简报都用这一份进度。',
     promptSnippet: 'Resume every task from the shared checkpoint',
-    promptGuidelines: ['Call task_checkpoint with action status before any task. There is no start action. Do not redo steps already marked done. Plan steps once, write the current step, then complete or fail it.'],
+    promptGuidelines: ['Call task_checkpoint with action status before any task. There is no start action. Do not redo steps already marked done. Plan steps once, write the current step, then complete or fail it. Do not complete an analysis section while its figures are still unread.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
@@ -332,6 +333,9 @@ async function installOpentest(pi, options = {}) {
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      if ((params.action || 'status') === 'complete' && params.task === 'analysis') {
+        assertAnalysisStepFiguresRead(workspace, params.step);
+      }
       const result = updateCheckpoint(workspace, {
         product: params.productName,
         sourceFile: params.sourceFile,
@@ -568,7 +572,7 @@ async function installOpentest(pi, options = {}) {
     promptSnippet: 'Ingest a DingTalk requirement tree into a frozen source pack',
     promptGuidelines: [
       'Call ingest_requirement_sources when the user gives a DingTalk docs URL instead of a local file.',
-      'Do not download nested documents by hand. After the pack exists, read knowledge/source-pack/ and stop calling DingTalk during analysis.',
+      'Do not download nested documents by hand. After the pack exists, read knowledge/source-pack/ and do not pull document text from DingTalk again. A section with images still calls read_requirement_figures, which only refreshes the live image URL.',
       'Depth 2 means the root plus directly linked documents. Unreadable links become clarifications.',
     ],
     parameters: Type.Object({
@@ -589,7 +593,7 @@ async function installOpentest(pi, options = {}) {
       showProgress(ctx, workspace);
       const unread = result.unread ? `，${result.unread} 条没读到的关联已写入待澄清` : '';
       return textResult(
-        `已采集 ${result.ingested} 篇文档到 knowledge/source-pack/${unread}。分析时读这份源包，不要再去钉钉拉正文。`,
+        `已采集 ${result.ingested} 篇文档到 knowledge/source-pack/${unread}。分析时读这份源包，不要再去钉钉拉正文。这一节有图时调用 read_requirement_figures，它只刷新当时有效的图地址。`,
         result,
       );
     },
@@ -638,11 +642,49 @@ async function installOpentest(pi, options = {}) {
   });
 
   pi.registerTool({
+    name: 'read_requirement_figures',
+    label: 'Read figures',
+    description: '读需求源包里某一节标题下的图。向钉钉要当时有效的图地址，连同标题和紧挨着的正文一起交给视觉模型。',
+    promptSnippet: 'Read the figures under one requirement heading before writing that section graph',
+    promptGuidelines: [
+      'After reading a section that contains images, call read_requirement_figures with that heading before store_requirement_graph.',
+      'The tool refreshes the signed image URL from DingTalk. Do not use image links stored in the source pack; they expire.',
+      'Write figure-only menus, fields, buttons, columns, and empty states into the graph, sourced to the figure. If the reading says 不一致, append a clarification that keeps both sides. Do not pick one.',
+      'Do not complete the section while its figures are still unread.',
+    ],
+    parameters: Type.Object({
+      requirementDir: Type.String({ description: 'Directory containing the product workspace parent' }),
+      productName: Type.String({ description: 'Visible product name, such as 易训' }),
+      heading: Type.String({ description: 'Section heading the images belong to. Images under that heading are that requirement\'s layout or diagram.' }),
+    }),
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      const result = await readRequirementFigures({
+        workspace,
+        heading: params.heading,
+        fetcher: {
+          async fetch(nodeId) {
+            const { createDingTalkFetcherFromConfig } = require('./sources/dingtalk-mcp');
+            const live = await createDingTalkFetcherFromConfig();
+            return live.fetch(nodeId);
+          },
+        },
+        vision: createVisionReader(),
+      });
+      showProgress(ctx, workspace);
+      return textResult(formatFigureResult(result), {
+        heading: result.heading,
+        readings: result.readings.map((note) => ({ key: note.key, heading: note.heading, reading: note.reading })),
+      });
+    },
+  });
+
+  pi.registerTool({
     name: 'store_requirement_graph',
     label: 'Requirement graph',
     description: '把需求分析得到的功能、场景、规则和关系写成产品图谱。图太大时分批调用，后续批次用 append。',
     promptSnippet: 'Store a requirement graph in batches',
-    promptGuidelines: ['If knowledge/source-pack/ exists, read that pack instead of live DingTalk. Call store_requirement_graph once per document section, with at most 20 nodes and 20 relationships. Use append after the first batch. Do not pass taskStep in that call. Append that section\'s new clarifications to knowledge/需求评审.md, then complete the section with task_checkpoint and stop for the tester. Do not draft the whole graph in the reply.'],
+    promptGuidelines: ['If knowledge/source-pack/ exists, read that pack instead of live DingTalk text. When the section has images, call read_requirement_figures first. Call store_requirement_graph once per document section, with sectionHeading set to that heading, and at most 20 nodes and 20 relationships. Use append after the first batch. Do not pass taskStep in that call. Append that section\'s new clarifications to knowledge/需求评审.md, then complete the section with task_checkpoint and stop for the tester. Do not draft the whole graph in the reply.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
@@ -651,6 +693,7 @@ async function installOpentest(pi, options = {}) {
       graphPath: Type.Optional(Type.String({ description: 'JSON file inside the product workspace, used instead of graph' })),
       mode: Type.Optional(Type.String({ description: 'replace or append. Use append for later batches.' })),
       taskStep: Type.Optional(Type.String({ description: 'Section title. Leave it empty while clarifications for this section are still unwritten.' })),
+      sectionHeading: Type.Optional(Type.String({ description: 'Heading of the section being stored. Required when the source pack contains figures. Unread figures under this heading reject the write.' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
@@ -662,6 +705,7 @@ async function installOpentest(pi, options = {}) {
           graph: params.graph,
           graphPath: params.graphPath,
           mode: params.mode || 'replace',
+          sectionHeading: params.sectionHeading,
           cwd: workspace,
           env: process.env,
         });

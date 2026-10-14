@@ -11,6 +11,7 @@ const {
   renderCypher,
   cypherPlan,
 } = require('./model');
+const { assertSectionFiguresRead } = require('../sources/figures');
 
 function readGraph(workspace) {
   const file = path.join(workspace, 'graph', 'graph.json');
@@ -122,10 +123,12 @@ async function storeRequirementGraph({
   graph,
   graphPath,
   mode = 'replace',
+  sectionHeading,
   cwd,
   env,
   execute,
 }) {
+  assertSectionFiguresRead(workspace, sectionHeading);
   let parsed;
   if (graphPath) {
     parsed = parseGraphText(fs.readFileSync(graphFileInWorkspace(workspace, graphPath, cwd), 'utf8'));

@@ -250,6 +250,7 @@ test('extension registers the terminal tools', async () => {
     'write_executive_report',
     'ingest_requirement_sources',
     'sync_case_sheet',
+    'read_requirement_figures',
     'store_requirement_graph',
     'query_requirement_graph',
     'align_requirement_versions',
