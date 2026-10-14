@@ -17,11 +17,9 @@ import { SystemPromptPanel } from "./SystemPromptPanel";
 import { ToolDefinitionsPanel } from "./ToolDefinitionsPanel";
 import { AgentSessionPanel } from "./AgentSessionPanel";
 import { TerminalPanel } from "./TerminalPanel";
-import { QaModeSwitch } from "./qa/QaModeSwitch";
 import { QaPipelineBar } from "./qa/QaPipelineBar";
 import { QaAssetTree } from "./qa/QaAssetTree";
 import { QaWorkbench } from "./qa/QaWorkbench";
-import { useQaMode } from "@/hooks/useQaMode";
 import { useQaOverview } from "@/hooks/useQaOverview";
 import { QA_TAB_ID, type QaAskAgent, type QaPanelId } from "@/lib/qa/client";
 import { newTerminalTab, restoreTerminalTabs, TERMINAL_TABS_KEY, type TerminalTab } from "./terminal-tab-state";
@@ -520,12 +518,10 @@ export function AppShell() {
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([]);
   const [terminalsRestored, setTerminalsRestored] = useState(false);
-  // OpenTest: test mode adds the QA workbench as the first, permanent tab.
-  const [qaMode, setQaMode] = useQaMode();
-  const qaEnabled = qaMode === "test";
+  // The QA workbench is the first, permanent tab.
   const [qaPanel, setQaPanel] = useState<QaPanelId>("overview");
   const qaTab: Tab = { id: QA_TAB_ID, label: "测试工作台", filePath: "", kind: "qa" };
-  const panelTabs: Tab[] = [...(qaEnabled ? [qaTab] : []), ...fileTabs, ...terminalTabs.map((tab) => ({
+  const panelTabs: Tab[] = [qaTab, ...fileTabs, ...terminalTabs.map((tab) => ({
     id: tab.id,
     label: getFileName(tab.cwd) || tab.cwd,
     filePath: tab.cwd,
@@ -1169,8 +1165,8 @@ export function AppShell() {
   }, [terminalTabs, isMobile]);
 
   // OpenTest QA workbench: the overview feeds the pipeline bar, asset tree and workbench.
-  const { overview: qaOverview, error: qaError, refresh: refreshQa } = useQaOverview(activeCwd, qaEnabled, explorerRefreshKey);
-  const qaWorkbenchActive = qaEnabled && (activeFileTabId === QA_TAB_ID || !activeFileTabId);
+  const { overview: qaOverview, error: qaError, refresh: refreshQa } = useQaOverview(activeCwd, true, explorerRefreshKey);
+  const qaWorkbenchActive = activeFileTabId === QA_TAB_ID || !activeFileTabId;
 
   const handleOpenQaPanel = useCallback((panel: QaPanelId) => {
     setQaPanel(panel);
@@ -1192,13 +1188,6 @@ export function AppShell() {
     input.insertText(request.text);
     return "composed";
   }, []);
-
-  // Leaving test mode closes the workbench tab it was showing.
-  useEffect(() => {
-    if (!qaEnabled && activeFileTabId === QA_TAB_ID) {
-      setActiveFileTabId(fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? null);
-    }
-  }, [qaEnabled, activeFileTabId, fileTabs, terminalTabs]);
 
   const handleTerminalClosed = (tab: TerminalTab) => {
     const replacement = tab.closing === "restart" ? newTerminalTab(tab.cwd) : null;
@@ -1377,7 +1366,6 @@ export function AppShell() {
 
   const sidebarContent = (
     <>
-      <QaModeSwitch mode={qaMode} onChange={setQaMode} />
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
         onSelectSession={handleSelectSession}
@@ -1401,7 +1389,7 @@ export function AppShell() {
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
         onSessionsChange={handleSessionsChange}
       />
-      {qaEnabled && activeCwd ? (
+      {activeCwd ? (
         <QaAssetTree
           overview={qaOverview}
           activePanel={qaWorkbenchActive && rightPanelOpen ? qaPanel : null}
@@ -2513,14 +2501,12 @@ export function AppShell() {
 
         </div>
         {isMobile && renderProjectTrustWarning(true)}
-        {qaEnabled ? (
-          <QaPipelineBar
-            overview={qaOverview}
-            hasProject={Boolean(activeCwd)}
-            activePanel={qaWorkbenchActive && rightPanelOpen ? qaPanel : null}
-            onOpenPanel={handleOpenQaPanel}
-          />
-        ) : null}
+        <QaPipelineBar
+          overview={qaOverview}
+          hasProject={Boolean(activeCwd)}
+          activePanel={qaWorkbenchActive && rightPanelOpen ? qaPanel : null}
+          onOpenPanel={handleOpenQaPanel}
+        />
         </div>
 
         {/* Chat content */}

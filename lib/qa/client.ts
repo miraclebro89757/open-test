@@ -2,14 +2,6 @@
 
 import { CASE_TEMPLATE_RULE } from "./case-format";
 
-export type QaMode = "test" | "dev";
-export const QA_MODE_KEY = "opentest-mode";
-export const DEFAULT_QA_MODE: QaMode = "test";
-
-export function parseQaMode(value: string | null | undefined): QaMode {
-  return value === "dev" || value === "test" ? value : DEFAULT_QA_MODE;
-}
-
 export type QaPanelId =
   | "overview"
   | "knowledge"
