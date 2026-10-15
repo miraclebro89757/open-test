@@ -86,11 +86,11 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   },
   "test-points": {
     mode: "send",
-    text: "根据需求图谱为当前产品写测试点。按功能分批，每个测试点用 ### TP编号 标题，并写优先级和状态：待确认。写完一个功能就停下，等我确认。",
+    text: "根据需求图谱为当前产品写测试点。按功能分批，每个测试点用 ### TP编号 标题，并写优先级和状态：待确认。写完一个功能就用 task_checkpoint complete。标准审核没通过就先改再 complete，不要带着问题开始下一步。",
   },
   cases: {
     mode: "send",
-    text: `测试点已经确认。请为已确认的测试点写功能用例。${CASE_TEMPLATE_RULE}写完后调用 sync_case_sheet 推到钉钉表格。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。`,
+    text: `测试点已经确认。请为已确认的测试点写功能用例。${CASE_TEMPLATE_RULE}写完一个功能就用 task_checkpoint complete。标准审核没通过就先改再 complete，不要带着问题开始下一步。写完后调用 sync_case_sheet 推到钉钉表格。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。`,
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
   run: { mode: "send", text: "运行 automation 目录里的自动化脚本，选择器失效时自愈，然后汇报每条用例的结果。" },
@@ -106,6 +106,7 @@ const BATCH_REQUEST: QaAgentRequest = {
     "按节把需求图谱和待澄清写完，再按功能把测试点连续写完，每条状态仍是待确认。结构完整、且没有高风险待澄清挡住的功能，接着写用例草稿，每条加「- 状态：待确认」，自动化写否。",
     CASE_TEMPLATE_RULE,
     "下线、疑似删除、互相矛盾、规则缺失、新版未提及、废弃核心用例只挡住该功能的用例，其他功能继续。",
+    "每写完一个功能的测试点或用例，就用 task_checkpoint complete。它会按标准审核状态为待确认的条目。没通过就先改文件再 complete，不要带着问题开始下一步。已经确认的测试点和没有状态行的旧用例不要改写。",
     "写完后汇报完成了哪些功能、几项必须逐项看、几项可以批量看，请我打开待审核。不要问要不要继续。录制、共享环境执行和应用版本演进基线要等我明确授权。",
   ].join("\n"),
 };

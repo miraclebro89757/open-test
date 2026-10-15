@@ -25,6 +25,7 @@ const { ingestRequirementSources } = require('./sources/ingest');
 const { readRequirementFigures, formatFigureResult, createVisionReader, assertAnalysisStepFiguresRead } = require('./sources/figures');
 const { syncCaseSheet } = require('./sources/case-sheet');
 const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
+const { assertStepStandards } = require('./standards/review');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
 const { readProject, setProject } = require('./project');
 const { STEPS, CHOICES, prepareStep, confirmPoints } = require('./commands');
@@ -320,7 +321,7 @@ async function installOpentest(pi, options = {}) {
     label: 'Task checkpoint',
     description: '查看或更新产品任务断点。分析、测试点、用例、录制、自愈、缺陷和简报都用这一份进度。',
     promptSnippet: 'Resume every task from the shared checkpoint',
-    promptGuidelines: ['Call task_checkpoint with action status before any task. There is no start action. Do not redo steps already marked done. Plan steps once, write the current step, then complete or fail it. Do not complete an analysis section while its figures are still unread.'],
+    promptGuidelines: ['Call task_checkpoint with action status before any task. There is no start action. Do not redo steps already marked done. Plan steps once, write the current step, then complete or fail it. Do not complete an analysis section while its figures are still unread. Completing a test-points or cases step reviews 待确认 items against the case standard. Fix the file and complete again before the next step. Do not rewrite confirmed points or cases that have no 待确认 line.'],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
@@ -335,6 +336,9 @@ async function installOpentest(pi, options = {}) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
       if ((params.action || 'status') === 'complete' && params.task === 'analysis') {
         assertAnalysisStepFiguresRead(workspace, params.step);
+      }
+      if ((params.action || 'status') === 'complete' && (params.task === 'test-points' || params.task === 'cases')) {
+        assertStepStandards(workspace, params.task, params.step);
       }
       const result = updateCheckpoint(workspace, {
         product: params.productName,
