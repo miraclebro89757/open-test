@@ -59,7 +59,7 @@ export interface RecordWizardInput {
 /** The request the wizard hands the agent. Every choice is spelled out so the agent has nothing to ask. */
 export function buildRecordRequest(input: RecordWizardInput): string {
   const parts = [
-    `请录制自动化脚本，不要再向我确认下面这些选项，直接调用 record_playwright_scenario。`,
+    `请录制自动化脚本，不要再向我确认下面这些选项，直接调用 record_playwright_scenario。浏览器只打开一次：先登录，再连续录多条，全部录完再关闭。`,
     `沙箱地址：${input.sandboxUrl}`,
     `用例：${input.caseId || "（不指定，按录制内容匹配）"}`,
     `录制模式：${input.mode}`,

@@ -141,7 +141,7 @@ export function RecordPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged
           {message ? <span role="alert" style={{ fontSize: 12, color: QA_COLORS.bad }}>{message}</span> : null}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          录制窗口在运行 Pi Web 的这台电脑上打开。关闭窗口后，脚本写进 automation/，并对上用例的自动化标记。清理函数里的删除逻辑需要你按接口补全。
+          浏览器在这台电脑上只打开一次。先登录，再在控制页连续录多条核心流程，全部录完再关闭。每条脚本按用例编号和标题命名，并写回对应用例。
         </div>
       </section>
 

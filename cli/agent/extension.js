@@ -8,7 +8,8 @@ const { promisify } = require('util');
 const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
 const { playwrightInvoke } = require('./tools/playwright-cli');
-const { recordScenario } = require('./tools/record');
+const { runRecordingSession, createPlaywrightRecordingSession } = require('./tools/record-session');
+const { loadBrowserConfig } = require('../browser/config-store');
 const { selectRecordingMode, getModeConfirmationMessage } = require('./tools/record-mode-selector');
 const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
@@ -382,10 +383,10 @@ async function installOpentest(pi, options = {}) {
   pi.registerTool({
     name: 'record_playwright_scenario',
     label: 'Record scenario',
-    description: '打开沙箱里的 Playwright 录制窗口，引导用户操作，并把录制对上功能用例的自动化标记。支持三种录制模式：ui+api（同时录制 UI 和 API）、ui-only（仅 UI）、api-only（仅 API）。',
+    description: '打开一次沙箱浏览器。用户登录后在控制页连续录多条用例，全部录完再关闭。每条脚本用用例编号和标题命名，并写回对应用例。',
     promptSnippet: 'Record a sandbox scenario with Playwright and tag matching cases',
     promptGuidelines: [
-      'Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL.',
+      'Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL. The browser stays open: the user logs in once, records several cases from the control page, and closes the browser only when finished. Each script is named with the case id and title.',
       'Use mode="ui+api" (default) to record both UI (Playwright) and API (HAR) scripts simultaneously.',
       'Use mode="ui-only" for UI automation only, or mode="api-only" for API recording only.',
       'The terminal asks the user before opening the browser.',
@@ -442,23 +443,19 @@ async function installOpentest(pi, options = {}) {
         selectedMode = 'ui+api';
       }
       
-      // Resolve a real LLM client for HAR analysis; null when unconfigured,
-      // which makes the analyzer fall back to rules instead of faking a reply.
-      const llmClient = await createLLMClient();
-      
-      const result = await recordScenario({
+      const result = await runRecordingSession({
         workspace,
         sandboxUrl,
-        caseId: params.caseId,
-        mode: selectedMode,
-        cleanup: { pre: params.cleanupPre !== false, post: params.cleanupPost !== false },
-        llmClient,
-        execFile: (file, args, options) => execFileAsync(file, args, options),
         confirm: async (summary) => {
           if (!ctx.hasUI) return false;
-          // Enhanced confirmation with mode info
-          const enhancedSummary = getModeConfirmationMessage(selectedMode, params.sandboxUrl);
-          return ctx.ui.confirm('录制沙箱场景', enhancedSummary);
+          const enhancedSummary = getModeConfirmationMessage(selectedMode, sandboxUrl);
+          return ctx.ui.confirm('录制沙箱场景', `${enhancedSummary}\n\n${summary}`);
+        },
+        mode: selectedMode,
+        openSession: async (options) => {
+          const config = await loadBrowserConfig();
+          const executablePath = config.browser && config.browser.path;
+          return createPlaywrightRecordingSession({ ...options, executablePath });
         },
       });
       

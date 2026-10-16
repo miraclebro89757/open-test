@@ -72,7 +72,7 @@ function upsertField(body, name, value) {
   return `${prefix}- ${name}：${value}\n${rest}`;
 }
 
-function applyAutomationTags(markdown, { matchedIds, specPaths }) {
+function applyAutomationTags(markdown, { matchedIds, specPaths, onlyMatched = false }) {
   const paths = (Array.isArray(specPaths) ? specPaths : [specPaths]).filter(Boolean);
   const cases = parseCases(markdown);
   if (!cases.length) return markdown;
@@ -86,7 +86,7 @@ function applyAutomationTags(markdown, { matchedIds, specPaths }) {
     if (matched) {
       body = upsertField(body, '自动化', '是');
       if (paths.length) body = upsertField(body, '脚本', paths.join('，'));
-    } else if (!hasTag) {
+    } else if (!onlyMatched && !hasTag) {
       body = upsertField(body, '自动化', '否');
     }
     output += body;

@@ -272,8 +272,8 @@ function getModeConfirmationMessage(mode, sandboxUrl) {
   lines.push('');
   lines.push(`沙箱地址：${chalk.cyan(sandboxUrl)}`);
   lines.push('');
-  lines.push(chalk.gray('请按功能用例操作。'));
-  lines.push(chalk.gray('关闭录制窗口后，会把脚本对上用例并标记是否自动化。'));
+  lines.push(chalk.gray('浏览器只打开一次。先登录，再在控制页连续录多条。'));
+  lines.push(chalk.gray('全部录完再关闭浏览器。每条脚本用用例编号和标题命名。'));
   
   return lines.join('\n');
 }
