@@ -27,17 +27,20 @@ test("opens one settings panel from direct sidebar shortcuts", () => {
 });
 
 test("keeps every requested configuration surface inside the settings panel", () => {
-  for (const section of ["general", "models", "skills", "agents", "plugins", "mcp"]) {
+  for (const section of ["general", "models", "skills", "rules", "agents", "plugins", "mcp"]) {
     assert.match(panelSource, new RegExp(`id: "${section}"`));
   }
   for (const component of ["ModelsConfig", "SkillsConfig", "AgentsConfig", "PluginsConfig", "McpConfig"]) {
     assert.match(panelSource, new RegExp(`<${component} embedded`));
   }
+  assert.match(panelSource, /<AgentRulesConfig key=\{cwd \?\? ""\} cwd=\{cwd\} \/>/);
 });
 
 test("Settings › MCP works without a project, and only project sections fall back to General", () => {
   // Mounted with or without a cwd, and remounted when the project changes.
   assert.match(panelSource, /\{sectionHost\("mcp", <McpConfig embedded key=\{cwd \?\? ""\} cwd=\{cwd\} [^\n]*onClose=\{onClose\} \/>\)\}/);
+  assert.match(panelSource, /\{sectionHost\("rules", <AgentRulesConfig key=\{cwd \?\? ""\} cwd=\{cwd\} \/>\)\}/);
+  assert.doesNotMatch(panelSource, /cwd && sectionHost\("rules"/);
   assert.doesNotMatch(panelSource, /cwd && sectionHost\("mcp"/);
   // Which sections need a project is decided once, in settings-navigation.
   assert.match(panelSource, /requiresProject: settingsSectionRequiresProject\(item\.id\)/);

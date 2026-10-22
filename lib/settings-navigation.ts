@@ -2,6 +2,7 @@ export const SETTINGS_SECTION_VALUES = [
   "general",
   "models",
   "skills",
+  "rules",
   "agents",
   "plugins",
   "mcp",
