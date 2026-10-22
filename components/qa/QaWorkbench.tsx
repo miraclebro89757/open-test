@@ -1,7 +1,9 @@
 "use client";
 
+import { useI18n } from "@/hooks/useI18n";
 import type { QaAskAgent, QaPanelId } from "@/lib/qa/client";
-import { QA_PANEL_TITLES, STAGE_REQUESTS, stageRequest, type WorkPolicy } from "@/lib/qa/client";
+import { STAGE_REQUESTS, stageRequest, type WorkPolicy } from "@/lib/qa/client";
+import { panelTitle } from "./text";
 import type { QaOverview } from "@/lib/qa/overview";
 import type { WorkspaceDir } from "@/lib/qa/assets";
 import { EmptyState, buttonStyle } from "./qa-ui";
@@ -44,25 +46,14 @@ interface FolderPanel {
   action?: string;
 }
 
-const FOLDER_PANELS: Partial<Record<QaPanelId, FolderPanel>> = {
-  knowledge: { dir: "knowledge", emptyTitle: "还没有需求知识", emptyHint: "用 @ 把需求文档放进对话，或把钉钉文档链接贴到源包栏采集。Agent 会把待澄清和知识写到 knowledge/。", stage: "analysis", action: "分析需求文档" },
-  graph: { dir: "graph", emptyTitle: "还没有需求图谱", emptyHint: "需求分析完成后，图谱写在 graph/。" },
-  "test-points": { dir: "test-points", emptyTitle: "还没有测试点", emptyHint: "需求分析之后，让 Agent 按功能写测试点，写完等你确认。", stage: "test-points", action: "生成测试点" },
-  cases: { dir: "cases", emptyTitle: "还没有用例", emptyHint: "测试点确认之后才能写用例。", stage: "cases", action: "生成用例" },
-  automation: { dir: "automation", emptyTitle: "还没有自动化脚本", emptyHint: "录制或运行 Agent 的探索，脚本会写到 automation/。", stage: "record", action: "录制脚本" },
-  record: { dir: "automation", emptyTitle: "", emptyHint: "" },
-  run: { dir: "automation", emptyTitle: "", emptyHint: "" },
-  heal: { dir: "automation", emptyTitle: "", emptyHint: "" },
-  defects: { dir: "defects", emptyTitle: "", emptyHint: "" },
-  report: { dir: "reports", emptyTitle: "还没有报告", emptyHint: "用例写好后，让 Agent 写测试简报。", stage: "report", action: "生成测试简报" },
-};
-
 function StageAction({ stage, label, mode, onAskAgent }: { stage: keyof typeof STAGE_REQUESTS; label: string; mode: WorkPolicy; onAskAgent: QaAskAgent }) {
+  const { t } = useI18n();
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const request = stageRequest(stage, mode);
+  const batch = mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "heal" && stage !== "defects" && stage !== "report";
   return (
     <>
-      <button type="button" style={buttonStyle("primary")} onClick={() => ask(request)}>{mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "heal" && stage !== "defects" && stage !== "report" ? "开始整批任务" : label}</button>
+      <button type="button" style={buttonStyle("primary")} onClick={() => ask(request)}>{batch ? t("qa.ask.batch") : label}</button>
       {feedback ? <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-muted)" }}>{feedback}</span> : null}
     </>
   );
@@ -70,14 +61,27 @@ function StageAction({ stage, label, mode, onAskAgent }: { stage: keyof typeof S
 
 /** The right-panel workbench: one navigable view per stage of the test cycle. */
 export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelChange, onOpenFile, onAskAgent, onChanged }: Props) {
+  const { t } = useI18n();
+  const folderPanels: Partial<Record<QaPanelId, FolderPanel>> = {
+    knowledge: { dir: "knowledge", emptyTitle: t("qa.empty.knowledge"), emptyHint: t("qa.empty.knowledgeHint"), stage: "analysis", action: t("qa.action.analysis") },
+    graph: { dir: "graph", emptyTitle: t("qa.empty.graph"), emptyHint: t("qa.empty.graphHint") },
+    "test-points": { dir: "test-points", emptyTitle: t("qa.empty.points"), emptyHint: t("qa.empty.pointsHint"), stage: "test-points", action: t("qa.action.points") },
+    cases: { dir: "cases", emptyTitle: t("qa.empty.cases"), emptyHint: t("qa.empty.casesHint"), stage: "cases", action: t("qa.action.cases") },
+    automation: { dir: "automation", emptyTitle: t("qa.empty.automation"), emptyHint: t("qa.empty.automationHint"), stage: "record", action: t("qa.action.record") },
+    record: { dir: "automation", emptyTitle: "", emptyHint: "" },
+    run: { dir: "automation", emptyTitle: "", emptyHint: "" },
+    heal: { dir: "automation", emptyTitle: "", emptyHint: "" },
+    defects: { dir: "defects", emptyTitle: "", emptyHint: "" },
+    report: { dir: "reports", emptyTitle: t("qa.empty.report"), emptyHint: t("qa.empty.reportHint"), stage: "report", action: t("qa.action.report") },
+  };
   if (!cwd) {
-    return <EmptyState title="先打开一个项目目录" hint="项目目录就是产品工作目录，测试产物都写在里面。在左侧项目列表里打开或新建。" />;
+    return <EmptyState title={t("qa.noProject")} hint={t("qa.noProjectHint")} />;
   }
-  const folder = FOLDER_PANELS[panel];
+  const folder = folderPanels[panel];
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <nav
-        aria-label="测试工作台"
+        aria-label={t("qa.aria.workbench")}
         style={{
           display: "flex", gap: 2, padding: "6px 8px", flexShrink: 0, overflowX: "auto", scrollbarWidth: "none",
           borderBottom: "1px solid var(--border)", background: "var(--bg-panel)",
@@ -99,7 +103,7 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
                 boxShadow: active ? "0 1px 2px rgba(0,0,0,0.12)" : "none",
               }}
             >
-              {QA_PANEL_TITLES[id]}
+              {panelTitle(t, id)}
             </button>
           );
         })}

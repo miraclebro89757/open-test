@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { QaAskAgent, QaPanelId, WorkPolicy } from "@/lib/qa/client";
-import { WORK_POLICY_LABEL, clarificationContinueRequest, stageRequest } from "@/lib/qa/client";
+import { clarificationContinueRequest, stageRequest } from "@/lib/qa/client";
 import type { QaOverview } from "@/lib/qa/overview";
-import { Badge, EmptyState, STAGE_STATUS_LABEL, StageMark, buttonStyle } from "../qa-ui";
+import { Badge, EmptyState, StageMark, buttonStyle } from "../qa-ui";
+import { panelTitle, policyLabel, stageStatusLabel, stageTitle } from "../text";
 import { useAskFeedback } from "../useAskFeedback";
 import { SourcePackPanel } from "./SourcePackPanel";
 
@@ -21,10 +23,11 @@ interface Props {
 const ALWAYS_STAGED = new Set(["record", "run", "heal", "defects", "report"]);
 
 export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, onAskAgent, onChanged }: Props) {
+  const { t } = useI18n();
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const [policyError, setPolicyError] = useState("");
-  if (error) return <EmptyState title="读取测试进度失败" hint={error} />;
-  if (!overview) return <EmptyState title="读取测试进度…" />;
+  if (error) return <EmptyState title={t("qa.progress.failed")} hint={error} />;
+  if (!overview) return <EmptyState title={t("qa.progress.loading")} />;
 
   const { counts, stages } = overview;
   const mode = overview.policy.mode;
@@ -47,7 +50,7 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
       });
       const body = (await response.json()) as { error?: string };
       if (!response.ok) {
-        setPolicyError(body.error ?? "没有切换成功");
+        setPolicyError(body.error ?? t("qa.policy.failed"));
         return;
       }
       onChanged();
@@ -57,13 +60,13 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
   }
 
   const cards: Array<{ panel: QaPanelId; label: string; value: string; note?: string }> = [
-    { panel: "knowledge", label: "需求知识", value: String(counts.knowledge), note: counts.sourcePack ? `源包 ${counts.sourcePack} 篇` : counts.graphNodes ? `图谱节点 ${counts.graphNodes}` : undefined },
-    { panel: "lessons", label: "审核经验", value: String(counts.lessons), note: counts.lessons ? "可查看和修改" : undefined },
-    { panel: "test-points", label: "测试点", value: String(counts.points), note: counts.points ? `已确认 ${counts.pointsConfirmed}` : undefined },
-    { panel: "cases", label: "用例", value: String(counts.cases), note: counts.cases ? `自动化 ${counts.casesAutomated}/${counts.cases}` : undefined },
-    { panel: "automation", label: "自动化脚本", value: String(counts.uiScripts + counts.apiScripts), note: `UI ${counts.uiScripts} · API ${counts.apiScripts}` },
-    { panel: "defects", label: "缺陷文件", value: String(counts.defects) },
-    { panel: "report", label: "报告", value: String(counts.reports) },
+    { panel: "knowledge", label: panelTitle(t, "knowledge"), value: String(counts.knowledge), note: counts.sourcePack ? t("qa.overview.sourcePack", { count: counts.sourcePack }) : counts.graphNodes ? t("qa.overview.graphNodes", { count: counts.graphNodes }) : undefined },
+    { panel: "lessons", label: panelTitle(t, "lessons"), value: String(counts.lessons), note: counts.lessons ? t("qa.overview.lessonsEditable") : undefined },
+    { panel: "test-points", label: panelTitle(t, "test-points"), value: String(counts.points), note: counts.points ? t("qa.overview.confirmed", { count: counts.pointsConfirmed }) : undefined },
+    { panel: "cases", label: panelTitle(t, "cases"), value: String(counts.cases), note: counts.cases ? t("qa.overview.automated", { done: counts.casesAutomated, total: counts.cases }) : undefined },
+    { panel: "automation", label: panelTitle(t, "automation"), value: String(counts.uiScripts + counts.apiScripts), note: `UI ${counts.uiScripts} · API ${counts.apiScripts}` },
+    { panel: "defects", label: t("qa.overview.defectFiles"), value: String(counts.defects) },
+    { panel: "report", label: panelTitle(t, "report"), value: String(counts.reports) },
   ];
 
   return (
@@ -75,36 +78,36 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
         </div>
         {empty ? (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
-            这个目录还没有测试产物。把需求文档用 @ 放进对话，或把钉钉文档链接贴到下面的源包栏采集，Agent 会按需求、测试点、用例的顺序往下做。
+            {t("qa.overview.empty")}
           </p>
         ) : current ? (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
             {continueMarks
-              ? <>待澄清已经标完。点「按标记继续」发给 Agent，按忽略、已补充、待讨论往下写。不要重做已经完成的功能。</>
-              : <>当前阶段：<strong style={{ color: "var(--text)" }}>{current.label}</strong>（{STAGE_STATUS_LABEL[current.status]}）{current.nextStep ? `，下一步 ${current.nextStep}` : ""}</>}
+              ? <>{t("qa.overview.continueLong")}</>
+              : <>{t("qa.overview.current")}<strong style={{ color: "var(--text)" }}>{stageTitle(t, current.id)}</strong>（{stageStatusLabel(t, current.status)}）{current.nextStep ? t("qa.next", { step: current.nextStep }) : ""}</>}
           </p>
         ) : continueMarks ? (
           <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
-            待澄清已经标完。点「按标记继续」发给 Agent。
+            {t("qa.overview.continueShort")}
           </p>
         ) : (
-          <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)" }}>七个阶段都已完成。</p>
+          <p style={{ margin: "4px 0 10px", fontSize: 12.5, color: "var(--text-muted)" }}>{t("qa.stagesDone")}</p>
         )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-          {(Object.keys(WORK_POLICY_LABEL) as WorkPolicy[]).map((item) => (
+          {(["guided", "balanced", "autonomous"] as WorkPolicy[]).map((item) => (
             <button
               key={item}
               type="button"
-              title="只切换协作方式，不会发给 Agent"
+              title={t("qa.policy.switchTitle")}
               style={buttonStyle(item === mode ? "primary" : "plain")}
               onClick={() => void choosePolicy(item)}
             >
-              {WORK_POLICY_LABEL[item]}
+              {policyLabel(t, item)}
             </button>
           ))}
         </div>
         <p style={{ margin: "0 0 10px", fontSize: 11.5, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          逐步引导 / 智能协作 / 自主执行只是协作方式，点它们不会发给 Agent。
+          {t("qa.policy.hint")}
         </p>
         {policyError ? <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--qa-bad, #d14343)" }}>{policyError}</p> : null}
         {request && (empty || current || continueMarks) ? (
@@ -114,11 +117,11 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
               style={buttonStyle("primary")}
               onClick={() => ask(request)}
             >
-              {continueMarks ? "按标记继续" : wholeBatch ? "开始整批任务" : request.mode === "send" ? "让 Agent 做这一步" : "在输入框里补全后发送"}
+              {continueMarks ? t("qa.ask.continue") : wholeBatch ? t("qa.ask.batch") : request.mode === "send" ? t("qa.ask.step") : t("qa.ask.compose")}
             </button>
             {counts.reviewPending > 0 ? (
               <button type="button" style={buttonStyle("plain")} onClick={() => onOpenPanel("reviews")}>
-                待审核 {counts.reviewPending}
+                {t("qa.pendingReview", { count: counts.reviewPending })}
               </button>
             ) : null}
             {feedback ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{feedback}</span> : null}
@@ -129,7 +132,7 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
       <SourcePackPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} onAskAgent={onAskAgent} />
 
       <section>
-        <h3 style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>流程</h3>
+        <h3 style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>{t("qa.pipeline.heading")}</h3>
         <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
           {stages.map((stage, index) => (
             <li key={stage.id}>
@@ -143,10 +146,10 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
                 }}
               >
                 <StageMark status={stage.status} />
-                <span style={{ flex: 1 }}>{index + 1}. {stage.label}</span>
-                {stage.awaitingReview ? <Badge tone="warn">有待审</Badge> : null}
-                {stage.stepsTotal ? <Badge>{stage.stepsDone}/{stage.stepsTotal} 步</Badge> : null}
-                <span style={{ color: "var(--text-dim)", fontSize: 11.5 }}>{STAGE_STATUS_LABEL[stage.status]}</span>
+                <span style={{ flex: 1 }}>{index + 1}. {stageTitle(t, stage.id)}</span>
+                {stage.awaitingReview ? <Badge tone="warn">{t("qa.awaiting")}</Badge> : null}
+                {stage.stepsTotal ? <Badge>{t("qa.steps", { done: stage.stepsDone, total: stage.stepsTotal })}</Badge> : null}
+                <span style={{ color: "var(--text-dim)", fontSize: 11.5 }}>{stageStatusLabel(t, stage.status)}</span>
               </button>
             </li>
           ))}
@@ -154,7 +157,7 @@ export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, o
       </section>
 
       <section>
-        <h3 style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>资产</h3>
+        <h3 style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>{t("qa.assets.heading")}</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8 }}>
           {cards.map((card) => (
             <button

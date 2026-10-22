@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { QaPanelId } from "@/lib/qa/client";
 import type { QaOverview } from "@/lib/qa/overview";
 import { Badge } from "./qa-ui";
+import { panelTitle } from "./text";
 
 interface Props {
   overview: QaOverview | null;
@@ -24,32 +26,33 @@ interface Row {
  * of its own.
  */
 export function QaAssetTree({ overview, activePanel, onOpenPanel }: Props) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(true);
   const counts = overview?.counts;
   const pending = counts ? counts.points - counts.pointsConfirmed : 0;
   const rows: Row[] = [
     {
-      panel: "reviews", label: "待审核", count: counts?.reviewPending ?? null,
-      badges: counts && counts.reviewHigh > 0 ? <Badge tone="bad">高风险 {counts.reviewHigh}</Badge> : null,
+      panel: "reviews", label: panelTitle(t, "reviews"), count: counts?.reviewPending ?? null,
+      badges: counts && counts.reviewHigh > 0 ? <Badge tone="bad">{t("qa.highRisk", { count: counts.reviewHigh })}</Badge> : null,
     },
-    { panel: "lessons", label: "审核经验", count: counts?.lessons ?? null },
-    { panel: "knowledge", label: "需求知识", count: counts?.knowledge ?? null },
-    { panel: "evolution", label: "版本演进", count: null },
-    { panel: "graph", label: "需求图谱（节点）", count: counts?.graphNodes ?? null },
+    { panel: "lessons", label: panelTitle(t, "lessons"), count: counts?.lessons ?? null },
+    { panel: "knowledge", label: panelTitle(t, "knowledge"), count: counts?.knowledge ?? null },
+    { panel: "evolution", label: panelTitle(t, "evolution"), count: null },
+    { panel: "graph", label: t("qa.panel.graphNodes"), count: counts?.graphNodes ?? null },
     {
-      panel: "test-points", label: "测试点", count: counts?.points ?? null,
-      badges: pending > 0 ? <Badge tone="warn">待确认 {pending}</Badge> : null,
-    },
-    {
-      panel: "cases", label: "用例", count: counts?.cases ?? null,
-      badges: counts && counts.cases ? <Badge tone={counts.casesAutomated ? "ok" : "muted"}>自动化 {counts.casesAutomated}/{counts.cases}</Badge> : null,
+      panel: "test-points", label: panelTitle(t, "test-points"), count: counts?.points ?? null,
+      badges: pending > 0 ? <Badge tone="warn">{t("qa.pendingConfirm", { count: pending })}</Badge> : null,
     },
     {
-      panel: "automation", label: "自动化脚本", count: counts ? counts.uiScripts + counts.apiScripts : null,
+      panel: "cases", label: panelTitle(t, "cases"), count: counts?.cases ?? null,
+      badges: counts && counts.cases ? <Badge tone={counts.casesAutomated ? "ok" : "muted"}>{t("qa.tree.automated", { done: counts.casesAutomated, total: counts.cases })}</Badge> : null,
+    },
+    {
+      panel: "automation", label: panelTitle(t, "automation"), count: counts ? counts.uiScripts + counts.apiScripts : null,
       badges: counts && counts.uiScripts + counts.apiScripts ? <Badge>UI {counts.uiScripts} · API {counts.apiScripts}</Badge> : null,
     },
-    { panel: "defects", label: "缺陷", count: counts?.defects ?? null },
-    { panel: "report", label: "报告", count: counts?.reports ?? null },
+    { panel: "defects", label: panelTitle(t, "defects"), count: counts?.defects ?? null },
+    { panel: "report", label: panelTitle(t, "report"), count: counts?.reports ?? null },
   ];
 
   return (
@@ -67,7 +70,7 @@ export function QaAssetTree({ overview, activePanel, onOpenPanel }: Props) {
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>
             <path d="M3 1.5l4 3.5-4 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span style={{ fontWeight: 600 }}>测试资产</span>
+          <span style={{ fontWeight: 600 }}>{t("qa.aria.assets")}</span>
           {overview ? <span style={{ color: "var(--text-dim)" }} title={overview.workspace}>{overview.product}</span> : null}
         </button>
         <button
@@ -79,7 +82,7 @@ export function QaAssetTree({ overview, activePanel, onOpenPanel }: Props) {
             background: activePanel === "overview" ? "var(--bg-selected)" : "transparent",
           }}
         >
-          总览
+          {panelTitle(t, "overview")}
         </button>
       </div>
       {open ? (

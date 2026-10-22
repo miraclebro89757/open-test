@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { Badge, EmptyState, buttonStyle } from "../qa-ui";
 import { useQaData } from "../useQaData";
+import { decisionLabel, kindBulkLabel, kindLabel, storedLabel } from "../text";
 
 interface LessonHint {
   id: string;
@@ -41,16 +43,7 @@ interface ReviewKind {
   bulkable: number;
 }
 
-const KIND_FALLBACK: Record<string, { label: string; bulkLabel: string }> = {
-  clarification: { label: "待澄清", bulkLabel: "本类已补充" },
-  auto: { label: "经验抽查", bulkLabel: "本类认可" },
-  lesson: { label: "待启用经验", bulkLabel: "本类启用" },
-  "test-point": { label: "测试点", bulkLabel: "本类确认" },
-  case: { label: "用例草稿", bulkLabel: "本类接受" },
-  evolution: { label: "版本演进", bulkLabel: "本类按建议处理" },
-  heal: { label: "选择器自愈", bulkLabel: "本类留下新选择器" },
-  baseline: { label: "应用基线", bulkLabel: "" },
-};
+const KIND_SOURCES = ["clarification", "auto", "lesson", "test-point", "case", "evolution", "heal", "baseline"];
 
 const LEVEL_TONE = { L2: "warn", L3: "bad", L4: "bad" } as const;
 
@@ -59,24 +52,18 @@ const fieldStyle: CSSProperties = {
   background: "var(--bg)", color: "var(--text)", fontSize: 12, boxSizing: "border-box",
 };
 
-function actionsFor(item: ReviewItem): { decision: string; label: string }[] {
-  if (item.source === "clarification") {
-    return [
-      { decision: "忽略", label: "忽略" },
-      { decision: "已补充", label: "已补充" },
-      { decision: "待讨论", label: "待讨论" },
-    ];
-  }
-  if (item.source === "auto") return [{ decision: "认可", label: "认可" }, { decision: "推翻", label: "推翻" }];
-  if (item.source === "lesson") return [{ decision: "启用", label: "启用" }, { decision: "不采纳", label: "不采纳" }];
-  if (item.source === "test-point") return [{ decision: "确认", label: "确认" }, { decision: "退回", label: "退回" }];
-  if (item.source === "case") return [{ decision: "接受", label: "接受" }, { decision: "退回", label: "退回" }];
-  if (item.source === "heal") return [{ decision: "after", label: "留下新选择器" }, { decision: "before", label: "回到旧选择器" }];
-  if (item.source === "baseline") return [{ decision: "apply", label: "应用已选" }];
-  if (item.suggested === "deprecate") return [{ decision: "deprecate", label: "确认废弃" }, { decision: "defer", label: "暂缓" }, { decision: "keep", label: "仍保留" }];
-  if (item.suggested === "update") return [{ decision: "update", label: "标记需更新" }, { decision: "defer", label: "暂缓" }, { decision: "keep", label: "仍保留" }];
-  if (item.suggested === "create") return [{ decision: "create", label: "生成候选" }, { decision: "reject", label: "不采纳" }];
-  return [{ decision: "keep", label: "保留" }, { decision: "defer", label: "暂缓" }, { decision: "deprecate", label: "废弃" }];
+function actionsFor(item: ReviewItem): string[] {
+  if (item.source === "clarification") return ["忽略", "已补充", "待讨论"];
+  if (item.source === "auto") return ["认可", "推翻"];
+  if (item.source === "lesson") return ["启用", "不采纳"];
+  if (item.source === "test-point") return ["确认", "退回"];
+  if (item.source === "case") return ["接受", "退回"];
+  if (item.source === "heal") return ["after", "before"];
+  if (item.source === "baseline") return ["apply"];
+  if (item.suggested === "deprecate") return ["deprecate", "defer", "keep"];
+  if (item.suggested === "update") return ["update", "defer", "keep"];
+  if (item.suggested === "create") return ["create", "reject"];
+  return ["keep", "defer", "deprecate"];
 }
 
 function takesNote(item: ReviewItem): boolean {
@@ -118,6 +105,7 @@ function ReviewRow({
 }
 
 export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refreshKey: number; onChanged: () => void }) {
+  const { t } = useI18n();
   const { data, error, post } = useQaData<{ items: ReviewItem[]; blocked: string[]; kinds?: ReviewKind[] }>("/api/qa/reviews", cwd, refreshKey);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -147,7 +135,7 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
     const body = await run({ action: "decide", id: item.id, decision, note, fingerprint: item.fingerprint });
     if (!body) return;
     const lesson = body.lesson as { id: string; scope: string } | null;
-    setMessage(lesson ? `已记成经验 ${lesson.id}（${lesson.scope}）。同类条目会按它处理，可在审核经验里查看或修改。` : "");
+    setMessage(lesson ? t("qa.review.lessonSaved", { id: lesson.id, scope: storedLabel(t, lesson.scope) }) : "");
     setNote("");
   }
 
@@ -155,23 +143,29 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
     const body = await run({ action: "accept-kind", source, ...(version ? { version } : {}) });
     if (!body) return;
     const skipped = Number(body.skipped ?? 0);
-    const versionNote = version ? `（${version}）` : "";
-    setMessage(`已一键处理「${label}」${versionNote}${Number(body.accepted ?? 0)} 条。${skipped ? `${skipped} 条高风险仍逐条看。` : ""}逐条的忽略、已补充、确认还可以继续用。`);
+    const versionNote = version ? `（${storedLabel(t, version)}）` : "";
+    setMessage(t("qa.review.kindDone", {
+      label,
+      version: versionNote,
+      accepted: Number(body.accepted ?? 0),
+      skipped: skipped ? t("qa.review.skippedHigh", { count: skipped }) : "",
+      follow: t("qa.review.follow"),
+    }));
   }
 
-  if (error) return <EmptyState title="读取待审核失败" hint={error} />;
-  if (!data) return <EmptyState title="读取待审核…" />;
-  if (!items.length) return <EmptyState title="没有待审核事项" hint="常规生成会继续往下做。只有歧义、高风险变更和还没看过的草稿会出现在这里。" />;
+  if (error) return <EmptyState title={t("qa.review.loadFailed")} hint={error} />;
+  if (!data) return <EmptyState title={t("qa.review.loading")} />;
+  if (!items.length) return <EmptyState title={t("qa.review.empty")} hint={t("qa.review.emptyHint")} />;
 
   return (
     <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
       <div style={{ width: "46%", minWidth: 240, overflowY: "auto", borderRight: "1px solid var(--border)", padding: 12 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-          <Badge tone="bad">高风险 {high}</Badge>
-          <Badge>待审核 {items.length}</Badge>
+          <Badge tone="bad">{t("qa.highRisk", { count: high })}</Badge>
+          <Badge>{t("qa.pendingReview", { count: items.length })}</Badge>
         </div>
         <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-          按任务类型分组。每类有一键处理；点开一条仍可逐条忽略、已补充、确认或退回。L3/L4 不会被一键带走。
+          {t("qa.review.intro")}
         </p>
         <button
           type="button"
@@ -179,17 +173,18 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
           disabled={bulk === 0}
           onClick={() => void run({ action: "accept-bulk" })}
         >
-          处理全部可批量项 {bulk}
+          {t("qa.review.bulk", { count: bulk })}
         </button>
         {data.blocked.length ? (
           <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-            挡住用例的功能：{data.blocked.join("、")}
+            {t("qa.review.blocked", { names: data.blocked.join("、") })}
           </p>
         ) : null}
         {message ? <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>{message}</p> : null}
-        {(kinds.length ? kinds : Object.keys(KIND_FALLBACK).map((source) => ({
+        {(kinds.length ? kinds : KIND_SOURCES.map((source) => ({
           source,
-          ...KIND_FALLBACK[source],
+          label: kindLabel(t, source),
+          bulkLabel: kindBulkLabel(t, source),
           count: items.filter((item) => item.source === source).length,
           high: items.filter((item) => item.source === source && (item.level === "L3" || item.level === "L4")).length,
           bulkable: items.filter((item) => item.source === source && item.bulkEligible).length,
@@ -198,8 +193,8 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
             .slice()
             .sort((left, right) => left.level.localeCompare(right.level) * -1);
           if (!rows.length) return null;
-          const fallback = KIND_FALLBACK[kind.source];
-          const bulkLabel = kind.bulkLabel || fallback?.bulkLabel || "";
+          const label = kindLabel(t, kind.source);
+          const bulkLabel = kindBulkLabel(t, kind.source);
           const versionGroups = kind.source === "case"
             ? [...new Set(rows.map((item) => item.requirementVersion || "未标明"))]
             : [];
@@ -207,11 +202,11 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
             <section key={kind.source} style={{ marginTop: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                 <h3 style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>
-                  {kind.label} {kind.count}
-                  {kind.high ? ` · 高风险 ${kind.high}` : ""}
+                  {label} {kind.count}
+                  {kind.high ? t("qa.review.highSuffix", { count: kind.high }) : ""}
                 </h3>
                 {bulkLabel && kind.bulkable > 0 && kind.source !== "baseline" ? (
-                  <button type="button" style={buttonStyle("primary")} onClick={() => void applyKind(kind.source, kind.label)}>
+                  <button type="button" style={buttonStyle("primary")} onClick={() => void applyKind(kind.source, label)}>
                     {bulkLabel} {kind.bulkable}
                   </button>
                 ) : null}
@@ -222,20 +217,20 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
                 return (
                   <div key={version} style={{ marginBottom: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                      <Badge>{version}</Badge>
+                      <Badge>{storedLabel(t, version)}</Badge>
                       {bulkLabel && bulkable > 0 ? (
-                        <button type="button" style={buttonStyle()} onClick={() => void applyKind(kind.source, kind.label, version)}>
-                          {version} {bulkLabel} {bulkable}
+                        <button type="button" style={buttonStyle()} onClick={() => void applyKind(kind.source, label, version)}>
+                          {storedLabel(t, version)} {bulkLabel} {bulkable}
                         </button>
                       ) : null}
                     </div>
                     {grouped.map((item) => (
-                      <ReviewRow key={item.id} item={item} kindLabel={kind.label} selected={selected?.id === item.id} onSelect={() => { setSelectedId(item.id); setNote(""); }} />
+                      <ReviewRow key={item.id} item={item} kindLabel={label} selected={selected?.id === item.id} onSelect={() => { setSelectedId(item.id); setNote(""); }} />
                     ))}
                   </div>
                 );
               }) : rows.map((item) => (
-                <ReviewRow key={item.id} item={item} kindLabel={kind.label} selected={selected?.id === item.id} onSelect={() => { setSelectedId(item.id); setNote(""); }} />
+                <ReviewRow key={item.id} item={item} kindLabel={label} selected={selected?.id === item.id} onSelect={() => { setSelectedId(item.id); setNote(""); }} />
               ))}
             </section>
           );
@@ -245,26 +240,26 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
         {selected ? (
           <>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-              <Badge>{KIND_FALLBACK[selected.source]?.label || selected.source}</Badge>
+              <Badge>{kindLabel(t, selected.source)}</Badge>
               <Badge tone={LEVEL_TONE[selected.level]}>{selected.level}</Badge>
               {selected.requirementVersion ? <Badge>{selected.requirementVersion}</Badge> : null}
             </div>
             <h2 style={{ margin: "0 0 8px", fontSize: 14 }}>{selected.title}</h2>
             <p style={{ margin: "0 0 8px" }}>{selected.reason}</p>
-            <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>影响：{selected.impact}</p>
-            <p style={{ margin: "0 0 8px", whiteSpace: "pre-wrap" }}><strong>依据</strong><br />{selected.evidence || "没有单独摘出的原文。"}</p>
-            <p style={{ margin: "0 0 8px" }}><strong>之前</strong><br />{selected.before}</p>
-            <p style={{ margin: "0 0 12px" }}><strong>{selected.source === "auto" ? "Agent 的处理" : "建议"}</strong><br />{selected.after}</p>
+            <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>{t("qa.review.impact", { text: selected.impact })}</p>
+            <p style={{ margin: "0 0 8px", whiteSpace: "pre-wrap" }}><strong>{t("qa.review.evidence")}</strong><br />{selected.evidence || t("qa.review.noEvidence")}</p>
+            <p style={{ margin: "0 0 8px" }}><strong>{t("qa.review.before")}</strong><br />{selected.before}</p>
+            <p style={{ margin: "0 0 12px" }}><strong>{selected.source === "auto" ? t("qa.review.agentDid") : t("qa.review.suggestion")}</strong><br />{selected.after}</p>
             {selected.lessons.map((hint) => (
               <div key={hint.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                <div>符合经验 <strong>{hint.id}</strong> {hint.title}</div>
+                <div>{t("qa.review.matchesLesson", { id: hint.id, title: hint.title })}</div>
                 <div style={{ color: "var(--text-muted)" }}>{hint.decision}：{hint.action}</div>
                 <button
                   type="button"
                   style={{ ...buttonStyle("primary"), marginTop: 6 }}
                   onClick={() => void decide(selected, `lesson:${hint.id}`)}
                 >
-                  按经验处理
+                  {t("qa.review.applyLesson")}
                 </button>
               </div>
             ))}
@@ -272,19 +267,19 @@ export function ReviewsPanel({ cwd, refreshKey, onChanged }: { cwd: string; refr
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder={selected.source === "clarification" ? "已补充时写上正确说法" : "退回时写上哪里不对"}
+                placeholder={selected.source === "clarification" ? t("qa.review.noteClarify") : t("qa.review.noteReturn")}
                 style={{ ...fieldStyle, minHeight: 72, marginBottom: 8, padding: 8 }}
               />
             ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {actionsFor(selected).map((action) => (
+              {actionsFor(selected).map((decision) => (
                 <button
-                  key={action.decision}
+                  key={decision}
                   type="button"
-                  style={buttonStyle(["忽略", "退回", "reject", "推翻", "不采纳"].includes(action.decision) ? "plain" : "primary")}
-                  onClick={() => void decide(selected, action.decision)}
+                  style={buttonStyle(["忽略", "退回", "reject", "推翻", "不采纳"].includes(decision) ? "plain" : "primary")}
+                  onClick={() => void decide(selected, decision)}
                 >
-                  {action.label}
+                  {decision === "keep" && !["deprecate", "update"].includes(selected.suggested) ? t("qa.assetAction.keep") : decision === "deprecate" && !["deprecate", "update", "create"].includes(selected.suggested) ? t("qa.decision.deprecate") : decisionLabel(t, decision)}
                 </button>
               ))}
             </div>

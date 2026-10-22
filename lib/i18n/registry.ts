@@ -1,9 +1,21 @@
 import { enLocale } from "./messages/en";
+import { qaEn, qaZhCN, qaZhTW } from "./messages/qa";
 import { zhCNLocale } from "./messages/zh-CN";
 import { zhTWLocale } from "./messages/zh-TW";
 import type { Locale, LocalePlugin } from "./types";
 
-const localePlugins: LocalePlugin[] = [enLocale, zhCNLocale, zhTWLocale];
+const qaByLocale: Record<string, Record<string, string>> = {
+  en: qaEn,
+  "zh-CN": qaZhCN,
+  "zh-TW": qaZhTW,
+};
+
+function withQa(plugin: LocalePlugin): LocalePlugin {
+  const extra = qaByLocale[plugin.id];
+  return extra ? { ...plugin, messages: { ...plugin.messages, ...extra } } : plugin;
+}
+
+const localePlugins: LocalePlugin[] = [enLocale, zhCNLocale, zhTWLocale].map(withQa);
 
 /**
  * 根据标识获取已注册的语言包。

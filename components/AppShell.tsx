@@ -520,7 +520,7 @@ export function AppShell() {
   const [terminalsRestored, setTerminalsRestored] = useState(false);
   // The QA workbench is the first, permanent tab.
   const [qaPanel, setQaPanel] = useState<QaPanelId>("overview");
-  const qaTab: Tab = { id: QA_TAB_ID, label: "测试工作台", filePath: "", kind: "qa" };
+  const qaTab: Tab = { id: QA_TAB_ID, label: translate("qa.tab"), filePath: "", kind: "qa" };
   const panelTabs: Tab[] = [qaTab, ...fileTabs, ...terminalTabs.map((tab) => ({
     id: tab.id,
     label: getFileName(tab.cwd) || tab.cwd,

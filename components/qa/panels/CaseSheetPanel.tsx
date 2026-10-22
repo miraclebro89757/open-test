@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { Badge, buttonStyle } from "../qa-ui";
 import { useQaData } from "../useQaData";
 
@@ -27,6 +28,7 @@ export function CaseSheetPanel({
   refreshKey: number;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const { data, error, post } = useQaData<SheetPayload>("/api/qa/case-sheet", cwd, refreshKey);
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState("");
@@ -43,9 +45,12 @@ export function CaseSheetPanel({
       return;
     }
     if (action === "pull") {
-      setMessage(`已收回 ${Number(result.body.updated ?? 0)} 条。${result.body.conflicts ? `${Number(result.body.conflicts)} 条两边都改了，已写入待澄清。` : ""}表格改动记成待确认经验，不会自动启用。`);
+      setMessage(t("qa.sheet.pulled", {
+        updated: Number(result.body.updated ?? 0),
+        conflicts: result.body.conflicts ? t("qa.sheet.conflicts", { count: Number(result.body.conflicts) }) : "",
+      }));
     } else {
-      setMessage(`已推送 ${Number(result.body.written ?? 0)} 条到个人空间表格。用「需求版本」列筛选评审。`);
+      setMessage(t("qa.sheet.pushed", { written: Number(result.body.written ?? 0) }));
     }
     onChanged();
   }
@@ -53,35 +58,35 @@ export function CaseSheetPanel({
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <strong style={{ fontSize: 12 }}>钉钉表格</strong>
-        {binding?.url ? <Badge tone="ok">{binding.title || "已绑定"}</Badge> : <Badge>未绑定</Badge>}
+        <strong style={{ fontSize: 12 }}>{t("qa.sheet.title")}</strong>
+        {binding?.url ? <Badge tone="ok">{binding.title || t("qa.sheet.bound")}</Badge> : <Badge>{t("qa.sheet.unbound")}</Badge>}
         {data?.version ? <Badge>{data.version}</Badge> : null}
-        {data && !data.mcpConfigured ? <Badge tone="bad">未接 dingtalk-excel</Badge> : null}
+        {data && !data.mcpConfigured ? <Badge tone="bad">{t("qa.sheet.noMcp")}</Badge> : null}
       </div>
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-        推到钉钉个人空间表格做评审。状态只有正常、废弃；模块是用例文件名；执行结果来自最近一次运行。人改完表格后收回。本地 cases/*.md 仍是准。
+        {t("qa.sheet.hint")}
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
-          placeholder={binding?.url || "空白则在个人空间新建表格"}
-          aria-label="钉钉表格链接"
+          placeholder={binding?.url || t("qa.sheet.placeholder")}
+          aria-label={t("qa.sheet.url")}
           style={{
             flex: 1, minWidth: 160, height: 26, padding: "0 8px", borderRadius: 6,
             border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12,
           }}
         />
         <button type="button" style={buttonStyle("primary", Boolean(busy) || !data?.caseCount)} disabled={Boolean(busy) || !data?.caseCount} onClick={() => void run("push")}>
-          {busy === "push" ? "推送中…" : "推到表格"}
+          {busy === "push" ? t("qa.sheet.pushing") : t("qa.sheet.push")}
         </button>
         <button type="button" style={buttonStyle()} disabled={Boolean(busy) || (!binding?.url && !url.trim())} onClick={() => void run("pull")}>
-          {busy === "pull" ? "收回中…" : "从表格收回"}
+          {busy === "pull" ? t("qa.sheet.pulling") : t("qa.sheet.pull")}
         </button>
       </div>
       {binding?.url ? (
         <a href={binding.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          打开表格
+          {t("qa.sheet.open")}
         </a>
       ) : null}
       {error ? <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{error}</div> : null}

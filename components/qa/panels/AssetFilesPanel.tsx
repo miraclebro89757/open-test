@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { AssetFile, WorkspaceDir } from "@/lib/qa/assets";
 import { Badge, EmptyState, formatSize, formatTime } from "../qa-ui";
 
@@ -17,6 +18,7 @@ interface Props {
 
 /** The files of one workspace folder, newest first. A click opens the file in the file viewer. */
 export function AssetFilesPanel({ cwd, dir, emptyTitle, emptyHint, refreshKey, onOpenFile, actions }: Props) {
+  const { t } = useI18n();
   const [files, setFiles] = useState<AssetFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,9 +44,9 @@ export function AssetFilesPanel({ cwd, dir, emptyTitle, emptyHint, refreshKey, o
       {actions ? <div style={{ display: "flex", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>{actions}</div> : null}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {error ? (
-          <EmptyState title="读取失败" hint={error} />
+          <EmptyState title={t("qa.loadFailed")} hint={error} />
         ) : files === null ? (
-          <EmptyState title="读取中…" />
+          <EmptyState title={t("qa.loading")} />
         ) : files.length === 0 ? (
           <EmptyState title={emptyTitle} hint={emptyHint} />
         ) : (

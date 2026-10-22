@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { buttonStyle } from "../qa-ui";
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 
 /** Edits the heading and the lines under it as plain text, so nothing the agent wrote is lost. */
 export function ItemEditor({ title, body, onSave, onCancel, note }: Props) {
+  const { t } = useI18n();
   const [titleValue, setTitleValue] = useState(title);
   const [bodyValue, setBodyValue] = useState(body);
   const [saving, setSaving] = useState(false);
@@ -33,13 +35,13 @@ export function ItemEditor({ title, body, onSave, onCancel, note }: Props) {
       <input
         value={titleValue}
         onChange={(event) => setTitleValue(event.target.value)}
-        aria-label="标题"
+        aria-label={t("qa.title")}
         style={{ height: 28, padding: "0 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12.5 }}
       />
       <textarea
         value={bodyValue}
         onChange={(event) => setBodyValue(event.target.value)}
-        aria-label="内容"
+        aria-label={t("qa.body")}
         rows={Math.min(14, Math.max(5, bodyValue.split("\n").length + 1))}
         spellCheck={false}
         style={{
@@ -50,8 +52,8 @@ export function ItemEditor({ title, body, onSave, onCancel, note }: Props) {
       {note ? <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{note}</div> : null}
       {error ? <div role="alert" style={{ fontSize: 12, color: "var(--qa-bad, #d14343)" }}>{error}</div> : null}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" style={buttonStyle("primary", saving || !dirty)} disabled={saving || !dirty} onClick={() => void save()}>保存</button>
-        <button type="button" style={buttonStyle()} onClick={onCancel}>取消</button>
+        <button type="button" style={buttonStyle("primary", saving || !dirty)} disabled={saving || !dirty} onClick={() => void save()}>{saving ? t("i18n.saving") : t("i18n.save")}</button>
+        <button type="button" style={buttonStyle()} onClick={onCancel}>{t("i18n.cancel")}</button>
       </div>
     </div>
   );

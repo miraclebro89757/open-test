@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { clarificationSubmitText, STAGE_REQUESTS, type QaAskAgent } from "@/lib/qa/client";
 import type { ClarificationItem, ClarificationStatus } from "@/lib/qa/clarification-format";
 import { Badge, EmptyState, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
 import { useQaData } from "../useQaData";
 import { SourcePackPanel } from "./SourcePackPanel";
+import { storedLabel } from "../text";
 
 interface Document {
   file: string;
@@ -14,11 +16,12 @@ interface Document {
   items: ClarificationItem[];
 }
 
-const ACTIONS: Array<{ status: Exclude<ClarificationStatus, "待处理">; hint: string }> = [
-  { status: "忽略", hint: "理解错了，不再提起" },
-  { status: "已补充", hint: "写上正确说法" },
-  { status: "待讨论", hint: "先搁置，以后再定" },
-];
+const ACTIONS: Array<Exclude<ClarificationStatus, "待处理">> = ["忽略", "已补充", "待讨论"];
+const ACTION_HINT: Record<Exclude<ClarificationStatus, "待处理">, string> = {
+  忽略: "qa.clarify.hint.ignore",
+  已补充: "qa.clarify.hint.supplemented",
+  待讨论: "qa.clarify.hint.discuss",
+};
 
 function itemKey(item: ClarificationItem): string {
   return `${item.file}#${item.id}`;
@@ -54,6 +57,7 @@ export function ClarificationsPanel({
   /** Flow with the surrounding document instead of filling the workbench. */
   embedded?: boolean;
 }) {
+  const { t } = useI18n();
   const { data, error, reload, post } = useQaData<{ documents: Document[]; otherFiles: string[] }>("/api/qa/clarifications", cwd, refreshKey);
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -104,7 +108,7 @@ export function ClarificationsPanel({
     }
     const incomplete = items.filter((item) => item.status === "已补充" && !noteOf(item).trim());
     if (incomplete.length) {
-      setMessage("已补充的条目需要写上补充内容");
+      setMessage(t("qa.clarify.needNote"));
       return;
     }
     const files = [...new Set(decided.map((item) => item.file))];
@@ -112,30 +116,30 @@ export function ClarificationsPanel({
     ask({ mode: "send", text: clarificationSubmitText(files) });
   };
 
-  if (error) return <EmptyState title="读取待澄清失败" hint={error} />;
-  if (!data) return <EmptyState title="读取中…" />;
+  if (error) return <EmptyState title={t("qa.clarify.loadFailed")} hint={error} />;
+  if (!data) return <EmptyState title={t("qa.loading")} />;
 
   return (
     <div ref={rootRef} style={{ display: "flex", flexDirection: "column", height: embedded ? "auto" : "100%", minHeight: embedded ? undefined : 0 }}>
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-        <Badge tone="warn">待处理 {items.filter((item) => item.status === "待处理").length}</Badge>
-        <Badge>忽略 {items.filter((item) => item.status === "忽略").length}</Badge>
-        <Badge tone="ok">已补充 {items.filter((item) => item.status === "已补充").length}</Badge>
-        <Badge tone="accent">待讨论 {items.filter((item) => item.status === "待讨论").length}</Badge>
+        <Badge tone="warn">{storedLabel(t, "待处理")} {items.filter((item) => item.status === "待处理").length}</Badge>
+        <Badge>{storedLabel(t, "忽略")} {items.filter((item) => item.status === "忽略").length}</Badge>
+        <Badge tone="ok">{storedLabel(t, "已补充")} {items.filter((item) => item.status === "已补充").length}</Badge>
+        <Badge tone="accent">{storedLabel(t, "待讨论")} {items.filter((item) => item.status === "待讨论").length}</Badge>
         <span style={{ flex: 1 }} />
         <button
           type="button"
           style={buttonStyle("primary", decided.length === 0)}
           disabled={decided.length === 0}
-          title={decided.length === 0 ? "先标记一条" : "把这些状态发给 Agent"}
+          title={decided.length === 0 ? t("qa.clarify.markFirst") : t("qa.clarify.sendMarks")}
           onClick={() => void submit()}
         >
-          提交给 Agent
+          {t("qa.clarify.submit")}
         </button>
-        <button type="button" style={buttonStyle()} onClick={() => ask(STAGE_REQUESTS.analysis)}>分析需求文档</button>
+        <button type="button" style={buttonStyle()} onClick={() => ask(STAGE_REQUESTS.analysis)}>{t("qa.action.analysis")}</button>
       </div>
       <div style={{ padding: "6px 12px", fontSize: 11.5, color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
-        再点一次已选中的按钮，改回未处理。条目留在文档里，不会被删掉。
+        {t("qa.clarify.toggle")}
       </div>
       {message || feedback ? (
         <div role="status" style={{ padding: "6px 12px", fontSize: 12, color: message ? "var(--qa-bad, #d14343)" : "var(--text-muted)", borderBottom: "1px solid var(--border)" }}>
@@ -149,7 +153,7 @@ export function ClarificationsPanel({
       )}
       <div style={{ flex: embedded ? undefined : 1, minHeight: embedded ? undefined : 0, overflowY: embedded ? "visible" : "auto" }}>
         {documents.length === 0 && otherFiles.length === 0 ? (
-          <EmptyState title="还没有待澄清" hint="分析需求时，Agent 会把待澄清写进 knowledge/需求评审.md。标好之后提交，Agent 按忽略、已补充、待讨论继续。" />
+          <EmptyState title={t("qa.clarify.empty")} hint={t("qa.clarify.emptyHint")} />
         ) : null}
         {documents.map((document) => (
           <section key={document.file}>
@@ -161,13 +165,13 @@ export function ClarificationsPanel({
                   style={{ ...buttonStyle(), height: 24, padding: "0 8px" }}
                   onClick={() => onOpenFile(`${cwd.replace(/[\\/]+$/, "")}/${document.file}`)}
                 >
-                  打开文档
+                  {t("qa.openDoc")}
                 </button>
               )}
             </div>
             {document.legacy ? (
               <div style={{ padding: "12px", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                这一节还是旧格式，页面没法逐条标记。
+                {t("qa.clarify.legacy")}
                 <div style={{ marginTop: 8 }}>
                   <button
                     type="button"
@@ -177,7 +181,7 @@ export function ClarificationsPanel({
                       text: `请把 ${document.file} 里「待澄清问题」一节改成可标记的条目。每条用 ### Q编号 标题，并写 - 状态：待处理、- 原文：、- Agent理解：、- 补充：。不要删掉原来的问题，也不要改已经标过的条目。`,
                     })}
                   >
-                    让 Agent 改成可标记的条目
+                    {t("qa.clarify.convert")}
                   </button>
                 </div>
               </div>
@@ -194,30 +198,30 @@ export function ClarificationsPanel({
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
                     <span style={{ color: "var(--text-dim)", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>{item.id}</span>
                     <strong style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{item.title}</strong>
-                    <Badge tone={item.status === "待处理" ? "warn" : item.status === "已补充" ? "ok" : item.status === "待讨论" ? "accent" : "muted"}>{item.status}</Badge>
+                    <Badge tone={item.status === "待处理" ? "warn" : item.status === "已补充" ? "ok" : item.status === "待讨论" ? "accent" : "muted"}>{storedLabel(t, item.status)}</Badge>
                   </div>
-                  {item.source && item.source !== item.title ? <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>原文：{item.source}</p> : null}
-                  {item.understanding ? <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text)", lineHeight: 1.5 }}>Agent 的理解：{item.understanding}</p> : null}
-                  <div role="group" aria-label={`${item.id} 的处理`} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {ACTIONS.map((action) => (
+                  {item.source && item.source !== item.title ? <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{t("qa.clarify.source", { text: item.source })}</p> : null}
+                  {item.understanding ? <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text)", lineHeight: 1.5 }}>{t("qa.clarify.understanding", { text: item.understanding })}</p> : null}
+                  <div role="group" aria-label={t("qa.clarify.group", { id: item.id })} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {ACTIONS.map((status) => (
                       <button
-                        key={action.status}
+                        key={status}
                         type="button"
-                        aria-pressed={item.status === action.status}
-                        data-clarify-action={action.status}
-                        title={action.hint}
-                        style={choiceStyle(item.status === action.status)}
-                        onClick={() => mark(item, action.status)}
+                        aria-pressed={item.status === status}
+                        data-clarify-action={status}
+                        title={t(ACTION_HINT[status])}
+                        style={choiceStyle(item.status === status)}
+                        onClick={() => mark(item, status)}
                       >
-                        {action.status}
+                        {storedLabel(t, status)}
                       </button>
                     ))}
                   </div>
                   {item.status === "已补充" ? (
                     <textarea
                       value={supplement}
-                      aria-label={`${item.id} 的补充`}
-                      placeholder="写上正确说法。Agent 会按这段话继续，不再用原来的理解。"
+                      aria-label={t("qa.clarify.noteLabel", { id: item.id })}
+                      placeholder={t("qa.clarify.note")}
                       onChange={(event) => {
                         dirty.current.add(key);
                         draftsRef.current[key] = event.target.value;
@@ -243,7 +247,7 @@ export function ClarificationsPanel({
         ))}
         {otherFiles.length > 0 ? (
           <section>
-            <h4 style={{ margin: 0, padding: "8px 12px", fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)" }}>其他知识文件</h4>
+            <h4 style={{ margin: 0, padding: "8px 12px", fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", background: "var(--bg-panel)", borderBottom: "1px solid var(--border)" }}>{t("qa.clarify.other")}</h4>
             {otherFiles.map((file) => (
               <button
                 key={file}

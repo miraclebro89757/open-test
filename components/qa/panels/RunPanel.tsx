@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { QaAskAgent } from "@/lib/qa/client";
 import { STAGE_REQUESTS } from "@/lib/qa/client";
 import type { AutomationScript } from "@/lib/qa/assets";
@@ -17,13 +18,13 @@ interface Props {
   onChanged: () => void;
 }
 
-const STATUS_TEXT: Record<ScriptStatus, string> = {
-  passed: "通过",
-  failed: "失败",
-  skipped: "跳过",
-  error: "无法执行",
-  running: "执行中",
-  pending: "排队中",
+const STATUS_KEY: Record<ScriptStatus, string> = {
+  passed: "qa.run.passedStatus",
+  failed: "qa.run.failedStatus",
+  skipped: "qa.run.skippedStatus",
+  error: "qa.run.errorStatus",
+  running: "qa.run.runningStatus",
+  pending: "qa.run.pendingStatus",
 };
 
 function statusTone(status: ScriptStatus): "ok" | "bad" | "warn" | "accent" | "muted" {
@@ -40,6 +41,7 @@ function seconds(ms: number): string {
 
 /** Run the recorded scripts and read the result of each. Numbers come only from real runs. */
 export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }: Props) {
+  const { t } = useI18n();
   const { data, error, reload, post } = useQaData<{ runs: RunRecord[]; scripts: AutomationScript[] }>("/api/qa/run", cwd, refreshKey);
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const [headed, setHeaded] = useState(false);
@@ -78,15 +80,15 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
     else onChanged();
   };
 
-  if (error) return <EmptyState title="读取执行结果失败" hint={error} />;
-  if (!data) return <EmptyState title="读取中…" />;
+  if (error) return <EmptyState title={t("qa.run.loadFailed")} hint={error} />;
+  if (!data) return <EmptyState title={t("qa.loading")} />;
 
   const uiCount = data.scripts.filter((script) => script.kind === "ui").length;
   const apiCount = data.scripts.filter((script) => script.kind === "api").length;
   if (!data.scripts.length && !data.runs.length) {
     return (
-      <EmptyState title="还没有可执行的脚本" hint="先录制脚本，或让 Agent 生成。脚本写在 automation/ 下。">
-        <button type="button" style={buttonStyle("primary")} onClick={() => ask(STAGE_REQUESTS.record)}>去录制</button>
+      <EmptyState title={t("qa.run.empty")} hint={t("qa.run.emptyHint")}>
+        <button type="button" style={buttonStyle("primary")} onClick={() => ask(STAGE_REQUESTS.record)}>{t("qa.run.goRecord")}</button>
         {feedback ? <div style={{ marginTop: 8, fontSize: 12 }}>{feedback}</div> : null}
       </EmptyState>
     );
@@ -101,27 +103,27 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
       <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "grid", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <button type="button" disabled={running || starting || !data.scripts.length} style={buttonStyle("primary", running || starting)} onClick={() => void start()}>
-            {running ? "执行中…" : `执行全部（${data.scripts.length}）`}
+            {running ? t("qa.run.running") : t("qa.run.all", { count: data.scripts.length })}
           </button>
-          <button type="button" disabled={running || starting || !uiCount} style={buttonStyle("plain", running || starting || !uiCount)} onClick={() => void start(undefined, "ui")}>只跑 UI（{uiCount}）</button>
-          <button type="button" disabled={running || starting || !apiCount} style={buttonStyle("plain", running || starting || !apiCount)} onClick={() => void start(undefined, "api")}>只跑 API（{apiCount}）</button>
+          <button type="button" disabled={running || starting || !uiCount} style={buttonStyle("plain", running || starting || !uiCount)} onClick={() => void start(undefined, "ui")}>{t("qa.run.ui", { count: uiCount })}</button>
+          <button type="button" disabled={running || starting || !apiCount} style={buttonStyle("plain", running || starting || !apiCount)} onClick={() => void start(undefined, "api")}>{t("qa.run.api", { count: apiCount })}</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--text-muted)", flexWrap: "wrap" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <input type="checkbox" checked={headed} onChange={(event) => setHeaded(event.target.checked)} />显示浏览器
+            <input type="checkbox" checked={headed} onChange={(event) => setHeaded(event.target.checked)} />{t("qa.run.headed")}
           </label>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            失败重试
-            <select value={retries} onChange={(event) => setRetries(Number(event.target.value))} aria-label="失败重试次数" style={selectStyle}>
-              <option value={0}>不重试</option>
-              <option value={1}>1 次</option>
-              <option value={2}>2 次</option>
+            {t("qa.run.retries")}
+            <select value={retries} onChange={(event) => setRetries(Number(event.target.value))} aria-label={t("qa.run.retriesLabel")} style={selectStyle}>
+              <option value={0}>{t("qa.run.retry0")}</option>
+              <option value={1}>{t("qa.run.retry1")}</option>
+              <option value={2}>{t("qa.run.retry2")}</option>
             </select>
           </label>
           {data.runs.length > 1 ? (
             <label style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
-              历史
-              <select value={run?.id ?? ""} onChange={(event) => setSelectedRun(event.target.value)} aria-label="执行历史" style={selectStyle}>
+              {t("qa.run.history")}
+              <select value={run?.id ?? ""} onChange={(event) => setSelectedRun(event.target.value)} aria-label={t("qa.run.historyLabel")} style={selectStyle}>
                 {data.runs.map((item) => <option key={item.id} value={item.id}>{formatTime(item.startedAt)}</option>)}
               </select>
             </label>
@@ -132,20 +134,20 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
       </div>
 
       {run && summary ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "8px 12px", borderBottom: "1px solid var(--border)", fontSize: 12.5 }} aria-label="执行汇总">
-          <span style={{ color: QA_COLORS.ok }}>通过 {summary.passed}</span>
-          <span style={{ color: summary.failed ? QA_COLORS.bad : "var(--text-muted)" }}>失败 {summary.failed}</span>
-          <span style={{ color: "var(--text-muted)" }}>跳过 {summary.skipped}</span>
-          {summary.errors ? <span style={{ color: QA_COLORS.warn }}>无法执行 {summary.errors}</span> : null}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "8px 12px", borderBottom: "1px solid var(--border)", fontSize: 12.5 }} aria-label={t("qa.run.summary")}>
+          <span style={{ color: QA_COLORS.ok }}>{t("qa.run.passed", { count: summary.passed })}</span>
+          <span style={{ color: summary.failed ? QA_COLORS.bad : "var(--text-muted)" }}>{t("qa.run.failed", { count: summary.failed })}</span>
+          <span style={{ color: "var(--text-muted)" }}>{t("qa.run.skipped", { count: summary.skipped })}</span>
+          {summary.errors ? <span style={{ color: QA_COLORS.warn }}>{t("qa.run.errors", { count: summary.errors })}</span> : null}
           <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 11 }}>
-            {run.status === "running" ? "执行中" : `结束 ${run.finishedAt ? formatTime(run.finishedAt) : ""}`}
+            {run.status === "running" ? t("qa.run.runningNow") : t("qa.run.finished", { time: run.finishedAt ? formatTime(run.finishedAt) : "" })}
           </span>
         </div>
       ) : null}
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {!run ? (
-          <EmptyState title="还没有执行过" hint="点上面的按钮，结果会写到 reports/runs/。" />
+          <EmptyState title={t("qa.run.none")} hint={t("qa.run.noneHint")} />
         ) : run.scripts.map((script: RunScript) => {
           const key = `${run.id}#${script.file}`;
           const expanded = open === key;
@@ -163,8 +165,8 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={script.file}>{script.file.replace(/^automation\//, "")}</span>
                 </button>
                 {script.caseIds.length ? <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{script.caseIds.join(" ")}</span> : null}
-                {script.attempts > 1 ? <Badge tone="warn" title="失败后重试过">重试 {script.attempts - 1}</Badge> : null}
-                <Badge tone={statusTone(script.status)}>{STATUS_TEXT[script.status]}</Badge>
+                {script.attempts > 1 ? <Badge tone="warn" title={t("qa.run.retried")}>{t("qa.run.retryBadge", { count: script.attempts - 1 })}</Badge> : null}
+                <Badge tone={statusTone(script.status)}>{t(STATUS_KEY[script.status])}</Badge>
                 {script.durationMs ? <span style={{ color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{seconds(script.durationMs)}</span> : null}
               </div>
               {expanded ? (
@@ -181,8 +183,8 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
                   ))}
                   {script.error ? <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 11.5, color: script.status === "error" ? QA_COLORS.warn : "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{script.error}</pre> : null}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button type="button" style={buttonStyle()} onClick={() => onOpenFile(absolute(script.file))}>打开脚本</button>
-                    <button type="button" disabled={running || starting} style={buttonStyle("plain", running || starting)} onClick={() => void start([script.file])}>重跑这个脚本</button>
+                    <button type="button" style={buttonStyle()} onClick={() => onOpenFile(absolute(script.file))}>{t("qa.openScript")}</button>
+                    <button type="button" disabled={running || starting} style={buttonStyle("plain", running || starting)} onClick={() => void start([script.file])}>{t("qa.run.rerun")}</button>
                     {failing && script.kind === "ui" && script.status === "failed" ? (
                       <button
                         type="button"
@@ -192,7 +194,7 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
                           text: `脚本 ${script.file} 执行失败：${(script.tests.find((test) => test.status === "failed")?.message ?? script.error).split("\n")[0].slice(0, 200)}。如果是选择器失效，用 heal_selector 修复并重新运行这个脚本，告诉我改了哪些选择器；如果是业务失败，不要改脚本，说明可能的缺陷。`,
                         })}
                       >
-                        让 Agent 分析并自愈
+                        {t("qa.run.heal")}
                       </button>
                     ) : null}
                   </div>

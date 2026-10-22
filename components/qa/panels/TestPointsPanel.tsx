@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { QaAskAgent } from "@/lib/qa/client";
 import { STAGE_REQUESTS } from "@/lib/qa/client";
 import type { QaFile, QaItem } from "@/lib/qa/assets";
@@ -21,6 +22,7 @@ const CONFIRMED = "已确认";
 
 /** Test point review: confirm, reopen and edit points before cases are written. */
 export function TestPointsPanel({ cwd, refreshKey, onAskAgent, onChanged }: Props) {
+  const { t } = useI18n();
   const { data, error, post } = useQaData<{ files: QaFile[] }>("/api/qa/test-points", cwd, refreshKey);
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -52,12 +54,12 @@ export function TestPointsPanel({ cwd, refreshKey, onAskAgent, onChanged }: Prop
     setSelected(new Set());
   };
 
-  if (error) return <EmptyState title="读取测试点失败" hint={error} />;
-  if (!data) return <EmptyState title="读取中…" />;
+  if (error) return <EmptyState title={t("qa.points.loadFailed")} hint={error} />;
+  if (!data) return <EmptyState title={t("qa.loading")} />;
   if (!all.length) {
     return (
-      <EmptyState title="还没有测试点" hint="需求分析之后，让 Agent 按功能写测试点，写完会停下来等你确认。">
-        <button type="button" style={buttonStyle("primary")} onClick={() => ask(STAGE_REQUESTS["test-points"])}>生成测试点</button>
+      <EmptyState title={t("qa.points.empty")} hint={t("qa.points.emptyHint")}>
+        <button type="button" style={buttonStyle("primary")} onClick={() => ask(STAGE_REQUESTS["test-points"])}>{t("qa.action.points")}</button>
         {feedback ? <div style={{ marginTop: 8, fontSize: 12 }}>{feedback}</div> : null}
       </EmptyState>
     );
@@ -67,12 +69,12 @@ export function TestPointsPanel({ cwd, refreshKey, onAskAgent, onChanged }: Prop
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-        <Badge tone={allConfirmed ? "ok" : "warn"}>已确认 {confirmedCount}/{all.length}</Badge>
+        <Badge tone={allConfirmed ? "ok" : "warn"}>{t("qa.points.confirmed", { done: confirmedCount, total: all.length })}</Badge>
         <span style={{ flex: 1 }} />
         {selected.size ? (
           <>
-            <button type="button" style={buttonStyle()} onClick={() => void confirmSelected("confirm")}>确认选中 {selected.size}</button>
-            <button type="button" style={buttonStyle()} onClick={() => void confirmSelected("unconfirm")}>重新打开</button>
+            <button type="button" style={buttonStyle()} onClick={() => void confirmSelected("confirm")}>{t("qa.points.confirmSelected", { count: selected.size })}</button>
+            <button type="button" style={buttonStyle()} onClick={() => void confirmSelected("unconfirm")}>{t("qa.points.reopen")}</button>
           </>
         ) : null}
         <button
@@ -81,17 +83,17 @@ export function TestPointsPanel({ cwd, refreshKey, onAskAgent, onChanged }: Prop
           disabled={allConfirmed}
           onClick={async () => { for (const file of data.files) if (file.items.length) await run({ file: file.file, action: "confirm-all" }); }}
         >
-          全部确认
+          {t("qa.points.confirmAll")}
         </button>
-        <button type="button" style={buttonStyle()} onClick={() => ask({ mode: "compose", text: "请补充这些测试点：" })}>让 Agent 补充</button>
+        <button type="button" style={buttonStyle()} onClick={() => ask({ mode: "compose", text: "请补充这些测试点：" })}>{t("qa.points.askMore")}</button>
         <button
           type="button"
           style={buttonStyle("primary", confirmedCount === 0)}
           disabled={confirmedCount === 0}
-          title={confirmedCount === 0 ? "先确认测试点" : undefined}
+          title={confirmedCount === 0 ? t("qa.points.needConfirm") : undefined}
           onClick={() => ask(STAGE_REQUESTS.cases)}
         >
-          基于已确认生成用例
+          {t("qa.points.generateCases")}
         </button>
       </div>
       {message || feedback ? (
@@ -111,7 +113,7 @@ export function TestPointsPanel({ cwd, refreshKey, onAskAgent, onChanged }: Prop
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", fontSize: 12.5 }}>
                     <input
                       type="checkbox"
-                      aria-label={`选择 ${item.id}`}
+                      aria-label={t("qa.points.select", { id: item.id })}
                       checked={selected.has(rowKey)}
                       onChange={(event) => setSelected((current) => {
                         const next = new Set(current);
@@ -122,21 +124,21 @@ export function TestPointsPanel({ cwd, refreshKey, onAskAgent, onChanged }: Prop
                     <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{item.id}</span>
                     <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.title}>{item.title}</span>
                     {item.priority ? <Badge>{item.priority}</Badge> : null}
-                    <Badge tone={confirmed ? "ok" : "warn"}>{confirmed ? "已确认" : "待确认"}</Badge>
+                    <Badge tone={confirmed ? "ok" : "warn"}>{confirmed ? t("qa.value.confirmed") : t("qa.value.pending")}</Badge>
                     <button
                       type="button"
                       style={{ ...buttonStyle(), height: 24, padding: "0 8px" }}
                       onClick={() => void run({ file: item.file, action: confirmed ? "unconfirm" : "confirm", ids: [item.id] })}
                     >
-                      {confirmed ? "重新打开" : "确认"}
+                      {confirmed ? t("qa.points.reopen") : t("qa.points.confirm")}
                     </button>
-                    <button type="button" style={{ ...buttonStyle(), height: 24, padding: "0 8px" }} onClick={() => setEditing(editing === rowKey ? null : rowKey)}>编辑</button>
+                    <button type="button" style={{ ...buttonStyle(), height: 24, padding: "0 8px" }} onClick={() => setEditing(editing === rowKey ? null : rowKey)}>{t("qa.edit")}</button>
                   </div>
                   {editing === rowKey ? (
                     <ItemEditor
                       title={item.title}
                       body={item.body}
-                      note={confirmed ? "改动内容后，这个测试点会回到待确认。" : undefined}
+                      note={confirmed ? t("qa.points.editNote") : undefined}
                       onCancel={() => setEditing(null)}
                       onSave={async (title, body) => {
                         const result = await run({ file: item.file, action: "edit", id: item.id, title, body });

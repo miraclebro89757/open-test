@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { analysisFromPackRequest, type QaAskAgent } from "@/lib/qa/client";
 import { Badge, buttonStyle } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
@@ -30,6 +31,7 @@ export function SourcePackPanel({
   onChanged: () => void;
   onAskAgent?: QaAskAgent;
 }) {
+  const { t } = useI18n();
   const { data, error, post } = useQaData<PackPayload>("/api/qa/source-pack", cwd, refreshKey);
   const { ask, feedback } = useAskFeedback(onAskAgent ?? (() => "unavailable"));
   const [url, setUrl] = useState("");
@@ -49,20 +51,20 @@ export function SourcePackPanel({
       setMessage(result.error);
       return;
     }
-    setMessage(`已采集 ${Number(result.body.ingested ?? 0)} 篇。分析时读源包，不必再下载。`);
+    setMessage(t("qa.pack.ingested", { count: Number(result.body.ingested ?? 0) }));
     onChanged();
   }
 
   return (
     <section style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, background: "var(--bg-panel)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-        <strong style={{ fontSize: 13 }}>钉钉需求源包</strong>
-        {pack ? <Badge tone="ok">已采集 {docs.length}</Badge> : <Badge>未采集</Badge>}
-        {unread.length ? <Badge tone="warn">未读到 {unread.length}</Badge> : null}
-        {data && !data.mcpConfigured ? <Badge tone="bad">未接 MCP</Badge> : null}
+        <strong style={{ fontSize: 13 }}>{t("qa.pack.title")}</strong>
+        {pack ? <Badge tone="ok">{t("qa.pack.collected", { count: docs.length })}</Badge> : <Badge>{t("qa.pack.none")}</Badge>}
+        {unread.length ? <Badge tone="warn">{t("qa.pack.unread", { count: unread.length })}</Badge> : null}
+        {data && !data.mcpConfigured ? <Badge tone="bad">{t("qa.pack.noMcp")}</Badge> : null}
       </div>
       <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-        贴根文档链接。系统通过钉钉文档 MCP 采集直接关联文档，写成 knowledge/source-pack/。你不用把嵌套文档下载到本地。
+        {t("qa.pack.hint")}
       </p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input
@@ -75,11 +77,11 @@ export function SourcePackPanel({
           }}
         />
         <button type="button" style={buttonStyle("primary", busy || (!url.trim() && !pack?.root?.url))} disabled={busy || (!url.trim() && !pack?.root?.url)} onClick={() => void ingest()}>
-          {pack ? "重新采集" : "采集"}
+          {pack ? t("qa.pack.again") : t("qa.pack.collect")}
         </button>
         {pack && onAskAgent ? (
           <button type="button" style={buttonStyle("plain")} onClick={() => ask(analysisFromPackRequest())}>
-            按源包分析
+            {t("qa.pack.analyze")}
           </button>
         ) : null}
       </div>
@@ -88,9 +90,9 @@ export function SourcePackPanel({
       {docs.length ? (
         <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
           {docs.slice(0, 8).map((node) => (
-            <li key={node.nodeId || node.title}>{node.role === "root" ? "根文档" : "关联"} · {node.title}</li>
+            <li key={node.nodeId || node.title}>{node.role === "root" ? t("qa.pack.root") : t("qa.pack.linked")} · {node.title}</li>
           ))}
-          {docs.length > 8 ? <li>另有 {docs.length - 8} 篇</li> : null}
+          {docs.length > 8 ? <li>{t("qa.pack.more", { count: docs.length - 8 })}</li> : null}
         </ul>
       ) : null}
     </section>
