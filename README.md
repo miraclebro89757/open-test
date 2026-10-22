@@ -2,292 +2,272 @@
 
 # Open-Test
 
-A terminal test agent that turns a requirement document into test knowledge, test points, and executable cases — then records real browser sessions to automate them.
+A test agent that turns a requirement document into test knowledge, test points, and executable cases, then records real browser sessions against those cases.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/opentest-ai.svg)](https://www.npmjs.com/package/opentest-ai)
 
-## 🎯 What is Open-Test?
+The same agent runs in the terminal and in the Web UI. The Web UI is the Pi Web shell plus a test workbench. It asks before recording, before a shared-environment run, and before applying a version-evolution baseline. Pass rates and defects come from files it has actually read.
 
-You point it at a requirement document with `@`. It reads that document and produces, in a visible folder next to it:
+Requires Node.js `>=22.19.0`. Recording and replay use the Playwright `1.63.0` shipped with this repo.
 
-- **Requirement knowledge** — the rules, states, and preconditions, stored as a graph
-- **Test points** — one behavior per scenario, written for a human to confirm
-- **Functional cases** — numbered, prioritized, step-by-step, runnable without reading code
-- **Recorded automation** — real Playwright scripts captured while you click through a sandbox
+## What it writes
 
-It is a terminal agent, not a web dashboard. You stay in your editor and your terminal; it asks for confirmation at the gates that matter and never invents results.
+Point it at a requirement with `@`, or give it a DingTalk document link. Artifacts go into one visible product directory:
 
-## 🚀 Quick Start
+- **Requirement knowledge** — rules, states, preconditions, and open questions, plus a graph
+- **Test points** — one behavior per scenario, each marked for a person to confirm
+- **Functional cases** — numbered steps, one assertion each, runnable without reading code
+- **Recorded automation** — Playwright specs captured after one login, each named for the case you picked
 
-### Terminal Agent (Quick)
+A DingTalk link is frozen into `knowledge/source-pack/` first. Later analysis reads that pack. A section that contains figures is graphed only after those figures have been read at fresh URLs. Where the figure and the text disagree, both sides stay and the clash is written as an open question.
+
+## Quick start
+
+### Terminal
 
 ```bash
-# 1. Configure a model once, in the Web UI's model page (the terminal shares it)
-npx opentest-ai web
+npx opentest-ai browser setup   # once: system Chrome/Edge, Playwright Chromium, or skip
+npx opentest-ai run             # checks browser setup, then opens the agent
 
-# 2. Configure browser environment (one-time)
-npx opentest-ai browser setup
-
-# 3. Open the agent anywhere
-npx opentest-ai run
-
-# 4. Point it at a requirement document
 > @/path/to/your/requirements.md
 ```
 
-### Web UI (Visual)
+`opentest-ai`, `open-test`, and `opentest` are the same program. On a TTY, the bare command opens the agent and skips the browser-setup check. `run` is the one that checks it. `agent` and `run` both accept `--print` for a single turn. Only `run` accepts `--skip-browser-setup`.
 
-Prefer a browser interface? Launch the Web UI:
+### Web UI and the test workbench
 
-```bash
-# Launch Web UI on http://127.0.0.1:30141
-npx opentest-ai web
-
-# Or customize port and hostname
-npx opentest-ai web --port 8080 --hostname 0.0.0.0
-```
-
-The Web UI provides:
-- 📂 Visual file browser and editor
-- 🔄 Session management across all projects
-- ⚙️ Graphical model configuration
-- 🎯 Real-time agent interaction
-- 🌲 Git integration and diff viewer
-
-See [Web UI Guide](./docs/WEB_UI.md) for full documentation.
-
-### Browser Setup
-
-On first run, OpenTest will guide you through browser environment setup for recording functionality. You have three options:
-
-1. **Use system browser** (recommended) — Use your installed Chrome/Edge/Chromium, no download required
-2. **Install Playwright Chromium** — Download a dedicated test browser (~120MB)
-3. **Skip for now** — Use other features without recording
-
-See [BROWSER_SETUP.md](BROWSER_SETUP.md) for detailed configuration guide.
-
-`config` is a wizard built so you can finish it without looking anything up. It asks one question at a time and tells you what to do at each step:
-
-1. **Pick a provider** — each option says what it costs and who it suits.
-2. **Paste the key** — the wizard prints the exact page to open, the button to click, and what a real key looks like (`sk-or-v1-…`, `sk-…`). Ollama skips this entirely.
-3. **Name, address, model** — pre-filled with the provider's defaults, so pressing Enter is always a valid answer. Only the `custom` provider requires you to type them.
-4. **Where to save** — `~/.opentest/config.json` (yours, never committed) or `./opentest.config.json` (your project, shareable with the team).
-5. **Ping** — an optional live check that tells you what to do if it fails.
-
-Pasted keys are cleaned before they are stored: a leading `Bearer `, surrounding quotes, and stray whitespace are removed, and obvious mistakes (a truncated key, a JSON blob, a documentation placeholder) are rejected at the prompt with an explanation instead of failing later at request time.
-
-To configure without the wizard:
+From a checkout of this repo:
 
 ```bash
-npx opentest-ai config set --provider deepseek --api-key sk-xxxx --model deepseek-chat
-npx opentest-ai config ping      # verify it can complete a request
-npx opentest-ai config list      # profiles, keys masked
+npm install
+npm run dev
+# http://127.0.0.1:30141
 ```
 
-### Models
+`npx opentest-ai web` starts the same app (`--port`, `--hostname`, `--no-open`). The default bind is `127.0.0.1:30141`. Without a production build it uses `next dev`.
 
-There is one model configuration, and it lives in Pi's agent directory (`~/.pi/agent/`, or `PI_CODING_AGENT_DIR` if you set it). The Web UI's **Models** page edits it, and the Terminal Agent reads the same files, so a model you add or switch to in the browser is the one the terminal starts on. Any provider Pi supports works, including OpenAI-compatible endpoints such as DeepSeek, SiliconFlow, ModelScope, OpenRouter or a local Ollama.
+Open a project directory in the sidebar. That directory is the product workspace: `knowledge/`, `cases/`, and the rest are written directly inside it. The terminal is different: there, artifacts land in a sibling folder named for the product, next to the requirement file.
 
-## 🔄 The Workflow
+The right-hand **Test workbench** follows the pipeline: requirements, test points, cases, record, run, defects, report. Beside that it has overview, review queue, lessons, version evolution, the graph, automation scripts, and selector healing.
 
-Nine steps, each with a slash command and a shortcut. Every step writes to one shared checkpoint, so an interrupted run resumes where it stopped.
+**Settings → General → Language** is English, 简体中文, or 繁體中文. The choice is stored as `pi-locale` and the workbench chrome follows it. Case files, stored statuses, and the text sent to the model stay Chinese.
 
-| Command | Shortcut | Produces |
+Set `OPENTEST_QA=0` to start Web sessions without the QA workflow.
+
+## Models
+
+There is one model configuration. The Web UI **Models** page writes it, and the terminal agent reads it. It lives in Pi's agent directory: `~/.pi/agent/`, or `PI_CODING_AGENT_DIR` when you set that yourself. The launcher does not write `models.json`, does not pass `--model`, and does not set `PI_CODING_AGENT_DIR` for you.
+
+Inside a running agent, switching is Pi's own control and keeps the conversation:
+
+| | |
+|---|---|
+| `/model` | pick a model Pi knows |
+| `Ctrl+P` / `Shift+Ctrl+P` | cycle forward / backward |
+| `/login` | sign in to a subscription provider |
+
+Tools that call the model directly (explore, and HAR analysis when that path runs) use this same default. A key stored as a shell command (`!cmd`) stays with Pi; those tools then fall back to rules and record `source: "rules"`. A model answer is `source: "ai"`.
+
+`opentest-ai config` still opens the old profile wizard and writes `~/.opentest/config.json`. It prints a warning and does not change the model the agent uses. There is no `/task-model` command.
+
+## Workflow
+
+Ten step commands. In the terminal each one also has a shortcut. The Web UI does not register these shortcuts; use the workbench or type the command.
+
+| Command | Shortcut | Writes |
 |---|---|---|
-| `/status` | `Ctrl+Shift+0` | Progress across all tasks |
+| `/status` | `Ctrl+Shift+0` | reads `tasks/` |
 | `/analyze` | `Ctrl+Shift+1` | `knowledge/`, `graph/` |
 | `/points` | `Ctrl+Shift+2` | `test-points/` |
 | `/cases` | `Ctrl+Shift+3` | `cases/` |
-| `/record` | `Ctrl+Shift+4` | `automation/` |
-| `/run` | `Ctrl+Shift+5` | Runs the recorded scripts |
-| `/heal` | `Ctrl+Shift+6` | Review selector replacements |
-| `/defects` | `Ctrl+Shift+7` | `defects/` |
-| `/report` | `Ctrl+Shift+8` | `reports/` |
+| `/explore` | `Ctrl+Shift+4` | a script from one free-form browser pass |
+| `/record` | `Ctrl+Shift+5` | `automation/` |
+| `/run` | `Ctrl+Shift+6` | runs scripts already in `automation/` |
+| `/heal` | `Ctrl+Shift+7` | keep or revert a selector replacement |
+| `/defects` | `Ctrl+Shift+8` | `defects/` |
+| `/report` | `Ctrl+Shift+9` | `reports/` |
 
-### The gates
+`/project` (shortcut `Ctrl+Alt+P`) exists only in the terminal. It pins the working directory in `~/.opentest/project.json` and remembers the last eight directories. On macOS the menu includes **📁 浏览本机文件夹...**, which opens the Finder chooser at the current project. Cancelling leaves the project unchanged. Other platforms get the recent list plus a typed path. A directory whose name starts with `.` is refused. The Web UI has no `/project`: the opened session directory is the workspace.
 
-The agent stops and waits at two points, on purpose:
+### How far it goes on its own
 
-1. **After test points.** It will not write functional cases until you confirm the points. Run `/points`, read them, confirm.
-2. **Before recording.** It will not guess a sandbox URL. Run `/record` and give it the `http`/`https` address of the environment you want recorded.
+`tasks/policy.json` holds the mode. Missing file means `balanced`.
 
-Two things it is explicitly instructed never to do: fabricate pass rates or defect data, and perform release sign-off or change-impact analysis.
-
-### Recording and self-healing
-
-`/record` asks for the sandbox URL, then opens a Playwright codegen window. You perform the scenario per your case; close the window when done. The agent then maps the recorded UI text back onto your functional cases: matched cases flip to `- 自动化：是` and record the script path, and unmatched cases get tagged `- 自动化：否`.
-
-Recording has three modes, chosen when you call `/record`:
-
-| Mode | Produces |
+| Mode | What it does |
 |---|---|
-| `ui+api` (default) | Playwright spec **and** a pytest API script generated from the HAR |
-| `ui-only` | Playwright spec only |
-| `api-only` | pytest API script only |
+| `guided` (逐步引导) | Stops after each section or feature. Does not write cases until the test points are confirmed. |
+| `balanced` (智能协作, the default) | Does not ask whether to continue. Writes the graph and open questions, then every test point still marked 待确认, then draft cases for features that are not blocked. |
+| `autonomous` (自主执行) | Same writing loop as `balanced`. |
 
-In `ui+api` the HAR is analyzed for variables, request dependencies, and secrets. When an LLM profile is configured the analysis is model-driven; otherwise a rule engine produces the same structure and the result is labelled `source: "rules"` so you always know which ran. Credentials are written to a `.env.example` and read from the environment — never hardcoded into the script.
+In every mode, recording, a shared-environment run, and applying a version-evolution baseline wait for an explicit yes.
 
-When a selector breaks during `/run`, the agent calls `heal_selector` immediately rather than stopping to ask. Both the before and after versions are kept, and the current file uses the replacement so the run can finish. **You** decide which version survives, with `/heal`.
+`/cases` itself stays blocked until a checkpoint step named `confirmed` exists. `/points` asks you to confirm, both when you view existing points and after a new batch finishes writing. Accepting that dialog writes the step. Draft cases written under `balanced` do not unlock the slash command by themselves.
 
-## 📁 Where Files Land
+High-risk open questions mention 下线, 疑似删除, 互相矛盾, 规则缺失, 没有可执行规则, or 新版未提及. They block cases for that feature only.
 
-Artifacts go to a visible folder next to your requirement document, named for the product. Hidden directories are refused.
+Completing a test-points or cases step checks the items still marked 待确认. A test point needs a priority and one behavior. A case needs the inspection template, a priority, 自动化 set to 是 or 否, a linked test point, a precondition, an expected result, and steps on their own numbered lines. One case asserts one thing: a title must not join two checks with 与, 兼测, or 同时校验, and a success path is not combined with a duplicate, length, format, or required-field failure. If the check fails, the step is not completed. Items already confirmed, and old cases with no 状态 line, are left as they are.
+
+The agent does not invent a pass rate or a defect. A briefing computes a pass rate only from a finished run record, counting passed and failed and leaving skipped and errored scripts out. It does not sign off a release and it does not do change-impact analysis.
+
+### Cases
+
+```
+# 功能用例-<模块名>
+
+### TC001 标题
+- 优先级：高
+- 自动化：否
+- 状态：待确认
+- 对应测试点：TP001
+- 前置条件：……
+- 步骤：
+  1. ……
+  2. ……
+- 期望结果：……
+```
+
+The filename is the module. Steps are numbered on separate lines even when there is only one. `sync_case_sheet` pushes the cases to a DingTalk spreadsheet in personal space (MCP server name `dingtalk-excel`) and can pull human edits back. The sheet has these columns, in this order:
+
+`编号` `标题` `模块` `需求版本` `优先级` `对应测试点` `前置条件` `步骤` `期望结果` `状态` `执行结果`
+
+Sheet status is only 正常 or 废弃. 待确认 and 已接受 show up as 正常. 执行结果 comes from the latest run. An existing `knowledge/case-sheet.json` is reused. Edits that come back from the sheet are stored as pending lessons, not enabled on their own. Local `cases/*.md` stays the source of truth.
+
+### Recording and healing
+
+`/record` asks for an `http` or `https` sandbox URL. It does not invent one. The address can also come from `OPENTEST_SANDBOX_URL` or from `opentest.sandbox.json` in the workspace.
+
+The browser opens once. You log in, then use the control page to record several cases, and close the browser only when you are done. The list is every case whose 优先级 is 高. If none are 高, the list is every case. You pick the case; the agent does not guess which clicks belong to which case. Each finished segment is `automation/<id>-<title>.spec.ts`, reuses `automation/auth/admin.json`, and marks only that case `- 自动化：是` with the script path. Other cases are left unchanged. An empty segment is not tagged.
+
+| Mode | What this session writes |
+|---|---|
+| `ui+api` (default) | the Playwright specs above, plus one HAR for the whole session: `automation/session-<timestamp>.har` |
+| `ui-only` | the Playwright specs only |
+| `api-only` | the same specs for the cases you record, plus the session HAR |
+
+`/explore` is a different path: you drive the browser once and `explore_and_generate` writes a script from that pass. It is not the case-by-case recorder.
+
+When a selector fails during `/run`, the agent calls `heal_selector` immediately. The file before and after the replacement are both kept, and the current file uses the replacement so the run can finish. After that run, the terminal asks which version to keep. `/heal` and the heal panel ask the same question.
+
+`/run` executes Playwright specs under `automation/`. A `test_*.py` or `*_test.py` file already in that folder is run with pytest when pytest is installed.
+
+## Where files land
+
+Terminal, with the requirement beside the product folder:
 
 ```
 ~/Desktop/projects/MyProduct_V1.1.3_Requirements.md   →   ~/Desktop/projects/MyProduct/
 ```
 
+Another product in the same parent gets its own directory.
+
 ```
 MyProduct/
-├── knowledge/      Rules, states, preconditions, open questions
-├── graph/          Requirement graph (index.md + batches)
-├── test-points/    Test points, one behavior per scenario
-├── cases/          Functional cases
-├── automation/     Playwright specs from recording
-├── defects/        Zentao / Jira
-├── reports/        Test briefings
-└── tasks/          Checkpoint and progress
+├── knowledge/      需求评审.md, 审核经验.md, source-pack/, evolution/, case-sheet.json
+├── graph/          graph.json, index.md, batches; Neo4j only when it is actually reachable
+├── test-points/
+├── cases/
+├── automation/     specs, auth/admin.json, and a session HAR when the mode records one
+├── defects/
+├── reports/
+└── tasks/          checkpoint, status.md, policy.json
 ```
 
-Sibling products in the same folder each get their own directory — ProductB does not leak into ProductA.
+Enabled lessons are read from `<product>/knowledge/审核经验.md` and from `~/.pi/agent/opentest/审核经验.md` before clarifications, test points, and cases are written. Review decisions are written into those files by the system. A lesson overturned twice is disabled. The agent does not enable a lesson by itself.
 
-Use `/project` to pin a working directory; after that, steps write there. The selection persists in `~/.opentest/project.json` along with your recent directories.
+When a product has both a baseline and a newer document, `align_requirement_versions` writes a plan under `knowledge/evolution/` and does not change cases, test points, or the graph. A feature the new document never mentions is 新版未提及, which is not a deletion. Nothing is applied until a person confirms it in the evolution panel.
 
-The picker lists your recent directories first. On macOS it also offers **📁 浏览本机文件夹...**, which opens the native Finder folder chooser and starts at your current project. Closing the dialog without choosing leaves the project unchanged; if the dialog cannot open, it falls back to typed input. Other platforms get recent entries plus typed input.
+## The requirement graph
 
-## 🧠 Models
+Test points are written from the graph, not from a paste of the whole document. A batch is one section. The tool rejects a batch over 40 nodes and relationships combined, or over 6000 characters. The first batch may use `replace` only while `graph.json` has no nodes. Every later batch uses `append`. An analysis section that still has unread figures cannot be completed.
 
-Set the model once in the Web UI (**Models** at the bottom left of the sidebar): add a provider and key, then choose a default model. The Terminal Agent starts on that default and prints it, with the key masked, when it opens.
-
-Inside the agent, switching is Pi's own job and keeps the conversation intact:
-
-| | |
+| Tool | Role |
 |---|---|
-| `/model` | pick any model Pi knows about |
-| `Ctrl+P` / `Shift+Ctrl+P` | cycle forward / backward |
-| `/login` | sign in to a subscription provider |
-
-OpenTest does not keep a second copy of any of this. The launcher never writes `models.json`, never passes `--model`, and never sets `PI_CODING_AGENT_DIR` for you.
-
-### Where your key lives
-
-| | |
-|---|---|
-| Stored in | `~/.pi/agent/models.json` (or `auth.json`), written by Pi Web's model page |
-| Read by | Pi itself, and by OpenTest tools that call the model directly (HAR analysis, explore). The direct tools use the same default model; a key given as a shell command (`!cmd`) is left to Pi, and those tools fall back to rule-based analysis |
-| Never | placed in the prompt, a message, a tool result, or the process command line |
-| Shown to you as | `sk-…cret`, a mask |
-
-## 🧠 The Requirement Graph
-
-Test points are written against a graph, not against the raw document. The agent stores the graph in batches (max 20 nodes / 20 relationships per call) so long documents stay tractable, and queries it before writing cases:
-
-- `ingest_requirement_sources` — freeze a DingTalk tree (root plus direct links) into `knowledge/source-pack/`; analysis reads the pack, not live DingTalk
-- `sync_case_sheet` — push local cases to a DingTalk spreadsheet in personal space (`dingtalk-excel`) or pull human edits back; table-derived lessons stay pending
-- `store_requirement_graph` — write a batch (`replace` for the first batch, `append` after)
-- `query_requirement_graph` — read preconditions, rules, and states for a feature
-
-Graphs go to Neo4j when it is running, and stay in `graph/` when it is not. The agent will not claim a graph reached Neo4j if it did not.
+| `ingest_requirement_sources` | freeze a DingTalk tree (root plus direct links; depth 2) into `knowledge/source-pack/` |
+| `read_requirement_figures` | refresh the figure URLs for the current section and read them with the nearby text |
+| `store_requirement_graph` | write one batch |
+| `query_requirement_graph` | read preconditions, rules, and states for a feature |
+| `align_requirement_versions` | propose how a new document lines up with the baseline |
+| `query_baseline_feature` | look up a baseline feature the new document only names |
+| `sync_case_sheet` | push cases to the DingTalk sheet, or pull edits back |
 
 ```bash
-npx opentest-ai services up      # start the bundled Neo4j (Docker)
+npx opentest-ai services up      # bundled Neo4j, Docker
 npx opentest-ai services logs
 npx opentest-ai services stop
 ```
 
-This writes a random password to `~/.opentest/services.json` (mode `0600`) and binds to loopback only — Bolt on `127.0.0.1:7687`, browser on `http://127.0.0.1:7474`. If Docker Hub times out, it retries from a mirror automatically.
+This writes a random password to `~/.opentest/services.json` (mode `0600`) and binds to loopback: Bolt `127.0.0.1:7687`, browser `http://127.0.0.1:7474`. The graph stays in `graph/` when Neo4j is not running, and the tool says so.
 
-## 🧰 Commands
+## Commands
 
 ```
-opentest-ai run [prompt...]        Open the agent (same as `agent`)
+opentest-ai run [prompt...]        Open the agent after the browser-setup check
+  --print                          One turn, then exit
+  --skip-browser-setup             Skip that check
 opentest-ai agent [prompt...]      Open the agent
-  --print                          Run one turn and exit (for scripting)
-  --skip-browser-setup             Skip browser setup check
+  --print                          One turn, then exit
 
-opentest-ai web                    Launch Web UI (browser interface)
-  -p, --port <port>                Server port (default: 30141)
-  -H, --hostname <hostname>        Bind hostname (default: 127.0.0.1)
-  --no-open                        Don't open browser automatically
+opentest-ai web                    Launch the Web UI from this repo
+  -p, --port <port>                Default 30141
+  -H, --hostname <hostname>        Default 127.0.0.1
+  --no-open                        Do not open a browser
 
-opentest-ai browser setup          Configure browser environment
-  --force                          Force reconfiguration
-opentest-ai browser status         Show browser configuration
-opentest-ai browser verify         Verify browser works
-opentest-ai browser detect         Detect available browsers
-opentest-ai browser reset          Reset browser configuration
+opentest-ai browser setup          Configure the browser (--force to redo)
+opentest-ai browser status|verify|detect|reset
 
-opentest-ai config                 Legacy ~/.opentest profiles (no longer used by the agent;
-                                   configure models in the Web UI instead)
+opentest-ai config                 Legacy ~/.opentest profiles. Does not select the agent model.
 
-opentest-ai services [up|stop|logs]   Bundled local Neo4j
-
-opentest-ai install                Check and install host dependencies
-opentest-ai doctor                 Dependency and update health check
+opentest-ai services [up|stop|logs]
+opentest-ai install                Host dependencies
+opentest-ai doctor                 Dependencies and update check
 opentest-ai update                 Check npm for a newer version
 ```
 
-### Inside the agent
+Inside the agent, `@path/to/doc.md` accepts absolute paths. `/` lists prompts. `Ctrl+C` exits. The built-in analysis template `/prd-analysis` is read-only. Custom templates go in `~/.pi/agent/prompts/` (or under `PI_CODING_AGENT_DIR`) and show up under `/`. A file with the same name does not replace the built-in template.
 
-`@path/to/doc.md` points at any document, absolute paths fine. `/` lists prompts. `Ctrl+C` exits.
-
-The built-in analysis template is `/prd-analysis`, and it is **read-only**. Custom templates go in `~/.pi/agent/prompts/` (Pi's own prompt folder) and are selectable with `/`.
-
-## ⚙️ Configuration
-
-### Models
-
-Configured in the Web UI and stored in Pi's agent directory; see [Models](#-models). The older `~/.opentest/config.json` profile store and `open-test config` are legacy and are not read by the agent.
-
-### Defect trackers
-
-`/defects` reads from whichever you configure. Unset, it says what is missing instead of inventing bugs.
-
-```bash
-# Zentao
-export ZENTAO_BASE_URL=https://your-zentao.example.com
-export ZENTAO_TOKEN=xxxx
-
-# Jira
-export JIRA_BASE_URL=https://your-jira.example.com
-export JIRA_EMAIL=you@example.com
-export JIRA_TOKEN=xxxx
-export JIRA_JQL="ORDER BY updated DESC"   # optional
-```
-
-### Other
+## Configuration
 
 | Variable | Purpose |
 |---|---|
-| `OPENTEST_CWD` | Override the working directory the agent sees |
-| `OPENTEST_HOME` | Override `~/.opentest` |
-| `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | Point at an existing Neo4j instead of the bundled one |
+| `PI_CODING_AGENT_DIR` | Pi agent directory. Default `~/.pi/agent` |
+| `OPENTEST_CWD` | Working directory the agent sees |
+| `OPENTEST_HOME` | Override `~` for `~/.opentest` |
+| `OPENTEST_QA` | `0` turns off the QA workflow in Web sessions |
+| `OPENTEST_SANDBOX_URL` | Sandbox URL used when `/record` is not given one |
+| `OPENTEST_ROOT` | Repo root the Web UI loads the QA skill from |
+| `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | An existing Neo4j instead of the bundled one |
+| `DINGTALK_DOC_MCP_URL` | DingTalk document MCP, if it is not named in `mcp.json` |
+| `DINGTALK_EXCEL_MCP_URL` | DingTalk sheet MCP, if it is not named `dingtalk-excel` |
+| `ZENTAO_BASE_URL` / `ZENTAO_TOKEN` | Zentao for `/defects` |
+| `JIRA_BASE_URL` / `JIRA_TOKEN` | Jira for `/defects`. `JIRA_EMAIL` and `JIRA_JQL` are optional |
 
-A full list lives in [`.env.example`](.env.example). API keys are never written into case files, automation scripts, or reports, and the agent will not print them.
+`/defects` says which of those are missing. It does not invent bugs.
 
-## 🛠️ Development
+`OPENTEST_PROVIDER`, `OPENTEST_API_KEY`, and the rest of the profile block in [`.env.example`](.env.example) belong to the legacy `opentest-ai config` store. The agent does not read them.
+
+Keys are not written into case files, scripts, or reports, and they are not placed in the prompt. A configured key is shown masked, like `sk-…cret`.
+
+## Development
 
 ```bash
 npm test
 ```
 
-The suite runs on `node --test` against a glob, so a new `*.test.js` file is picked up automatically. It covers LLM config resolution and failover, agent launch, every registered tool, requirement-graph storage and batching, checkpoint resume, command gating, recording/tagging, HAR analysis and pytest rendering, and local Neo4j startup. 91 tests.
-
-Playwright is pinned to `1.63.0` so recording uses a browser matching the installed Chromium. Do not float this version — codegen output must stay compatible with replay.
-
-### Repository layout
+That runs `cli/**/*.test.js` and then the Web UI tests. Playwright stays on `1.63.0` so codegen and replay use the same browser.
 
 ```
 open-test/
-├── cli/               the agent: commands, tools, graph, checkpoints, LLM config
-├── .pi/skills/        the QA skill the agent loads
-├── schemas/           llm-config.schema.json
-└── opentest.config.example.json
+├── cli/            agent, tools, graph, checkpoints
+├── .pi/skills/     the opentest-qa skill
+├── app/            Next.js routes, including /api/qa
+├── components/     Pi Web shell and the test workbench
+├── lib/            workbench, i18n, session wiring
+└── schemas/        legacy llm-config.schema.json
 ```
 
-The earlier microservice architecture (Go API, React frontend, Rust worker pool / semantic engine / event bus, Python agent service) has been removed. `cli/services/compose.yml` is the only Compose file, and it runs just the bundled Neo4j.
+`cli/services/compose.yml` runs only the bundled Neo4j.
 
-## 📄 License
+## License
 
 MIT — see [LICENSE](LICENSE).
