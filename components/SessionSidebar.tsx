@@ -60,6 +60,7 @@ import { DirectoryPicker } from "./DirectoryPicker";
 import { DismissButton } from "./DismissButton";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { ProjectWorktreePicker, type ProjectWorktreePickerHandle, type WorktreeRemoval } from "./ProjectWorktreePicker";
+import { WorkspaceSwitcher, type WorkspaceSwitcherHandle } from "./WorkspaceSwitcher";
 import { SessionSearch } from "./SessionSearch";
 import { SessionTree, sessionRowTitle, type SessionTreeReveal } from "./SessionTree";
 import { SidebarMenu, type SidebarMenuAnchor, type SidebarMenuItem } from "./SidebarMenu";
@@ -411,6 +412,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [validatedProject, setValidatedProject] = useState<ValidatedProject | null>(null);
   // The files tab's project and worktree picker.
   const filesPickerRef = useRef<ProjectWorktreePickerHandle>(null);
+  const workspaceSwitcherRef = useRef<WorkspaceSwitcherHandle>(null);
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
   const [worktreeLoadingCwd, setWorktreeLoadingCwd] = useState<string | null>(null);
   const [explorerKey, setExplorerKey] = useState(0);
@@ -1189,6 +1191,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     moreShown,
     pinnedCollapsed,
   }), [allSessions, uiState, runningSessionIds, unreadSessionIds, selectedSessionId, currentProject, groupExpansion, moreShown, pinnedCollapsed]);
+  // The list under the switcher is this project's sessions. The full tree
+  // stays the catalog for the switcher, pins, and project order.
+  const workspaceTree = useMemo(() => {
+    if (!currentProject) return model;
+    return buildSessionTree({
+      sessions: allSessions,
+      uiState,
+      runningIds: runningSessionIds,
+      unreadIds: unreadSessionIds,
+      selectedSessionId,
+      currentProject,
+      groupExpansion,
+      moreShown,
+      pinnedCollapsed,
+      scope: "current",
+    });
+  }, [allSessions, currentProject, groupExpansion, model, moreShown, pinnedCollapsed, runningSessionIds, selectedSessionId, uiState, unreadSessionIds]);
   const archiveRows = useMemo(() => (archiveView ? buildArchiveRows({
     sessions: allSessions,
     uiState,
@@ -1196,6 +1215,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     unreadIds: unreadSessionIds,
     selectedSessionId,
     currentProject,
+    scope: currentProject ? "current" : undefined,
   }) : []), [archiveView, allSessions, uiState, runningSessionIds, unreadSessionIds, selectedSessionId, currentProject]);
   const projectByKey = useMemo(
     () => new Map(model.projects.map((project) => [project.key, project])),
@@ -1735,7 +1755,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // A row whose menu is open can leave the tree (archived or deleted in
   // another window): its menu goes with it.
-  const visibleRows = archiveView ? archiveRows : model.rows;
+  const visibleRows = archiveView ? archiveRows : workspaceTree.rows;
   useEffect(() => {
     if (menu?.kind !== "row") return;
     if (!visibleRows.some((row) => row.key === menu.row.key)) setMenu(null);
@@ -1803,8 +1823,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   };
 
   const handleOpenOtherProject = () => {
-    filesTabFocusRef.current = "project-list";
-    switchTab("files");
+    workspaceSwitcherRef.current?.open();
   };
   // Once the files tab shows, the project button takes the focus, or its
   // menu opens below it (the menu takes the focus: its filter or first project).
@@ -1970,10 +1989,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const searchesFiles = sidebarTab === "files" && explorerCwd !== null;
   // What the toolbar row's widths depend on (the chosen tab's label is bolder).
   useHeaderFit(headerRef, [t("sidebar.tabSessions"), t("sidebar.tabFiles"), t("sidebar.new"), explorerCwd && changesCount > 0 ? changesCount : "", sidebarTab].join("\n"));
-  const archivedCount = model.archivedCount;
+  const archivedCount = workspaceTree.archivedCount;
 
   return (
     <div className={`session-sidebar${toast ? " has-toast" : ""}`}>
+      <WorkspaceSwitcher
+        handleRef={workspaceSwitcherRef}
+        project={selectedProject ? { key: selectedProject.key, root: selectedProject.root } : null}
+        projects={projectChoiceList}
+        projectActivity={projectActivity}
+        homeDir={homeDir}
+        mobile={isMobile}
+        onPick={handleFilesPick}
+        onOpenFolder={handleCustomPathClick}
+      />
       {customPathOpen && (
         <DirectoryPicker
           initialPath={customPathValue}
@@ -2067,7 +2096,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </button>
       </div>
 
-      {/* Sessions tab: every project's sessions, or the archive */}
+      {/* Sessions tab: the current project's sessions, or its archive */}
       <div
         ref={sessionsPanelRef}
         id="session-sidebar-panel-sessions"
@@ -2109,7 +2138,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <div className="sidebar-sessions-view" hidden={archiveView}>
             <SessionTree
               {...treeProps}
-              rows={model.rows}
+              rows={workspaceTree.rows}
               emptyLabel={t("sidebar.noSessions")}
               reveal={treeReveal}
               onRevealHandled={handleRevealHandled}

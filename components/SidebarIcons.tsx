@@ -224,6 +224,17 @@ export function MessageIcon(props: SidebarIconProps) {
   return <SidebarIcon {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></SidebarIcon>;
 }
 
+/** A circled exclamation: a short note about the control beside it. */
+export function ExclamationIcon(props: SidebarIconProps) {
+  return (
+    <SidebarIcon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5" />
+      <circle cx="12" cy="16.6" r="0.9" fill="currentColor" stroke="none" />
+    </SidebarIcon>
+  );
+}
+
 /**
  * The running-agent spinner. It turns through the `sidebar-spin` class
  * (app/sidebar-menu.css), which stands still under prefers-reduced-motion.

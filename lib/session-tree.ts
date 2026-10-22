@@ -62,6 +62,13 @@ export interface SessionTreeInput {
   selectedSessionId: string | null;
   /** projectFor(selectedCwd); shown as a group even without sessions. */
   currentProject: { key: string; root: string } | null;
+  /**
+   * "current" lists only `currentProject`: its sessions, its pins, and its
+   * archived count. Other pinned projects stay out of the tree. With no
+   * current project the flag is ignored, so a window that has not chosen a
+   * folder yet still shows every group.
+   */
+  scope?: "current";
   /** Explicit user choices only (from prefs); see isGroupExpanded. */
   groupExpansion: Readonly<Record<string, boolean>>;
   /** Families revealed beyond the base limit by "show more", per projectKey or PINNED_MORE_KEY. */
@@ -73,7 +80,7 @@ export interface SessionTreeModel {
   rows: SidebarRow[];
   /** Projects in group order. */
   projects: SidebarProject[];
-  /** Archived families across all projects. */
+  /** Archived families in this tree. A current-project scope counts only that project. */
   archivedCount: number;
   /**
    * Shown projects without a place in `projectOrder`, per band, top to
@@ -315,6 +322,7 @@ function moreRowState(total: number, visible: number, revealed: number): { hidde
 
 export function buildSessionTree(input: SessionTreeInput): SessionTreeModel {
   const { uiState, runningIds, currentProject } = input;
+  const scopeKey = input.scope === "current" ? currentProject?.key ?? null : null;
   const families = listSessionFamilies(input.sessions);
   const resolver = createProjectResolver(uiState, currentProject);
 
@@ -327,12 +335,13 @@ export function buildSessionTree(input: SessionTreeInput): SessionTreeModel {
   const savedKeys = new Set<string>();
 
   for (const family of families) {
+    const key = familyProjectKey(family);
+    if (scopeKey !== null && key !== scopeKey) continue;
     if (isFamilyArchived(family, uiState, runningIds)) {
       archivedCount++;
       continue;
     }
     resolver.noteFamily(family);
-    const key = familyProjectKey(family);
     const activity = timeOf(family.latestModified);
     projectActivity.set(key, Math.max(projectActivity.get(key) ?? -Infinity, activity));
     if (!family.root.transient) savedKeys.add(key);
@@ -382,7 +391,9 @@ export function buildSessionTree(input: SessionTreeInput): SessionTreeModel {
     projectKeys.push(key);
   };
   if (currentProject) addKey(currentProject.key);
-  for (const key of Object.keys(uiState.projects)) addKey(key);
+  if (scopeKey === null) {
+    for (const key of Object.keys(uiState.projects)) addKey(key);
+  }
 
   const projects = projectKeys.map((key) => resolver.get(key));
   // A Map: a stored key such as "constructor" must not find a prototype member.
@@ -467,18 +478,21 @@ export function nextProjectKeysToRecord(toRecord: readonly string[], sent: Reado
 }
 
 /**
- * The archive view: archived families of every project, grouped by project.
+ * The archive view: archived families, grouped by project. A current-project
+ * scope counts only that project.
  * Groups by their newest archivedAt (desc), families by archivedAt (desc).
  */
 export function buildArchiveRows(
-  input: Pick<SessionTreeInput, "sessions" | "uiState" | "runningIds" | "unreadIds" | "selectedSessionId" | "currentProject">,
+  input: Pick<SessionTreeInput, "sessions" | "uiState" | "runningIds" | "unreadIds" | "selectedSessionId" | "currentProject" | "scope">,
 ): SidebarRow[] {
-  const { uiState, runningIds } = input;
+  const { uiState, runningIds, currentProject } = input;
+  const scopeKey = input.scope === "current" ? currentProject?.key ?? null : null;
   const flags: FamilyFlagsInput = input;
-  const resolver = createProjectResolver(uiState, input.currentProject);
+  const resolver = createProjectResolver(uiState, currentProject);
   const groups = new Map<string, { newest: number; families: { family: SessionFamily; archivedAt: number }[] }>();
 
   for (const family of listSessionFamilies(input.sessions)) {
+    if (scopeKey !== null && familyProjectKey(family) !== scopeKey) continue;
     if (!isFamilyArchived(family, uiState, runningIds)) continue;
     resolver.noteFamily(family);
     const archivedAt = finiteNumber(familyEntry(uiState, family.root.id)?.archivedAt) ?? 0;

@@ -1725,7 +1725,7 @@ pre, code {
   font-size: 10px;
 }
 
-/* Something runs or waits in another project (the files tab). */
+/* Something runs or waits in another project (the workspace switcher and the files tab). */
 .project-picker-activity {
   flex: none;
   width: 8px;

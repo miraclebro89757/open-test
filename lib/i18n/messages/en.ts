@@ -249,6 +249,8 @@ export const enLocale: LocalePlugin = {
     "workspace.stepModels": "Open Settings at the bottom, then choose Models",
     "workspace.newSessionContext": "New session location",
     "workspace.project": "Project",
+    "workspace.switcherAbout": "About projects",
+    "workspace.switcherHint": "This is a project. Click it to switch the whole workbench.",
     "files.hidePanel": "Hide file panel",
     "files.expandPanel": "Expand file panel",
     "files.restorePanelWidth": "Restore file panel width",

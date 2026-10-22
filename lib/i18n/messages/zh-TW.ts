@@ -249,6 +249,8 @@ export const zhTWLocale: LocalePlugin = {
     "workspace.stepModels": "開啟底部的「設定」，然後選擇「模型」",
     "workspace.newSessionContext": "新工作階段的位置",
     "workspace.project": "專案",
+    "workspace.switcherAbout": "專案說明",
+    "workspace.switcherHint": "這是專案。點擊可以切換整個工作台。",
     "files.hidePanel": "隱藏檔案面板",
     "files.expandPanel": "全寬顯示檔案面板",
     "files.restorePanelWidth": "還原檔案面板寬度",

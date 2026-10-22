@@ -249,6 +249,8 @@ export const zhCNLocale: LocalePlugin = {
     "workspace.stepModels": "打开底部的“设置”，然后选择“模型”",
     "workspace.newSessionContext": "新会话的位置",
     "workspace.project": "项目",
+    "workspace.switcherAbout": "项目说明",
+    "workspace.switcherHint": "这是项目。点击可以切换整个工作台。",
     "files.hidePanel": "隐藏文件面板",
     "files.expandPanel": "全宽展示文件面板",
     "files.restorePanelWidth": "还原文件面板宽度",

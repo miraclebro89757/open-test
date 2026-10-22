@@ -807,6 +807,84 @@
   padding-bottom: 56px;
 }
 
+/* The window's project. Sessions and files below belong to this choice. */
+.workspace-switcher {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-switcher-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-switcher-button:hover {
+  background: var(--bg-hover);
+}
+
+.workspace-switcher-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-switcher-about {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 36px;
+  margin-right: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.workspace-switcher-about:hover,
+.workspace-switcher-about[aria-expanded="true"] {
+  color: var(--text);
+}
+
+.workspace-switcher-note {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 8px;
+  z-index: 5;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+}
+
 /* One toolbar row in the cells of the chat's top bar beside it (AppShell):
    36px with its line, as that bar is, so the two read as one bar. Each cell is divided on its
    right; the search cell's right is the sidebar's own edge. */

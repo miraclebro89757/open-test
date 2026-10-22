@@ -11,6 +11,7 @@ const { SessionSidebar, sameIdsOr } = await jiti.import("./SessionSidebar.tsx");
 const { buildSessionTree, getRowOffsets, getVisibleRowIndices } = await jiti.import("@/lib/session-tree.ts");
 
 const source = await readFile(new URL("./SessionSidebar.tsx", import.meta.url), "utf8");
+const switcherSource = await readFile(new URL("./WorkspaceSwitcher.tsx", import.meta.url), "utf8");
 const treeSource = await readFile(new URL("./SessionTree.tsx", import.meta.url), "utf8");
 const searchSource = await readFile(new URL("./SessionSearch.tsx", import.meta.url), "utf8");
 const globalStyles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -579,15 +580,19 @@ test("a cwd prop that went away and came back still moves the sidebar", () => {
   assert.match(sync, /if \(selectedCwdProp !== lastSyncedCwdPropRef\.current\) \{\s*lastSyncedCwdPropRef\.current = selectedCwdProp;\s*setSelectedCwd\(selectedCwdProp\);/);
 });
 
-test("the footer opens the project list in the files tab; the archive view replaces the tree", () => {
+test("the footer opens the workspace switcher; the archive view replaces the tree", () => {
   const footer = source.slice(source.indexOf("const handleOpenOtherProject"), source.indexOf("const sessionMenuItems"));
-  assert.match(footer, /filesTabFocusRef\.current = "project-list";\s*switchTab\("files"\);\s*\};/);
-  // Once the tab shows, the picker's project menu opens below its button.
-  assert.match(footer, /if \(target === "project-list"\) filesPickerRef\.current\?\.openMenu\("project"\);\s*else filesPickerRef\.current\?\.button\("project"\)\?\.focus\(\{ preventScroll: true \}\);\s*\}, \[sidebarTab\]\);/);
+  assert.match(footer, /workspaceSwitcherRef\.current\?\.open\(\);\s*\};/);
+  assert.match(source, /<WorkspaceSwitcher[\s\S]*?onPick=\{handleFilesPick\}\s+onOpenFolder=\{handleCustomPathClick\}\s+\/>/);
+  assert.ok(source.indexOf("<WorkspaceSwitcher") < source.indexOf('className="sidebar-header"'));
+  assert.match(switcherSource, /className="workspace-switcher-about"/);
+  assert.match(switcherSource, /aria-label=\{t\("workspace\.switcherAbout"\)\}/);
+  assert.match(switcherSource, /\{t\("workspace\.switcherHint"\)\}/);
+  assert.match(sidebarStyles, /\.workspace-switcher-about[\s\S]*?\.workspace-switcher-note/);
   assert.match(source, /onOpenOtherProject: handleOpenOtherProject,/);
   assert.match(source, /onOpenArchive: openArchiveView,/);
   assert.match(callbackBody("openArchiveView"), /setArchiveView\(true\);[\s\S]*?setSessionSearchOpen\(false\);\s*switchTab\("sessions"\);/);
-  assert.match(source, /<div className="sidebar-sessions-view" hidden=\{archiveView\}>\s*<SessionTree\s+\{\.\.\.treeProps\}\s+rows=\{model\.rows\}\s+emptyLabel=\{t\("sidebar\.noSessions"\)\}\s+reveal=\{treeReveal\}\s+onRevealHandled=\{handleRevealHandled\}\s+\/>/);
+  assert.match(source, /<div className="sidebar-sessions-view" hidden=\{archiveView\}>\s*<SessionTree\s+\{\.\.\.treeProps\}\s+rows=\{workspaceTree\.rows\}\s+emptyLabel=\{t\("sidebar\.noSessions"\)\}\s+reveal=\{treeReveal\}\s+onRevealHandled=\{handleRevealHandled\}\s+\/>/);
   assert.match(source, /<SessionTree \{\.\.\.treeProps\} rows=\{archiveRows\} emptyLabel=\{t\("sidebar\.noArchived"\)\} \/>/);
   assert.match(source, /const sessionMenuItems = \(row: SessionRow\): SidebarMenuItem\[\] => sessionMenuEntries\(row\.context, row\.status\)/);
   assert.match(callbackBody("handleTogglePinned"), /setPinnedCollapsed\(next\);\s*savePinnedCollapsed\(next\);/);
@@ -597,8 +602,8 @@ test("the files tab shows the composer bar's picker as two rows, with removal an
   const html = render({ selectedCwd: "/work/alpha" });
   const filesPanel = html.slice(html.indexOf('id="session-sidebar-panel-files"'));
   // Before the sidebar has a cwd: the project row asks for one.
-  assert.match(filesPanel, /<div class="project-picker is-stacked" role="group" aria-label="Project and worktree"><button type="button" class="project-picker-button is-project is-empty" title="" aria-haspopup="menu" aria-expanded="false">/);
-  assert.match(filesPanel, /<span class="project-picker-label">Select project…<\/span>/);
+  assert.match(filesPanel, /<div class="project-picker is-stacked" role="group" aria-label="Project and worktree"><button type="button" class="project-picker-button is-project is-empty" title="Click to choose a directory" aria-haspopup="dialog">/);
+  assert.match(filesPanel, /<span class="project-picker-label">Click to choose a directory<\/span>/);
   const pickerStart = source.indexOf("<ProjectWorktreePicker\n");
   const picker = source.slice(pickerStart, source.indexOf("/>", pickerStart));
   assert.match(picker, /layout="stacked"/);
