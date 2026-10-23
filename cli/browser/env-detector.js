@@ -26,6 +26,12 @@ async function detectSystemBrowsers() {
         recommended: true,
       },
       {
+        name: 'Chrome',
+        type: 'chrome',
+        path: path.join(os.homedir(), 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+        recommended: true,
+      },
+      {
         name: 'Edge',
         type: 'msedge',
         path: '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',

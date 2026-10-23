@@ -119,20 +119,7 @@ async function recordScenario({
   cleanup = { pre: true, post: true }, // which pytest cleanup hooks to generate
   llmClient = null,
   now = () => Date.now(),
-  skipBrowserCheck = false, // for testing
 }) {
-  // Check browser configuration first (skip in tests)
-  if (!skipBrowserCheck) {
-    const { loadBrowserConfig } = require('../../browser/config-store');
-    const browserConfig = await loadBrowserConfig();
-    
-    if (!browserConfig.configured || browserConfig.type === 'none') {
-      throw new Error(
-        '录制功能需要浏览器环境。请先运行 `npx open-test browser setup` 配置浏览器。'
-      );
-    }
-  }
-  
   const url = assertSandboxUrl(sandboxUrl);
   
   // Validate recording mode

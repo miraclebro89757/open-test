@@ -7,9 +7,8 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
-const { playwrightInvoke } = require('./tools/playwright-cli');
 const { runRecordingSession, createPlaywrightRecordingSession } = require('./tools/record-session');
-const { loadBrowserConfig } = require('../browser/config-store');
+const { ensureRecordingBrowser } = require('../browser/recording-browser');
 const { selectRecordingMode, getModeConfirmationMessage } = require('./tools/record-mode-selector');
 const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
@@ -56,14 +55,6 @@ function showProgress(ctx, workspace, readProgress) {
   if (typeof ui.setWidget === 'function') ui.setWidget('opentest-progress', lines, { placement: 'aboveEditor' });
   if (typeof ui.setStatus === 'function') ui.setStatus('opentest', lines[0]);
   if (typeof ui.setWorkingMessage === 'function') ui.setWorkingMessage(lines[0]);
-}
-
-async function ensureChromium() {
-  const command = playwrightInvoke(['install', 'chromium']);
-  await execFileAsync(command.file, command.args, {
-    cwd: path.join(__dirname, '..', '..'),
-    timeout: 10 * 60 * 1000,
-  });
 }
 
 function visibleWorkspace(requirementDir, productName) {
@@ -366,11 +357,12 @@ async function installOpentest(pi, options = {}) {
       headed: Type.Optional(Type.Boolean({ description: 'Open a visible browser window' })),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      await ensureChromium();
+      const browser = await ensureRecordingBrowser();
       const result = await runPlaywright({
         cwd: ctx.cwd,
         specFile: params.specFile,
         headed: params.headed,
+        executablePath: browser.executablePath,
         execFile: (file, args, options) => execFileAsync(file, args, options).then(
           (out) => ({ ...out, exitCode: 0 }),
           (error) => ({ stdout: error.stdout, stderr: error.stderr, exitCode: error.code ?? 1 }),
@@ -406,7 +398,7 @@ async function installOpentest(pi, options = {}) {
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
-      await ensureChromium();
+      const browser = await ensureRecordingBrowser();
       
       // Resolve sandbox URL (from config, env, or prompt)
       let sandboxUrl = params.sandboxUrl;
@@ -452,11 +444,10 @@ async function installOpentest(pi, options = {}) {
           return ctx.ui.confirm('录制沙箱场景', `${enhancedSummary}\n\n${summary}`);
         },
         mode: selectedMode,
-        openSession: async (options) => {
-          const config = await loadBrowserConfig();
-          const executablePath = config.browser && config.browser.path;
-          return createPlaywrightRecordingSession({ ...options, executablePath });
-        },
+        openSession: async (options) => createPlaywrightRecordingSession({
+          ...options,
+          executablePath: browser.executablePath || undefined,
+        }),
       });
       
       if (result.recorded && result.matches.length) {

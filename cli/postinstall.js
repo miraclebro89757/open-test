@@ -11,7 +11,7 @@ console.log(
     chalk.gray('Quick start:\n') +
     chalk.cyan('  npx open-test web      ') + chalk.gray('# Open the Web UI, set a model on its Models page\n') +
     chalk.cyan('  npx open-test run      ') + chalk.gray('# Open the agent, then @ a requirement\n') +
-    chalk.cyan('  npx open-test doctor   ') + chalk.gray('# Check dependencies\n\n') +
+    chalk.cyan('  npx open-test doctor   ') + chalk.gray('# Check the recording browser\n\n') +
     chalk.gray('Documentation: ') + chalk.blue('https://github.com/miraclebro89757/open-test'),
     {
       padding: 1,

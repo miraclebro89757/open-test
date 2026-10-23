@@ -3,7 +3,6 @@
 const { Command } = require('commander');
 const chalk = require('chalk');
 const figlet = require('figlet');
-const { checkDependencies, installDependencies } = require('./install');
 const { checkForUpdates } = require('./update-checker');
 const { registerConfigCommand } = require('./commands/config');
 const { registerAgentCommand, startAgent } = require('./commands/agent');
@@ -11,13 +10,22 @@ const { registerBrowserCommand } = require('./commands/browser');
 const { launchWeb } = require('./commands/web');
 const { startGraphService, stopGraphService, logGraphService } = require('./services/local');
 const { setupBrowserEnvironment } = require('./browser/setup');
-const { loadBrowserConfig } = require('./browser/config-store');
+const { describeRecordingBrowser } = require('./browser/recording-browser');
 const pkg = require('../package.json');
 
 // Create CLI program
 const program = new Command();
 
 // Display banner
+function nodeSatisfies(current, required) {
+  const parse = (value) => value.split('.').map((part) => Number(part));
+  const [major, minor, patch] = parse(current);
+  const [needMajor, needMinor, needPatch] = parse(required);
+  if (major !== needMajor) return major > needMajor;
+  if (minor !== needMinor) return minor > needMinor;
+  return patch >= needPatch;
+}
+
 function showBanner() {
   console.log(
     chalk.cyan(
@@ -46,12 +54,8 @@ program
   .action(async (prompt, options) => {
     // Check browser configuration on first run (unless explicitly skipped)
     if (!options.skipBrowserSetup) {
-      const browserConfig = await loadBrowserConfig();
-      if (!browserConfig.configured) {
-        console.log(chalk.yellow('\n⚠️  首次运行需要配置浏览器环境\n'));
-        await setupBrowserEnvironment();
-        console.log(''); // Add spacing
-      }
+      await setupBrowserEnvironment();
+      console.log('');
     }
     
     await startAgent(prompt, options);
@@ -60,16 +64,11 @@ program
 // Command: install - Install dependencies
 program
   .command('install')
-  .description('📦 Install all dependencies')
+  .description('使用本机 Chrome；没有则安装 Playwright Chromium')
   .action(async () => {
     showBanner();
-    console.log(chalk.blue('Installing OpenTest dependencies...\n'));
-    const { missing } = await checkDependencies();
-    if (missing.length > 0) {
-      await installDependencies(missing);
-    } else {
-      console.log(chalk.green('✓ All dependencies already installed'));
-    }
+    await setupBrowserEnvironment();
+    console.log('');
   });
 
 // Command: update - Check for updates
@@ -100,7 +99,7 @@ program
 // Command: doctor - Check system health
 program
   .command('doctor')
-  .description('🏥 Check system health and dependencies')
+  .description('检查 Node 和录制浏览器')
   .action(async () => {
     showBanner();
     console.log(chalk.blue('Running system health check...\n'));
@@ -120,67 +119,33 @@ program
     }
     console.log();
     
-    const { checkDependencies } = require('./install');
-    const { allInstalled, installed, missing } = await checkDependencies();
-    
-    console.log(chalk.bold('System Dependencies:'));
+    const nodeOk = nodeSatisfies(process.versions.node, '22.19.0');
+    console.log(chalk.bold('Recording browser:'));
     console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-    
-    // Show installed
-    if (installed.length > 0) {
-      console.log(chalk.green('✓ Installed:'));
-      installed.forEach(dep => console.log(chalk.green(`  ✓ ${dep}`)));
-      console.log();
-    }
-    
-    // Show missing
-    if (missing.length > 0) {
-      console.log(chalk.yellow('⚠ Missing:'));
-      missing.forEach(dep => console.log(chalk.yellow(`  ✗ ${dep}`)));
-      console.log();
-    }
-    
-    // Browser environment check
-    const { loadBrowserConfig } = require('./browser/config-store');
-    const { detectEnvironment } = require('./browser/env-detector');
-    
-    console.log(chalk.bold('Browser Environment:'));
-    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
-    
-    const browserConfig = await loadBrowserConfig();
-    const env = await detectEnvironment();
-    
-    if (browserConfig.configured && browserConfig.type !== 'none') {
-      console.log(chalk.green('✓ Configured:'));
-      const browserName = browserConfig.browser?.name || 'Playwright Chromium';
-      const browserVersion = browserConfig.browser?.version || 'unknown';
-      console.log(chalk.green(`  ✓ ${browserName} v${browserVersion}`));
+    console.log(nodeOk
+      ? chalk.green(`✓ Node.js ${process.version}`)
+      : chalk.yellow(`⚠ Node.js ${process.version} is older than 22.19.0`));
+
+    const browser = await describeRecordingBrowser();
+    if (browser.ready && browser.source === 'chrome') {
+      console.log(chalk.green(`✓ Chrome ${browser.version}`));
+      console.log(chalk.gray(`  ${browser.path}`));
+    } else if (browser.ready) {
+      console.log(chalk.green(`✓ Playwright Chromium ${browser.version}`));
+      console.log(chalk.gray('  Local Chrome was not found, so recording uses the downloaded browser'));
     } else {
-      console.log(chalk.yellow('⚠ Not configured'));
-      console.log(chalk.gray('  Run: npx open-test browser setup'));
-    }
-    
-    // Show detected browsers
-    if (env.systemBrowsers.length > 0 || env.playwright.installed) {
-      console.log(chalk.gray('\n  Available browsers:'));
-      env.systemBrowsers.forEach(browser => {
-        console.log(chalk.gray(`    • ${browser.name} v${browser.version}`));
-      });
-      if (env.playwright.installed) {
-        console.log(chalk.gray(`    • Playwright Chromium v${env.playwright.version}`));
-      }
+      console.log(chalk.yellow('⚠ Chrome was not found and Playwright Chromium is not installed'));
+      console.log(chalk.gray('  Run: npx opentest-ai install'));
     }
     console.log();
-    
-    // Overall status
-    if (allInstalled && browserConfig.configured) {
-      console.log(chalk.green.bold('✅ System is healthy!\n'));
-    } else if (allInstalled) {
-      console.log(chalk.yellow.bold('⚠️  System is ready, browser setup recommended'));
-      console.log(chalk.blue('Run: npx open-test browser setup\n'));
+
+    if (nodeOk && browser.ready) {
+      console.log(chalk.green.bold('✅ Recording browser is ready\n'));
+    } else if (!browser.ready) {
+      console.log(chalk.yellow.bold('⚠️  The recording browser is not ready'));
+      console.log(chalk.blue('Run: npx opentest-ai install\n'));
     } else {
-      console.log(chalk.yellow.bold('⚠️  Some dependencies are missing'));
-      console.log(chalk.blue('Run: npx open-test install\n'));
+      console.log(chalk.yellow.bold('⚠️  Node.js is older than 22.19.0\n'));
     }
   });
 

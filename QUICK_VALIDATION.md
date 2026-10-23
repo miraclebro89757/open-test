@@ -7,11 +7,8 @@ opentest-ai doctor
 ```
 
 **预期输出**：
-```
-✅ System is healthy!
-✓ docker, docker-compose, node installed
-✓ Chrome v154.0.8037.95 configured
-```
+
+Node.js 不低于 `22.19.0`，并且有一行本机 Chrome 的路径。没有 Chrome 时，这一行是已下载的 Playwright Chromium。Docker 不在这次检查里。还没有浏览器时，它会提示运行 `opentest-ai install`。
 
 ---
 
@@ -31,31 +28,11 @@ opentest-ai run "访问 https://example.com 并验证标题包含 Example"
 
 ---
 
-### 2. 交互式录制
+### 2. 录制
 
-```bash
-opentest-ai record
-```
+在 Agent 里使用 `/record`，并给出沙箱的 `http` 或 `https` 地址。浏览器不会让人选 Chromium、Firefox 或 WebKit。本机有 Google Chrome 就打开它，没有才用下载的 Playwright Chromium。
 
-**交互流程**：
-```
-? 请选择录制模式:
-  ○ UI Only - 只录制界面操作
-  ○ API Only - 只录制网络请求
-  ● Both - 同时录制界面和API
-
-? 请选择浏览器:
-  ● Chromium (推荐)
-  ○ Firefox
-  ○ WebKit
-
-? 请输入起始 URL: https://example.com
-```
-
-**预期结果**：
-- 浏览器自动打开
-- 你的操作被实时记录
-- 关闭浏览器后生成脚本 `tests/recorded/test-YYYYMMDD-HHMMSS.spec.js`
+登录一次后，在控制页连续录多条。脚本写到产品目录的 `automation/<编号>-<标题>.spec.ts`。
 
 ---
 
@@ -115,12 +92,12 @@ curl -X POST https://openrouter.ai/api/v1/chat/completions \
 ### 问题 2：浏览器启动失败
 
 ```bash
-# 重新配置浏览器
-opentest-ai browser setup
-
-# 检查 Playwright
-npx playwright --version
+opentest-ai doctor
+opentest-ai install
+opentest-ai browser verify
 ```
+
+有 Google Chrome 时不会下载。没有时才会安装 Playwright 1.63.0 的 Chromium。
 
 ---
 

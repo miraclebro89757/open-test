@@ -40,8 +40,8 @@ opentest-ai config ping
 # 查看浏览器状态
 opentest-ai browser status
 
-# 配置浏览器
-opentest-ai browser setup
+# 有 Chrome 就用它，没有再下载
+opentest-ai install
 
 # 验证浏览器
 opentest-ai browser verify
@@ -108,9 +108,8 @@ opentest-ai services stop
 opentest-ai config
 # 选择 openrouter，使用免费 deepseek/deepseek-r1:free
 
-# 2. 配置浏览器（一次性）
-opentest-ai browser setup
-# 选择"使用系统浏览器"
+# 2. 准备录制浏览器（有 Chrome 就用它）
+opentest-ai install
 
 # 3. 启动 Agent
 opentest-ai run
@@ -232,7 +231,7 @@ npm install --no-save @agegr/pi-web@latest --registry=https://registry.npmmirror
 - [ ] `opentest-ai config` 向导正常
 - [ ] `opentest-ai config list` 显示配置
 - [ ] `opentest-ai config ping` 测试连接
-- [ ] `opentest-ai browser setup` 配置浏览器
+- [ ] `opentest-ai doctor` 能看到本机 Chrome，或已下载的 Chromium
 
 ### 核心功能
 - [ ] `opentest-ai run` 启动 Agent

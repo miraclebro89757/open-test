@@ -27,13 +27,13 @@
 ### 终端
 
 ```bash
-npx opentest-ai browser setup   # 一次性：系统 Chrome/Edge、Playwright Chromium，或暂时跳过
-npx opentest-ai run             # 先检查浏览器，再打开 Agent
+npx opentest-ai install         # 有本机 Chrome 就用它，没有再下载 Playwright Chromium
+npx opentest-ai run             # 做同样的检查，再打开 Agent
 
 > @/path/to/your/requirements.md
 ```
 
-`opentest-ai`、`open-test`、`opentest` 是同一个程序。在终端里直接运行会打开 Agent，并且不检查浏览器。`run` 才会检查。`agent` 和 `run` 都接受 `--print`，跑一轮就退出。只有 `run` 接受 `--skip-browser-setup`。
+`opentest-ai`、`open-test`、`opentest` 是同一个程序。在终端里直接运行会打开 Agent，并且不检查浏览器。`run` 会检查：本机装了 Chrome 就用它，没有才下载 Playwright Chromium。`agent` 和 `run` 都接受 `--print`，跑一轮就退出。只有 `run` 接受 `--skip-browser-setup`。
 
 ### Web UI 和测试工作台
 
@@ -137,6 +137,8 @@ Agent 不编造通过率，也不编造缺陷。简报里的通过率只从一�
 
 `/record` 要一个 `http` 或 `https` 沙箱地址，不会自己猜。地址也可以来自 `OPENTEST_SANDBOX_URL`，或工作目录里的 `opentest.sandbox.json`。
 
+录制和回放使用本机安装的 Google Chrome。没有 Chrome 时，才下载与 Playwright 1.63.0 配套的 Chromium。先从官方地址下载，失败后再用 npmmirror 的 Playwright 镜像试一次。Edge、Brave，以及以前写在 `~/.opentest/browser.json` 里的选择，都不会用。`opentest-ai doctor` 会说明将要打开哪一个。`opentest-ai install` 负责准备好它。Docker 只给可选的 Neo4j 图谱服务用。
+
 浏览器只打开一次。先登录，再在控制页连续录多条，全部录完才关闭。列表是优先级为高的用例；一条高的都没有时，列出全部用例。用例由你在控制页点选，Agent 不根据点击内容猜测对应哪一条。录完的一段写成 `automation/<编号>-<标题>.spec.ts`，复用 `automation/auth/admin.json`，并且只给这一条用例标上 `- 自动化：是` 和脚本路径。其他用例不动。空的一段不会打标。
 
 | 模式 | 这次会话实际写出的文件 |
@@ -202,7 +204,7 @@ npx opentest-ai services stop
 ## 命令
 
 ```
-opentest-ai run [prompt...]        检查浏览器后打开 Agent
+opentest-ai run [prompt...]        检查录制浏览器后打开 Agent
   --print                          跑一轮后退出
   --skip-browser-setup             跳过这次检查
 opentest-ai agent [prompt...]      打开 Agent
@@ -213,14 +215,14 @@ opentest-ai web                    在本仓库里启动 Web UI
   -H, --hostname <hostname>        默认 127.0.0.1
   --no-open                        不自动打开浏览器
 
-opentest-ai browser setup          配置浏览器（--force 重新配置）
+opentest-ai browser setup          使用本机 Chrome，没有则下载 Chromium
 opentest-ai browser status|verify|detect|reset
 
 opentest-ai config                 旧的 ~/.opentest 配置。不决定 Agent 的模型。
 
 opentest-ai services [up|stop|logs]
-opentest-ai install                主机依赖
-opentest-ai doctor                 依赖和更新检查
+opentest-ai install                使用本机 Chrome，没有则下载 Playwright Chromium
+opentest-ai doctor                 检查 Node 和录制浏览器
 opentest-ai update                 向 npm 检查新版本
 ```
 
@@ -254,7 +256,7 @@ Agent 里 `@path/to/doc.md` 可以用绝对路径。`/` 列出提示词。`Ctrl+
 npm test
 ```
 
-先跑 `cli/**/*.test.js`，再跑 Web UI 的测试。Playwright 固定在 `1.63.0`，这样录制生成的脚本和回放用的是同一个浏览器。
+先跑 `cli/**/*.test.js`，再跑 Web UI 的测试。Playwright 固定在 `1.63.0`。本机有 Chrome 时录制打开它，没有才用这份配套的 Chromium。回放同一个脚本时用的也是这个浏览器。
 
 ```
 open-test/

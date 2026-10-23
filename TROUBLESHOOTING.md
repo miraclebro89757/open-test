@@ -173,28 +173,21 @@ opentest-ai config ping
 
 ## 问题5：浏览器录制失败
 
-### 错误信息
-```
-Error: Browser not configured
-```
+### 现象
+
+`doctor` 写着没有找到 Chrome，也还没有 Playwright Chromium。或者 `verify` 报浏览器没有启动。
 
 ### 解决方案
 
 ```bash
-# 1. 配置浏览器
-opentest-ai browser setup
-
-# 2. 选择选项：
-#    - 使用系统浏览器（推荐）
-#    - 安装 Playwright Chromium
-#    - 跳过（不录制）
-
-# 3. 验证配置
+opentest-ai doctor
+opentest-ai install
 opentest-ai browser verify
-
-# 4. 查看状态
-opentest-ai browser status
 ```
+
+本机装了 Google Chrome 时，录制和回放用它，不会再下载。没有 Chrome 时，`install` 下载与 Playwright 1.63.0 配套的 Chromium。官方地址失败时会再试 npmmirror。
+
+不会弹出菜单。Edge、Brave 和 `~/.opentest/browser.json` 里的旧选择都不会被使用。`browser reset` 只删除那份旧文件。
 
 ---
 
@@ -379,7 +372,7 @@ npm test
 
 1. ✅ **使用终端 Agent** - `opentest-ai run`
 2. ✅ **使用稳定的 LLM** - DeepSeek、OpenRouter
-3. ✅ **本地浏览器** - 系统 Chrome/Edge
+3. ✅ **本地浏览器** - 本机 Google Chrome；没有则用下载的 Playwright Chromium
 4. ✅ **可选 Neo4j** - 不是必需的
 
 **Web UI 仅用于**：

@@ -27,13 +27,13 @@ A DingTalk link is frozen into `knowledge/source-pack/` first. Later analysis re
 ### Terminal
 
 ```bash
-npx opentest-ai browser setup   # once: system Chrome/Edge, Playwright Chromium, or skip
-npx opentest-ai run             # checks browser setup, then opens the agent
+npx opentest-ai install         # use local Chrome, or download Playwright Chromium
+npx opentest-ai run             # same browser check, then opens the agent
 
 > @/path/to/your/requirements.md
 ```
 
-`opentest-ai`, `open-test`, and `opentest` are the same program. On a TTY, the bare command opens the agent and skips the browser-setup check. `run` is the one that checks it. `agent` and `run` both accept `--print` for a single turn. Only `run` accepts `--skip-browser-setup`.
+`opentest-ai`, `open-test`, and `opentest` are the same program. On a TTY, the bare command opens the agent and skips the browser check. `run` checks it: local Chrome is used when it is installed, and Playwright Chromium is downloaded only when Chrome is missing. `agent` and `run` both accept `--print` for a single turn. Only `run` accepts `--skip-browser-setup`.
 
 ### Web UI and the test workbench
 
@@ -137,6 +137,8 @@ Sheet status is only 正常 or 废弃. 待确认 and 已接受 show up as 正常
 
 `/record` asks for an `http` or `https` sandbox URL. It does not invent one. The address can also come from `OPENTEST_SANDBOX_URL` or from `opentest.sandbox.json` in the workspace.
 
+Recording and replay use the Google Chrome installed on this machine. If Chrome is not there, OpenTest downloads the Chromium build that matches Playwright 1.63.0. The official download is tried first; if it fails, the same install is tried again from the npmmirror Playwright host. Edge, Brave, and a browser saved in `~/.opentest/browser.json` are not used. `opentest-ai doctor` reports which browser will open. `opentest-ai install` prepares it. Docker is only for the optional Neo4j graph service.
+
 The browser opens once. You log in, then use the control page to record several cases, and close the browser only when you are done. The list is every case whose 优先级 is 高. If none are 高, the list is every case. You pick the case; the agent does not guess which clicks belong to which case. Each finished segment is `automation/<id>-<title>.spec.ts`, reuses `automation/auth/admin.json`, and marks only that case `- 自动化：是` with the script path. Other cases are left unchanged. An empty segment is not tagged.
 
 | Mode | What this session writes |
@@ -202,7 +204,7 @@ This writes a random password to `~/.opentest/services.json` (mode `0600`) and b
 ## Commands
 
 ```
-opentest-ai run [prompt...]        Open the agent after the browser-setup check
+opentest-ai run [prompt...]        Open the agent after the browser check
   --print                          One turn, then exit
   --skip-browser-setup             Skip that check
 opentest-ai agent [prompt...]      Open the agent
@@ -213,14 +215,14 @@ opentest-ai web                    Launch the Web UI from this repo
   -H, --hostname <hostname>        Default 127.0.0.1
   --no-open                        Do not open a browser
 
-opentest-ai browser setup          Configure the browser (--force to redo)
+opentest-ai browser setup          Use local Chrome, or download Chromium
 opentest-ai browser status|verify|detect|reset
 
 opentest-ai config                 Legacy ~/.opentest profiles. Does not select the agent model.
 
 opentest-ai services [up|stop|logs]
-opentest-ai install                Host dependencies
-opentest-ai doctor                 Dependencies and update check
+opentest-ai install                Local Chrome, or download Playwright Chromium
+opentest-ai doctor                 Node and the recording browser
 opentest-ai update                 Check npm for a newer version
 ```
 
@@ -254,7 +256,7 @@ Keys are not written into case files, scripts, or reports, and they are not plac
 npm test
 ```
 
-That runs `cli/**/*.test.js` and then the Web UI tests. Playwright stays on `1.63.0` so codegen and replay use the same browser.
+That runs `cli/**/*.test.js` and then the Web UI tests. Playwright stays on `1.63.0`. Recording launches local Chrome when it is installed, and that pinned Chromium only when Chrome is missing. Replay of a spec uses the same browser.
 
 ```
 open-test/

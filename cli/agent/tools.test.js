@@ -53,6 +53,21 @@ test('playwright tool only accepts a spec path', async () => {
   }), /Playwright spec/);
 });
 
+test('playwright tool points replay at a local Chrome when one was found', async () => {
+  let config = '';
+  await runPlaywright({
+    cwd: '/work',
+    specFile: 'tests/login.spec.ts',
+    executablePath: '/Applications/Google Chrome',
+    execFile: async (_file, args) => {
+      const configPath = args[args.indexOf('--config') + 1];
+      config = fs.readFileSync(configPath, 'utf8');
+      return { stdout: '{}', exitCode: 0 };
+    },
+  });
+  assert.match(config, /Google Chrome/);
+});
+
 test('playwright tool returns parsed stats', async () => {
   const result = await runPlaywright({
     cwd: '/work',
