@@ -72,6 +72,8 @@ export const zhCNLocale: LocalePlugin = {
     "settings.rulesProjectHint": "开在这个目录上的网页会话会读这份文件。",
     "settings.rulesNeedProject": "先打开一个项目，才能改它的规则。",
     "settings.rulesEmpty": "还没有内容。保存后会创建这个文件。",
+    "settings.rulesEdit": "编辑",
+    "settings.rulesBack": "返回规则",
     "settings.rulesSave": "保存",
     "settings.rulesSaving": "保存中…",
     "settings.rulesSaved": "已保存",

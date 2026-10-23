@@ -72,6 +72,8 @@ export const zhTWLocale: LocalePlugin = {
     "settings.rulesProjectHint": "開在這個目錄上的網頁工作階段會讀這份檔案。",
     "settings.rulesNeedProject": "先開啟一個專案，才能改它的規則。",
     "settings.rulesEmpty": "還沒有內容。儲存後會建立這個檔案。",
+    "settings.rulesEdit": "編輯",
+    "settings.rulesBack": "返回規則",
     "settings.rulesSave": "儲存",
     "settings.rulesSaving": "儲存中…",
     "settings.rulesSaved": "已儲存",

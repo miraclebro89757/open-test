@@ -72,6 +72,8 @@ export const enLocale: LocalePlugin = {
     "settings.rulesProjectHint": "A web session opened on this folder reads this file.",
     "settings.rulesNeedProject": "Open a project to edit its rules.",
     "settings.rulesEmpty": "Nothing here yet. Saving creates the file.",
+    "settings.rulesEdit": "Edit",
+    "settings.rulesBack": "Back to rules",
     "settings.rulesSave": "Save",
     "settings.rulesSaving": "Saving…",
     "settings.rulesSaved": "Saved",
