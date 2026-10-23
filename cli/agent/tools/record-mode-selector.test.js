@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   parseRecordingMode,
+  getModeConfirmationMessage,
   getModeDescription,
   getModeIcon,
   producesUIScript,
@@ -78,6 +79,27 @@ test('RECORDING_MODES has all required modes', () => {
     assert.ok(Array.isArray(config.produces));
     assert.ok(config.useCase);
   });
+});
+
+test('the confirmation message follows the UI language and has no color codes', () => {
+  const previous = process.env.OPENTEST_UI_LOCALE;
+  try {
+    process.env.OPENTEST_UI_LOCALE = 'en';
+    const message = getModeConfirmationMessage('ui+api', 'https://example.test/login');
+    assert.match(message, /Recording mode/);
+    assert.match(message, /UI \+ API/);
+    assert.match(message, /Playwright UI script/);
+    assert.match(message, /https:\/\/example\.test\/login/);
+    assert.doesNotMatch(message, /\x1b|\[\d+m|同时录制/);
+    process.env.OPENTEST_UI_LOCALE = 'zh-CN';
+    const chinese = getModeConfirmationMessage('ui+api', 'https://example.test/login');
+    assert.match(chinese, /录制模式/);
+    assert.match(chinese, /同时录制/);
+    assert.doesNotMatch(chinese, /\x1b|\[\d+m/);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_UI_LOCALE;
+    else process.env.OPENTEST_UI_LOCALE = previous;
+  }
 });
 
 test('ui+api is marked as recommended', () => {

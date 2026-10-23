@@ -70,7 +70,7 @@ export function DefectsPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChange
             <pre style={{ margin: "6px 0 0", padding: 8, borderRadius: 6, background: "var(--bg-selected)", fontSize: 11, whiteSpace: "pre-wrap" }}>
 {`export ZENTAO_BASE_URL=https://zentao.example.com
 export ZENTAO_TOKEN=...
-# 或 Jira
+# ${t("qa.defects.orJira")}
 export JIRA_BASE_URL=https://example.atlassian.net
 export JIRA_EMAIL=you@example.com
 export JIRA_TOKEN=...`}

@@ -2,6 +2,7 @@
 
 const inquirer = require('inquirer');
 const chalk = require('chalk');
+const { uiText, recordingProduces, recordingConfirmMessage } = require('../ui-copy');
 
 /**
  * Recording mode options
@@ -64,23 +65,22 @@ async function selectRecordingMode(options = {}) {
  */
 async function selectRecordingModeWithPiUI(piUI, defaultMode) {
   const options = Object.entries(RECORDING_MODES).map(([mode, config]) => {
-    const recommendation = config.recommended ? ' (推荐)' : '';
+    const recommendation = config.recommended ? ` (${uiText('record.recommended')})` : '';
     return {
       id: mode,
-      label: `${config.icon} ${config.label}${recommendation}`,
-      description: config.description,
+      label: `${config.icon} ${uiText(`record.mode.${mode}.label`)}${recommendation}`,
+      description: uiText(`record.mode.${mode}.description`),
     };
   });
   
-  // Add help option
   options.push({
     id: 'help',
-    label: '❓ 查看详细说明',
-    description: '显示各模式的详细使用说明',
+    label: uiText('record.help'),
+    description: uiText('record.helpDescription'),
   });
   
   const selected = await piUI.choose(
-    '请选择录制模式：',
+    uiText('record.choose'),
     options,
     { defaultId: defaultMode }
   );
@@ -104,22 +104,22 @@ async function selectRecordingModeWithPiUI(piUI, defaultMode) {
 async function selectRecordingModeWithInquirer(defaultMode) {
   // Build choices
   const choices = Object.entries(RECORDING_MODES).map(([mode, config]) => {
-    const recommendation = config.recommended ? chalk.green(' (推荐)') : '';
-    const name = `${config.icon}  ${config.label}${recommendation}\n    ${chalk.gray(config.description)}`;
+    const recommendation = config.recommended ? chalk.green(` (${uiText('record.recommended')})`) : '';
+    const name = `${config.icon}  ${uiText(`record.mode.${mode}.label`)}${recommendation}\n    ${chalk.gray(uiText(`record.mode.${mode}.description`))}`;
     
     return {
       name,
       value: mode,
-      short: config.label,
+      short: uiText(`record.mode.${mode}.label`),
     };
   });
   
   // Add separator and help
   choices.push(new inquirer.Separator());
   choices.push({
-    name: chalk.cyan('❓ 查看详细说明'),
+    name: chalk.cyan(uiText('record.help')),
     value: 'help',
-    short: '查看说明',
+    short: uiText('record.help'),
   });
   
   // Prompt user
@@ -127,7 +127,7 @@ async function selectRecordingModeWithInquirer(defaultMode) {
     {
       type: 'list',
       name: 'mode',
-      message: '请选择录制模式：',
+      message: uiText('record.choose'),
       choices,
       pageSize: 10,
       default: defaultMode,
@@ -148,21 +148,16 @@ async function selectRecordingModeWithInquirer(defaultMode) {
  * @returns {string}
  */
 function buildHelpText() {
-  const lines = ['# 录制模式详细说明\n'];
+  const lines = [`# ${uiText('record.help')}\n`];
   
   Object.entries(RECORDING_MODES).forEach(([mode, config]) => {
-    const recommendation = config.recommended ? ' (推荐)' : '';
-    lines.push(`## ${config.icon} ${config.label}${recommendation}\n`);
-    lines.push(`${config.description}\n`);
-    lines.push('**产出物：**');
-    config.produces.forEach(item => lines.push(`- ${item}`));
-    lines.push(`\n**适用场景：** ${config.useCase}\n`);
+    const recommendation = config.recommended ? ` (${uiText('record.recommended')})` : '';
+    lines.push(`## ${config.icon} ${uiText(`record.mode.${mode}.label`)}${recommendation}\n`);
+    lines.push(`${uiText(`record.mode.${mode}.description`)}\n`);
+    lines.push(`**${uiText('record.willRecord')}**`);
+    recordingProduces(mode).forEach((item) => lines.push(`- ${item}`));
+    lines.push(`\n${config.useCase}\n`);
   });
-  
-  lines.push('## 💡 如何选择？\n');
-  lines.push('- **完整测试**：选择 UI + API（推荐），同时获得 UI 自动化脚本和 API 测试脚本');
-  lines.push('- **纯前端**：选择 UI Only，只关注页面交互，不测试后端接口');
-  lines.push('- **纯接口**：选择 API Only，只测试后端接口，不生成 UI 脚本\n');
   
   return lines.join('\n');
 }
@@ -204,41 +199,20 @@ function parseRecordingMode(modeInput) {
  */
 function showModeHelp() {
   console.clear();
-  console.log(chalk.cyan.bold('\n📖 录制模式详细说明\n'));
-  console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'));
+  console.log(chalk.cyan.bold(`\n${uiText('record.help')}\n`));
   
   Object.entries(RECORDING_MODES).forEach(([mode, config]) => {
-    const recommendation = config.recommended ? chalk.green(' (推荐)') : '';
-    console.log(chalk.bold(`${config.icon}  ${config.label}${recommendation}`));
-    console.log(chalk.gray(`   ${config.description}\n`));
-    
-    console.log(chalk.cyan('   产出物：'));
-    config.produces.forEach(item => {
+    const recommendation = config.recommended ? chalk.green(` (${uiText('record.recommended')})`) : '';
+    console.log(chalk.bold(`${config.icon}  ${uiText(`record.mode.${mode}.label`)}${recommendation}`));
+    console.log(chalk.gray(`   ${uiText(`record.mode.${mode}.description`)}\n`));
+    console.log(chalk.cyan(`   ${uiText('record.willRecord')}`));
+    recordingProduces(mode).forEach((item) => {
       console.log(chalk.gray(`     • ${item}`));
     });
-    
-    console.log(chalk.cyan('\n   适用场景：'));
-    console.log(chalk.gray(`     ${config.useCase}\n`));
-    
-    console.log(chalk.gray('   ─────────────────────────────────────────────\n'));
+    console.log('');
   });
   
-  console.log(chalk.bold('💡 如何选择？\n'));
-  console.log(chalk.gray('   • ') + chalk.white('完整测试') + chalk.gray('：选择 ') + chalk.cyan('UI + API') + chalk.gray('（推荐）'));
-  console.log(chalk.gray('     同时获得 UI 自动化脚本和 API 测试脚本\n'));
-  
-  console.log(chalk.gray('   • ') + chalk.white('纯前端') + chalk.gray('：选择 ') + chalk.cyan('UI Only'));
-  console.log(chalk.gray('     只关注页面交互，不测试后端接口\n'));
-  
-  console.log(chalk.gray('   • ') + chalk.white('纯接口') + chalk.gray('：选择 ') + chalk.cyan('API Only'));
-  console.log(chalk.gray('     只测试后端接口，不生成 UI 脚本\n'));
-  
-  console.log(chalk.yellow('⚠️  注意事项\n'));
-  console.log(chalk.gray('   • UI + API 模式会同时录制，但文件分开存储'));
-  console.log(chalk.gray('   • API Only 模式下，录制窗口仅用于触发请求'));
-  console.log(chalk.gray('   • 所有模式都支持后续单独运行和调试\n'));
-  
-  console.log(chalk.gray('按回车继续...'));
+  console.log(chalk.gray(uiText('record.continue')));
   
   // Wait for user to press enter
   return new Promise(resolve => {
@@ -257,25 +231,7 @@ function showModeHelp() {
  * @returns {string} Confirmation message
  */
 function getModeConfirmationMessage(mode, sandboxUrl) {
-  const config = RECORDING_MODES[mode];
-  
-  const lines = [
-    `${config.icon}  录制模式：${chalk.cyan(config.label)}`,
-    ``,
-    chalk.bold('将录制：'),
-  ];
-  
-  config.produces.forEach(item => {
-    lines.push(`  ${chalk.green('✓')} ${item}`);
-  });
-  
-  lines.push('');
-  lines.push(`沙箱地址：${chalk.cyan(sandboxUrl)}`);
-  lines.push('');
-  lines.push(chalk.gray('浏览器只打开一次。先登录，再在控制页连续录多条。'));
-  lines.push(chalk.gray('全部录完再关闭浏览器。每条脚本用用例编号和标题命名。'));
-  
-  return lines.join('\n');
+  return recordingConfirmMessage(mode, sandboxUrl);
 }
 
 /**
@@ -284,8 +240,8 @@ function getModeConfirmationMessage(mode, sandboxUrl) {
  * @returns {string} Description
  */
 function getModeDescription(mode) {
-  const config = RECORDING_MODES[mode];
-  return config ? config.description : mode;
+  const text = uiText(`record.mode.${mode}.description`);
+  return text === `record.mode.${mode}.description` ? mode : text;
 }
 
 /**

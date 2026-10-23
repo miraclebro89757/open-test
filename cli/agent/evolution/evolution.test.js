@@ -228,7 +228,7 @@ test('align writes the merged spec into one product workspace', async () => {
   assert.match(looked.rules.join('\n'), /逾期/);
   assert.equal(looked.text.includes('111111'), false);
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-evolution-other-'));
-  assert.throws(() => queryBaselineFeature({ workspace: other, module: '巡检管理' }), /版本包/);
+  assert.throws(() => queryBaselineFeature({ workspace: other, module: '巡检管理' }), /version pack/);
   assert.equal(result.workspace, workspace);
 });
 
@@ -269,12 +269,12 @@ test('a missing new-version mention does not delete the old case', async () => {
   const inspectionCase = aligned.plan.test_asset_actions.find((item) => item.asset_id === 'TC-INSP');
   assert.equal(inspectionCase.action, 'keep');
 
-  assert.throws(() => applyMigration({ workspace, decisions: [] }), /还没有审核 TC-CANCEL/);
+  assert.throws(() => applyMigration({ workspace, decisions: [] }), /TC-CANCEL has not been reviewed/);
   fs.writeFileSync(caseFile, `${original}\n改过一行\n`);
   assert.throws(() => applyMigration({
     workspace,
     decisions: [{ asset_id: 'TC-CANCEL', action: 'deprecate' }],
-  }), /审核期间被修改/);
+  }), /changed during review/);
   assert.match(fs.readFileSync(caseFile, 'utf8'), /改过一行/);
   assert.equal(fs.readFileSync(caseFile, 'utf8').includes('生命周期'), false);
 

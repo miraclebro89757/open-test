@@ -3,6 +3,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const chalk = require('chalk');
+const { uiText } = require('../ui-copy');
 const inquirer = require('inquirer');
 
 const DEFAULT_CONFIG_FILENAME = 'opentest.sandbox.json';
@@ -121,7 +122,7 @@ async function resolveSandboxUrl(workspace, options = {}) {
   
   // 4. No URL available
   throw new Error(
-    '未配置沙箱地址。请设置 OPENTEST_SANDBOX_URL 环境变量或运行 /record 配置默认地址。'
+    'No sandbox URL is configured. Set OPENTEST_SANDBOX_URL, or save a default with /record.'
   );
 }
 
@@ -186,7 +187,7 @@ async function promptForSandboxUrl(workspace, piUI, existingConfig) {
 async function promptWithPiUI(workspace, piUI, existingConfig) {
   // Ask for URL
   const url = await piUI.input(
-    '请输入沙箱地址：',
+    uiText('sandbox.askUrl'),
     {
       placeholder: 'https://demo.example.com',
       default: existingConfig?.lastUsedUrl || '',
@@ -194,26 +195,24 @@ async function promptWithPiUI(workspace, piUI, existingConfig) {
   );
   
   if (!url || !isValidUrl(url)) {
-    throw new Error('无效的 URL 地址');
+    throw new Error('The URL must start with http:// or https://');
   }
   
-  // Ask if user wants to save as default
   const saveAsDefault = await piUI.confirm(
-    '是否保存为默认沙箱地址？',
-    '下次执行 /record 时将自动使用此地址'
+    uiText('sandbox.saveTitle'),
+    uiText('sandbox.saveBody'),
   );
   
   if (saveAsDefault) {
-    // Ask for environment name (optional)
     const hasEnvironments = await piUI.confirm(
-      '是否为此地址指定环境名称？',
-      '例如：dev、test、staging、prod'
+      uiText('sandbox.envTitle'),
+      uiText('sandbox.envBody'),
     );
     
     let environment = null;
     if (hasEnvironments) {
       environment = await piUI.input(
-        '请输入环境名称：',
+        uiText('sandbox.envName'),
         { placeholder: 'dev' }
       );
     }
@@ -242,41 +241,41 @@ async function promptWithPiUI(workspace, piUI, existingConfig) {
  * @returns {Promise<{url: string, source: string, shouldSave: boolean}>}
  */
 async function promptWithInquirer(workspace, existingConfig) {
-  console.log(chalk.cyan('\n📍 配置沙箱地址\n'));
+  console.log(chalk.cyan('\nSandbox URL\n'));
   
   if (existingConfig?.lastUsedUrl) {
-    console.log(chalk.gray(`上次使用：${existingConfig.lastUsedUrl}\n`));
+    console.log(chalk.gray(`${uiText('sandbox.lastUsed', { url: existingConfig.lastUsedUrl })}\n`));
   }
   
   const answers = await inquirer.prompt([
     {
       type: 'input',
       name: 'url',
-      message: '请输入沙箱地址：',
+      message: uiText('sandbox.askUrl'),
       default: existingConfig?.lastUsedUrl || '',
       validate: (input) => {
-        if (!input) return '请输入 URL';
-        if (!isValidUrl(input)) return '请输入有效的 http 或 https 地址';
+        if (!input) return 'Enter a URL';
+        if (!isValidUrl(input)) return 'Enter an http or https URL';
         return true;
       },
     },
     {
       type: 'confirm',
       name: 'saveAsDefault',
-      message: '是否保存为默认沙箱地址？',
+      message: uiText('sandbox.saveTitle'),
       default: true,
     },
     {
       type: 'confirm',
       name: 'hasEnvironment',
-      message: '是否为此地址指定环境名称？（例如：dev、test、prod）',
+      message: uiText('sandbox.envAsk'),
       default: false,
       when: (answers) => answers.saveAsDefault,
     },
     {
       type: 'input',
       name: 'environment',
-      message: '请输入环境名称：',
+      message: uiText('sandbox.envName'),
       default: 'dev',
       when: (answers) => answers.hasEnvironment,
     },
@@ -284,7 +283,7 @@ async function promptWithInquirer(workspace, existingConfig) {
   
   if (answers.saveAsDefault) {
     await saveUrlToConfig(workspace, answers.url, answers.environment, existingConfig);
-    console.log(chalk.green('\n✅ 配置已保存\n'));
+    console.log(chalk.green('\nSandbox URL saved\n'));
     
     return {
       url: answers.url,
@@ -371,11 +370,11 @@ async function switchEnvironment(workspace, environment) {
   const config = await loadSandboxConfig(workspace);
   
   if (!config) {
-    throw new Error('未找到沙箱配置文件');
+    throw new Error('Sandbox config file was not found');
   }
   
   if (!config.environments || !config.environments[environment]) {
-    throw new Error(`环境 "${environment}" 不存在`);
+    throw new Error(`Environment "${environment}" does not exist`);
   }
   
   config.activeEnvironment = environment;

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const resolved = await resolveQaWorkspace(request, payload.cwd);
     if ("response" in resolved) return resolved.response;
     if (!isWorkPolicy(payload.mode)) {
-      return NextResponse.json({ error: "mode 必须是 guided、balanced 或 autonomous" }, { status: 400 });
+      return NextResponse.json({ error: "mode must be guided, balanced, or autonomous" }, { status: 400 });
     }
     return NextResponse.json(writePolicy(resolved.workspace, payload.mode));
   } catch (error) {

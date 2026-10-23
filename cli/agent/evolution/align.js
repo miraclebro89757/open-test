@@ -13,7 +13,7 @@ function oneLine(value) {
 
 function readPack(workspace) {
   const file = path.join(workspace, 'knowledge', 'version-pack.json');
-  if (!fs.existsSync(file)) throw new Error('这个产品还没有版本包。先对齐基线和重构稿。');
+  if (!fs.existsSync(file)) throw new Error('This product has no version pack. Align the baseline and the rewrite first.');
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
@@ -63,8 +63,8 @@ async function alignRequirementVersions({
   baselineVersion,
   deltaVersion,
 }) {
-  if (!baselinePath || !fs.existsSync(baselinePath)) throw new Error(`找不到基线文档 ${baselinePath || ''}`);
-  if (!deltaPath || !fs.existsSync(deltaPath)) throw new Error(`找不到重构文档 ${deltaPath || ''}`);
+  if (!baselinePath || !fs.existsSync(baselinePath)) throw new Error(`Baseline document not found: ${baselinePath || ''}`);
+  if (!deltaPath || !fs.existsSync(deltaPath)) throw new Error(`Rewrite document not found: ${deltaPath || ''}`);
   const baselineText = fs.readFileSync(baselinePath, 'utf8');
   const deltaText = fs.readFileSync(deltaPath, 'utf8');
   const compiled = compileEvolution({
@@ -107,7 +107,7 @@ async function alignRequirementVersions({
 function queryBaselineFeature({ workspace, module, aspect } = {}) {
   const pack = readPack(workspace);
   const baselinePath = pack.baseline && pack.baseline.path;
-  if (!baselinePath || !fs.existsSync(baselinePath)) throw new Error('版本包里的基线文件不存在');
+  if (!baselinePath || !fs.existsSync(baselinePath)) throw new Error('The baseline file in the version pack does not exist');
   return retrieveBaseline(fs.readFileSync(baselinePath, 'utf8'), { module, aspect });
 }
 

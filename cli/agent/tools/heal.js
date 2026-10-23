@@ -66,7 +66,7 @@ function pendingInProject(project) {
 
 function keepHealVersion(entry, choice) {
   if (!entry || (choice !== 'before' && choice !== 'after')) {
-    throw new Error('要选择保留自愈前或自愈后');
+    throw new Error('Choose the healed selector or the previous one');
   }
   if (choice === 'before') {
     fs.copyFileSync(entry.before, entry.file);

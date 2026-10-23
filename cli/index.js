@@ -64,7 +64,7 @@ program
 // Command: install - Install dependencies
 program
   .command('install')
-  .description('使用本机 Chrome；没有则安装 Playwright Chromium')
+  .description('Use local Chrome, or install Playwright Chromium when it is missing')
   .action(async () => {
     showBanner();
     await setupBrowserEnvironment();
@@ -99,7 +99,7 @@ program
 // Command: doctor - Check system health
 program
   .command('doctor')
-  .description('检查 Node 和录制浏览器')
+  .description('Check Node and the recording browser')
   .action(async () => {
     showBanner();
     console.log(chalk.blue('Running system health check...\n'));
@@ -152,12 +152,12 @@ program
 // Command: services - start the local graph service shipped with the agent
 program
   .command('services [action]')
-  .description('启动随 agent 附带的本机 Neo4j')
+  .description('Start the local Neo4j shipped with the agent')
   .action(async (action = 'up') => {
     try {
       if (action === 'stop') {
         stopGraphService();
-        console.log('Neo4j 已停止。');
+        console.log('Neo4j stopped.');
         return;
       }
       if (action === 'logs') {
@@ -165,7 +165,7 @@ program
         return;
       }
       if (action !== 'up') {
-        console.error('用法：npx open-test services [up|stop|logs]');
+        console.error('Usage: npx open-test services [up|stop|logs]');
         process.exitCode = 2;
         return;
       }

@@ -36,7 +36,7 @@ export function readSandbox(workspace: string, environment: NodeJS.ProcessEnv = 
 
 /** Save the address as the default, keeping whatever else the file holds. */
 export function saveSandboxUrl(workspace: string, url: string): void {
-  if (!isHttpUrl(url)) throw new Error("沙箱地址必须是 http 或 https");
+  if (!isHttpUrl(url)) throw new Error("The sandbox URL must start with http:// or https://");
   const config = readSandboxConfig(workspace) ?? {
     $comment: "OpenTest 沙箱配置文件 - 配置测试环境的 URL",
     defaultUrl: null,

@@ -99,10 +99,10 @@ async function ingestRequirementSources(options) {
   const product = options.product || '';
   const depth = Number.isFinite(options.depth) ? Math.max(1, options.depth) : 2;
   const fetcher = options.fetcher || await require('./dingtalk-mcp').createDingTalkFetcherFromConfig(options.env || process.env);
-  if (!workspace) throw new Error('需要产品工作目录');
-  if (!options.url) throw new Error('需要钉钉文档链接');
+  if (!workspace) throw new Error('A product workspace is required');
+  if (!options.url) throw new Error('A DingTalk document link is required');
   if (!fetcher || typeof fetcher.inspect !== 'function' || typeof fetcher.fetch !== 'function') {
-    throw new Error('没有可用的文档采集器。请先在设置里接入钉钉文档 MCP。');
+    throw new Error('No document collector is available. Connect the DingTalk document MCP in Settings first.');
   }
 
   const queue = [{ ref: options.url, parentId: null, distance: 0 }];

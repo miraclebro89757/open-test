@@ -21,7 +21,7 @@ const CHOICES = ['创建新任务', '查看已有文档'];
 
 function stepByName(name) {
   const found = STEPS.find((item) => item[0] === name);
-  if (!found) throw new Error(`未知命令 ${name}`);
+  if (!found) throw new Error(`Unknown command ${name}`);
   return { name: found[0], shortcut: found[1], title: found[2], dirs: found[3], create: found[4] };
 }
 

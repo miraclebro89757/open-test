@@ -132,7 +132,7 @@ function hint(lesson: Lesson): LessonHint {
 
 function assertFingerprint(current: string, expected: unknown): void {
   if (typeof expected === "string" && expected && expected !== current) {
-    throw new ReviewError("文件在打开后被修改了，请重新查看", 409);
+    throw new ReviewError("The file changed after it was opened. Open it again.", 409);
   }
 }
 
@@ -402,7 +402,7 @@ function writeField(workspace: string, kind: "test-points" | "cases", file: stri
   const absolute = path.join(workspace, file);
   const markdown = fs.readFileSync(absolute, "utf8");
   const next = setItemField(markdown, id, name, value);
-  if (next === null) throw new ReviewError("事项不存在", 404);
+  if (next === null) throw new ReviewError("Review item not found", 404);
   if (next !== markdown) {
     const temporary = `${absolute}.${process.pid}.tmp`;
     fs.writeFileSync(temporary, next);
@@ -413,26 +413,26 @@ function writeField(workspace: string, kind: "test-points" | "cases", file: stri
 function saveEvolutionChoice(workspace: string, assetId: string, action: string): void {
   const relative = path.join("knowledge", "evolution", "current.json");
   const absolute = path.join(workspace, relative);
-  if (!fs.existsSync(absolute)) throw new ReviewError("没有版本演进方案", 404);
+  if (!fs.existsSync(absolute)) throw new ReviewError("No evolution plan", 404);
   const plan = JSON.parse(fs.readFileSync(absolute, "utf8")) as { test_asset_actions?: EvolutionAction[]; choices?: Record<string, string> };
   const target = (plan.test_asset_actions || []).find((item) => item.asset_id === assetId);
-  if (!target) throw new ReviewError("事项不存在", 404);
+  if (!target) throw new ReviewError("Review item not found", 404);
   const allowed = ["keep", "update", "deprecate", "defer", "create", "reject"];
-  if (!allowed.includes(action)) throw new ReviewError("不支持这个决定");
+  if (!allowed.includes(action)) throw new ReviewError("This decision is not supported");
   plan.choices = { ...(plan.choices || {}), [assetId]: action };
   fs.writeFileSync(absolute, `${JSON.stringify(plan, null, 2)}\n`);
 }
 
 function clarificationItem(workspace: string, file: string, itemId: string) {
   const item = readClarificationDocuments(workspace).find((document) => document.file === file)?.items.find((entry) => entry.id === itemId);
-  if (!item) throw new ReviewError("事项不存在", 404);
+  if (!item) throw new ReviewError("Review item not found", 404);
   return item;
 }
 
 /** A person chose to settle this clarification the way the lesson says. */
 function applyLessonTo(workspace: string, item: ReviewItem, lessonId: string, reviewed = false): void {
   const lesson = findLesson(workspace, lessonId);
-  if (lesson.status !== "已启用" || lesson.target !== "待澄清") throw new ReviewError(`经验 ${lessonId} 没有启用`);
+  if (lesson.status !== "已启用" || lesson.target !== "待澄清") throw new ReviewError(`Lesson ${lessonId} is not enabled`);
   applyClarificationUpdate(workspace, item.file, item.itemId, lesson.decision, lesson.decision === "已补充" ? lesson.action : "", {
     basis: `审核经验 ${lesson.id}`,
     review: reviewed ? "已认可" : null,
@@ -460,13 +460,13 @@ function recordAssetReturn(workspace: string, item: ReviewItem, decision: string
 
 export function decideReview(workspace: string, id: string, decision: string, note: string, fingerprint: string): { item: ReviewItem | null; lesson: Lesson | null } {
   const current = listReviews(workspace).find((entry) => entry.id === id);
-  if (!current) throw new ReviewError("事项不存在或已经处理过", 404);
+  if (!current) throw new ReviewError("This review item was not found or is already decided", 404);
   assertFingerprint(current.fingerprint, fingerprint);
   let recorded: Lesson | null = null;
   if (current.source === "clarification") {
     if (decision.startsWith("lesson:")) applyLessonTo(workspace, current, decision.slice("lesson:".length), true);
     else {
-      if (decision === "已补充" && !note.trim()) throw new ReviewError("已补充的条目需要写上补充内容");
+      if (decision === "已补充" && !note.trim()) throw new ReviewError("A supplemented item needs a note");
       recorded = applyClarificationUpdate(workspace, current.file, current.itemId, decision, note).lesson;
     }
   } else if (current.source === "auto") {
@@ -478,31 +478,31 @@ export function decideReview(workspace: string, id: string, decision: string, no
     } else if (decision === "推翻") {
       applyClarificationUpdate(workspace, current.file, current.itemId, "待处理", "", { basis: null, review: null });
       if (lessonId) recordLessonOverturn(workspace, lessonId);
-    } else throw new ReviewError("不支持这个决定");
+    } else throw new ReviewError("This decision is not supported");
   } else if (current.source === "lesson") {
     if (decision === "启用") setLessonStatus(workspace, current.itemId, "已启用");
     else if (decision === "不采纳") setLessonStatus(workspace, current.itemId, "停用");
-    else throw new ReviewError("不支持这个决定");
+    else throw new ReviewError("This decision is not supported");
   } else if (current.source === "test-point") {
     if (decision === "确认") applyPointAction(workspace, current.file, { action: "confirm", ids: [current.itemId] });
     else if (decision === "退回") {
       writeField(workspace, "test-points", current.file, current.itemId, "退回说明", note || "退回");
       recorded = recordAssetReturn(workspace, current, decision, note);
-    } else throw new ReviewError("不支持这个决定");
+    } else throw new ReviewError("This decision is not supported");
   } else if (current.source === "case") {
     if (decision === "接受") writeField(workspace, "cases", current.file, current.itemId, "状态", "已接受");
     else if (decision === "退回") {
       writeField(workspace, "cases", current.file, current.itemId, "状态", "退回");
       writeField(workspace, "cases", current.file, current.itemId, "退回说明", note || "退回");
       recorded = recordAssetReturn(workspace, current, decision, note);
-    } else throw new ReviewError("不支持这个决定");
+    } else throw new ReviewError("This decision is not supported");
   } else if (current.source === "evolution") {
     saveEvolutionChoice(workspace, current.itemId, decision);
   } else if (current.source === "heal") {
-    if (decision !== "before" && decision !== "after") throw new ReviewError("不支持这个决定");
+    if (decision !== "before" && decision !== "after") throw new ReviewError("This decision is not supported");
     keepHeal(workspace, current.itemId, decision);
   } else if (current.source === "baseline") {
-    throw new ReviewError("应用基线要单独授权");
+    throw new ReviewError("Applying the baseline needs its own confirmation");
   }
   appendLog(workspace, logEntry(current, decision, note));
   compactIfDue(workspace);
@@ -555,8 +555,8 @@ export function reviewKinds(items: ReviewItem[]): ReviewKindSummary[] {
  * Per-item 忽略 / 已补充 / 确认 / 退回 still work afterwards on whatever remains.
  */
 export function acceptKind(workspace: string, source: string, options: { version?: string } = {}): { accepted: number; skipped: number } {
-  if (source === "baseline") throw new ReviewError("应用基线要单独授权");
-  if (!(source in REVIEW_KIND_LABEL)) throw new ReviewError("不支持这个任务类型");
+  if (source === "baseline") throw new ReviewError("Applying the baseline needs its own confirmation");
+  if (!(source in REVIEW_KIND_LABEL)) throw new ReviewError("This task type is not supported");
   const wanted = options.version?.trim() || "";
   const items = listReviews(workspace).filter((item) => {
     if (item.source !== source) return false;
@@ -623,7 +623,7 @@ export function acceptBulk(workspace: string): { accepted: number; excluded: num
 
 export function applyBaseline(workspace: string): Record<string, unknown> {
   const plan = readEvolutionPlan(workspace) as { choices?: Record<string, string> } | null;
-  if (!plan) throw new ReviewError("没有版本演进方案", 404);
+  if (!plan) throw new ReviewError("No evolution plan", 404);
   const decisions = Object.entries(plan.choices || {}).map(([asset_id, action]) => ({ asset_id, action }));
   const applied = applyEvolutionPlan(workspace, decisions);
   appendLog(workspace, { id: "baseline", decision: "apply" });

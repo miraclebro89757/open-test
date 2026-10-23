@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { playwrightInvoke } = require('./playwright-cli');
+const { uiText } = require('../ui-copy');
 const { analyzeHAR } = require('./har-analyzer');
 const { renderHARToPytest } = require('./har-renderer');
 
@@ -50,18 +51,18 @@ function scoreCase(item, phrases) {
 function matchRecording(cases, phrases, caseId) {
   if (caseId) {
     const chosen = cases.find((item) => item.id === caseId);
-    if (!chosen) return { matches: [], message: `没有找到用例 ${caseId}` };
-    return { matches: [chosen], message: `${chosen.id} 按指定用例对照。` };
+    if (!chosen) return { matches: [], message: `Case ${caseId} was not found` };
+    return { matches: [chosen], message: `${chosen.id} was matched to the requested case.` };
   }
   const ranked = cases
     .map((item) => ({ item, score: scoreCase(item, phrases) }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score);
-  if (!ranked.length) return { matches: [], message: '录制内容没有对上任何功能用例。' };
+  if (!ranked.length) return { matches: [], message: 'The recording did not match a functional case.' };
   if (ranked.length > 1 && ranked[0].score === ranked[1].score) {
-    return { matches: [], message: '多个用例文案相同，请指定用例编号再录一次。' };
+    return { matches: [], message: 'Several cases use the same wording. Record again with a case id.' };
   }
-  return { matches: [ranked[0].item], message: `${ranked[0].item.id} 已对照到录制。` };
+  return { matches: [ranked[0].item], message: `${ranked[0].item.id} was matched to the recording.` };
 }
 
 function upsertField(body, name, value) {
@@ -101,10 +102,10 @@ function assertSandboxUrl(sandboxUrl) {
   try {
     url = new URL(sandboxUrl);
   } catch {
-    throw new Error('沙箱地址必须是 http 或 https');
+    throw new Error('The sandbox URL must start with http:// or https://');
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('沙箱地址必须是 http 或 https');
+    throw new Error('The sandbox URL must start with http:// or https://');
   }
   return url.href;
 }
@@ -128,16 +129,14 @@ async function recordScenario({
     throw new Error(`Invalid recording mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
   }
   
-  const modeDesc = {
-    'ui+api': '同时录制 UI 脚本（Playwright）和 API 脚本（HAR）',
-    'ui-only': '仅录制 UI 脚本（Playwright）',
-    'api-only': '仅录制 API 请求（HAR）',
-  }[mode];
-  
   const allowed = await confirm(
-    `沙箱 ${url}\n录制模式：${modeDesc}\n请按功能用例操作。关闭录制窗口后，会把脚本对上用例并标记是否自动化。`
+    [
+      `${uiText('record.sandbox')} ${url}`,
+      `${uiText('record.mode')} ${uiText(`record.mode.${mode}.label`)}`,
+      uiText('record.hint'),
+    ].join('\n'),
   );
-  if (!allowed) return { recorded: false, matches: [], message: '未打开沙箱，没有录制。' };
+  if (!allowed) return { recorded: false, matches: [], message: 'The sandbox was not opened, so nothing was recorded.' };
   
   const dir = path.join(workspace, 'automation');
   await fs.promises.mkdir(dir, { recursive: true });
@@ -168,7 +167,7 @@ async function recordScenario({
   
   // Progress is collected and returned in `message`; this library never prints,
   // so the terminal UI stays in charge and tests are not corrupted by stdout.
-  const steps = [`录制模式：${mode}`];
+  const steps = [`Recording mode: ${mode}`];
   
   // Execute recording
   await execFile(command.file, command.args, {
@@ -192,7 +191,7 @@ async function recordScenario({
   // Process HAR file (for ui+api and api-only modes)
   if (mode !== 'ui-only') {
     if (fs.existsSync(harFile)) {
-      steps.push('正在分析 HAR');
+      steps.push('Analyzing HAR');
       
       try {
         // Analyze HAR with the resolved LLM client; falls back to rules when none.
@@ -205,11 +204,11 @@ async function recordScenario({
           JSON.stringify(analysis, null, 2),
           'utf8'
         );
-        const source = analysis.source === 'ai' ? 'AI' : '规则引擎';
-        steps.push(`分析完成（${source}）：${path.basename(analysisFile)}`);
+        const source = analysis.source === 'ai' ? 'AI' : 'rules';
+        steps.push(`Analysis complete (${source}): ${path.basename(analysisFile)}`);
         
         // Render HAR to pytest script
-        steps.push('正在生成 pytest 脚本');
+        steps.push('Generating the pytest script');
         const scripts = await renderHARToPytest(harFile, analysis, {
           testName: `test_${caseId || 'api_scenario'}`,
           includeCleanup: true,
@@ -220,7 +219,7 @@ async function recordScenario({
         
         // Save pytest script
         await fs.promises.writeFile(apiTestFile, scripts.pytestScript, 'utf8');
-        steps.push(`API 脚本：${path.basename(apiTestFile)}`);
+        steps.push(`API script: ${path.basename(apiTestFile)}`);
         
         // Save .env.example
         const envFile = path.join(dir, `${baseName}.env.example`);
@@ -238,11 +237,11 @@ async function recordScenario({
         };
         
       } catch (error) {
-        steps.push(`⚠ HAR 处理失败：${error.message}`);
-        steps.push(`HAR 原件已保留：${harFile}`);
+        steps.push(`HAR processing failed: ${error.message}`);
+        steps.push(`The original HAR was kept: ${harFile}`);
       }
     } else {
-      steps.push(`⚠ 没有找到 HAR：${path.basename(harFile)}，录制期间可能没有捕获到 API 请求。`);
+      steps.push(`HAR was not found: ${path.basename(harFile)}. No API requests may have been captured.`);
     }
   }
   
@@ -253,7 +252,7 @@ async function recordScenario({
     ? (await fs.promises.readdir(casesDir)).filter((name) => name.endsWith('.md'))
     : [];
   const matches = [];
-  let note = '没有功能用例文件。';
+  let note = 'No functional case files.';
   
   for (const name of files) {
     const file = path.join(casesDir, name);
@@ -277,18 +276,17 @@ async function recordScenario({
     }));
   }
   
-  const listed = matches.length ? matches.map((item) => `${item.id} 自动化：是`).join('，') : '没有用例被标为自动化';
+  const listed = matches.length ? matches.map((item) => `${item.id} automated: yes`).join(', ') : 'No case was marked automated';
   
-  // Build result message
-  const lines = [`录制完成（模式：${mode}）`];
+  const lines = [`Recording finished (mode: ${mode})`];
   steps.forEach((step) => lines.push(`  ${step}`));
   if (mode !== 'api-only') {
-    lines.push(`  UI 脚本：${specFile}`);
+    lines.push(`  UI script: ${specFile}`);
   }
   if (apiScript) {
-    lines.push(`  API 脚本：${apiScript.pytestFile}`);
-    lines.push(`  变量提取：${apiScript.analysis.variables.length} 个`);
-    lines.push(`  请求依赖：${apiScript.analysis.dependencies.length} 条`);
+    lines.push(`  API script: ${apiScript.pytestFile}`);
+    lines.push(`  Variables: ${apiScript.analysis.variables.length}`);
+    lines.push(`  Request dependencies: ${apiScript.analysis.dependencies.length}`);
   }
   lines.push(`${note}${listed}`);
   const message = lines.join('\n');

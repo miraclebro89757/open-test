@@ -12,7 +12,7 @@ function packageRoot() {
 function playwrightCli() {
   const cli = path.join(packageRoot(), 'node_modules', 'playwright', 'cli.js');
   if (!fs.existsSync(cli)) {
-    throw new Error('没有安装 Playwright 1.63.0。在 open-test 目录执行 npm install。');
+    throw new Error('Playwright 1.63.0 is not installed. Run npm install in the open-test directory.');
   }
   return cli;
 }

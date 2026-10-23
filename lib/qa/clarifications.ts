@@ -57,7 +57,7 @@ export function applyClarificationUpdate(
     throw new ReviewError("status must be 待处理, 忽略, 已补充 or 待讨论");
   }
   const note = typeof supplement === "string" ? supplement : "";
-  if (note.length > MAX_SUPPLEMENT) throw new ReviewError("补充过长");
+  if (note.length > MAX_SUPPLEMENT) throw new ReviewError("The supplement is too long");
   const safeNote = note.replace(/\0/g, "").replace(/^###\s+/gm, "");
   const absolute = knowledgeFile(workspace, file);
   const markdown = fs.readFileSync(absolute, "utf8");

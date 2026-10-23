@@ -28,8 +28,8 @@ async function startAgent(prompt, options = {}) {
   // Pi Web edits from its model page.
   const model = readPiModel({ env: process.env });
   if (!model.configured) {
-    console.log('还没有默认模型。先在 Web 里配置：npx open-test web，打开左下角「模型」。');
-    console.log(`配置保存在 ${model.dir}，终端和 Web 共用。也可以进入 Agent 后用 /login、/model。`);
+    console.log('No default model yet. Set one in the Web UI: npx open-test web, then open Models at the bottom left.');
+    console.log(`The configuration is in ${model.dir} and is shared by the terminal and the Web UI. Inside the agent, /login and /model work too.`);
   }
   const homeDir = process.env.OPENTEST_HOME || undefined;
   const graph = await prepareGraphService({
@@ -39,12 +39,12 @@ async function startAgent(prompt, options = {}) {
     confirm: ask,
   });
   if (model.configured) {
-    console.log(`模型 ${describeModel(model)}（在 Web 的「模型」页修改，终端同步）`);
+    console.log(`Model ${describeModel(model)} (change it on the Models page in the Web UI; the terminal uses the same setting)`);
   }
   console.log(graph.message);
-  console.log('在任意目录打开。输入 @ 后接需求文档路径，例如 @/Users/you/docs/requirements.md');
-  console.log(`需求分析用 /${DEFAULT_ANALYSIS_PROMPT}，这个模板只读。自定义模板放在 ${model.dir}/prompts/。`);
-  console.log('切换模型用 /model 或 Ctrl+P，会话上下文保留。Ctrl+C 退出。产物写在需求文档旁边、以产品名命名的可见目录，例如 ~/Desktop/projects/MyProduct/。');
+  console.log('Open it from any directory. Type @ and a requirements file, for example @/Users/you/docs/requirements.md');
+  console.log(`Requirement analysis uses /${DEFAULT_ANALYSIS_PROMPT}. That template is read-only. Custom templates go in ${model.dir}/prompts/.`);
+  console.log('Switch models with /model or Ctrl+P. The session stays. Ctrl+C exits. Output is written next to the requirements file, in a visible folder named after the product, for example ~/Desktop/projects/MyProduct/.');
   let child;
   try {
     child = launchAgent({

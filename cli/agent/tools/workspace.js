@@ -5,7 +5,7 @@ const path = require('path');
 function sanitizeProductName(name) {
   const text = String(name || '').trim().replace(/[\\/:*?"<>|]/g, '').replace(/^\.+/, '');
   if (!text || text === '.' || text === '..') {
-    throw new Error('需要一个可见的产品项目名');
+    throw new Error('A visible product name is required');
   }
   return text;
 }

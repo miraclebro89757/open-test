@@ -65,7 +65,7 @@ test('nothing configured is reported as such, with no invented model', () => {
   const info = readPiModel({ env: {}, homeDir: home });
   assert.equal(info.configured, false);
   assert.equal(info.direct, null);
-  assert.equal(describeModel(info), '还没有默认模型');
+  assert.equal(describeModel(info), 'No default model');
 });
 
 test('keys written as $ENV resolve from the environment, commands are not run', () => {

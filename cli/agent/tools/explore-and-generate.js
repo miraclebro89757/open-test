@@ -193,7 +193,7 @@ async function exploreAndGenerate({
     result.success = false;
     result.error = error.message;
     result.steps.push(`错误：${error.message}`);
-    console.error('❌ 探索和生成失败:', error.message);
+    console.error('Exploration failed:', error.message);
     throw error;
   }
   

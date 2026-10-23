@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const resolved = await resolveQaWorkspace(request, payload.cwd);
     if ("response" in resolved) return resolved.response;
     const url = String(payload.url ?? "").trim();
-    if (!url) return NextResponse.json({ error: "需要钉钉文档链接" }, { status: 400 });
+    if (!url) return NextResponse.json({ error: "A DingTalk document link is required" }, { status: 400 });
     const result = await ingestRequirementSources(resolved.workspace, url, {
       product: basename(resolved.workspace),
       depth: typeof payload.depth === "number" ? payload.depth : 2,

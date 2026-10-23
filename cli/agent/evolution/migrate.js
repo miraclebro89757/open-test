@@ -356,18 +356,18 @@ function appendCandidate(workspace, action) {
 
 function applyMigration({ workspace, decisions }) {
   const plan = readPlan(workspace);
-  if (!plan) throw new Error('这个产品还没有版本演进方案');
-  if (plan.status === 'applied') throw new Error('这份迁移已经应用过');
+  if (!plan) throw new Error('This product has no evolution plan');
+  if (plan.status === 'applied') throw new Error('This migration was already applied');
   const chosen = new Map((decisions || []).map((item) => [item.asset_id, item.action]));
   plan.test_asset_actions.filter((action) => action.file).forEach((action) => {
     const absolute = path.join(workspace, action.file);
     const current = sha(fs.readFileSync(absolute, 'utf8'));
     if (current !== plan.fingerprints[action.file]) {
-      throw new Error(`${action.file} 在审核期间被修改了，请重新生成迁移方案`);
+      throw new Error(`${action.file} changed during review. Generate the migration again.`);
     }
   });
   plan.test_asset_actions.filter((action) => action.requires_review).forEach((action) => {
-    if (!chosen.has(action.asset_id)) throw new Error(`还没有审核 ${action.asset_id}`);
+    if (!chosen.has(action.asset_id)) throw new Error(`${action.asset_id} has not been reviewed`);
   });
 
   const applied = [];
@@ -386,7 +386,7 @@ function applyMigration({ workspace, decisions }) {
     if (!action.file || !['keep', 'update', 'deprecate', 'defer'].includes(choice)) return;
     if (!byFile.has(action.file)) byFile.set(action.file, fs.readFileSync(path.join(workspace, action.file), 'utf8'));
     const next = applyChoice(byFile.get(action.file), action, choice);
-    if (next == null) throw new Error(`没有找到 ${action.asset_id}`);
+    if (next == null) throw new Error(`Could not find ${action.asset_id}`);
     byFile.set(action.file, next);
     applied.push({ asset_id: action.asset_id, action: choice });
   });

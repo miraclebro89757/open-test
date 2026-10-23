@@ -113,7 +113,7 @@ function rangeAddress(columns, rowCount) {
 
 function createDingTalkExcel(options) {
   const rpc = options.rpc;
-  if (typeof rpc !== 'function') throw new Error('需要 MCP rpc');
+  if (typeof rpc !== 'function') throw new Error('An MCP rpc function is required');
   let names = options.tools || null;
 
   async function tools() {
@@ -126,7 +126,7 @@ function createDingTalkExcel(options) {
   async function call(kind, args) {
     const picked = await tools();
     const name = picked[kind];
-    if (!name) throw new Error(`钉钉表格 MCP 没有 ${kind} 工具`);
+    if (!name) throw new Error(`The DingTalk sheet MCP has no ${kind} tool`);
     return rpc('tools/call', { name, arguments: args });
   }
 
@@ -154,7 +154,7 @@ function createDingTalkExcel(options) {
         if (parsed.columns.length || parsed.rows.length) return parsed;
       }
       if (picked.tableGet) return rowsFromMcp(await call('tableGet', { nodeId, sheetId }));
-      throw new Error('钉钉表格 MCP 没有读取工具');
+      throw new Error('The DingTalk sheet MCP has no read tool');
     },
     async writeTable(nodeId, sheetId, { columns, rows, name }) {
       const picked = await tools();
@@ -179,7 +179,7 @@ function createDingTalkExcel(options) {
         }
       }
       if (!picked.updateRange) {
-        if (!picked.tablePut) throw new Error('钉钉表格 MCP 没有写入工具');
+        if (!picked.tablePut) throw new Error('The DingTalk sheet MCP has no write tool');
         return;
       }
       await call('updateRange', {
@@ -205,7 +205,7 @@ function createDingTalkExcel(options) {
 async function createDingTalkExcelFromConfig(environment = process.env) {
   const url = findDingTalkExcelMcpUrl(environment);
   if (!url) {
-    const error = new Error('没有找到钉钉表格 MCP。请在设置 → MCP 里添加名为 dingtalk-excel 的官方钉钉表格地址。');
+    const error = new Error('No DingTalk sheet MCP was found. In Settings → MCP, add the official DingTalk sheet address named dingtalk-excel.');
     error.code = 'mcp-missing';
     throw error;
   }

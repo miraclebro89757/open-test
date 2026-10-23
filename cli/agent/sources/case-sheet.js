@@ -468,7 +468,7 @@ async function resolveExcel(options) {
 async function bindWorkbook(workspace, product, excel, binding, url) {
   if (url) {
     const nodeId = nodeIdFromRef(url) || (binding && binding.nodeId) || '';
-    if (!nodeId) throw new Error('需要钉钉表格链接');
+    if (!nodeId) throw new Error('A DingTalk sheet link is required');
     const sheet = await excel.ensureSheet(nodeId, SHEET_TAB);
     return saveBinding(workspace, {
       nodeId,
@@ -485,7 +485,7 @@ async function bindWorkbook(workspace, product, excel, binding, url) {
     return saveBinding(workspace, { ...binding, sheetId: sheet.id, sheetName: sheet.name });
   }
   const created = await excel.createWorkspaceSheet({ name: `${product || '产品'}用例` });
-  if (!created.nodeId) throw new Error('钉钉表格没有返回文档 ID');
+  if (!created.nodeId) throw new Error('The DingTalk sheet did not return a document id');
   const sheet = await excel.ensureSheet(created.nodeId, SHEET_TAB);
   return saveBinding(workspace, {
     nodeId: created.nodeId,
@@ -650,7 +650,7 @@ async function syncCaseSheet(options) {
   const excel = await resolveExcel(options);
   let binding = readCaseSheetBinding(workspace);
   if (action === 'pull' && !binding && !options.url) {
-    throw new Error('还没有绑定钉钉表格。先推送一次，或传入表格链接。');
+    throw new Error('No DingTalk sheet is linked. Push once, or pass a sheet link.');
   }
   binding = await bindWorkbook(workspace, product, excel, binding, options.url);
   if (action === 'pull') return pullCases(workspace, excel, binding);

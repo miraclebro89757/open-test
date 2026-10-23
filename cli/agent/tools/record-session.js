@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parseCases, applyAutomationTags } = require('./record');
+const { uiLocale, uiText } = require('../ui-copy');
 
 const FIELD_LINE = /^[-*]\s*([^：:\n]{1,12})[：:]\s*(.*)$/;
 const STORAGE_STATE = 'automation/auth/admin.json';
@@ -69,74 +70,99 @@ function renderSpecFile({ id, title, url, actions, storageState }) {
 }
 
 function controlPage() {
+  const text = {
+    loginPrompt: uiText('record.control.loginPrompt'),
+    scopeCore: uiText('record.control.scopeCore'),
+    scopeAll: uiText('record.control.scopeAll'),
+    record: uiText('record.control.record'),
+    recording: uiText('record.control.recording'),
+    saved: uiText('record.control.saved'),
+    recordingStatus: uiText('record.control.recordingStatus'),
+    loggedIn: uiText('record.control.loggedIn'),
+    closing: uiText('record.control.closing'),
+  };
   return `<!doctype html>
-<html lang="zh">
+<html lang="${uiLocale()}">
 <head>
 <meta charset="utf-8" />
-<title>录制控制</title>
+<title>${uiText('record.control.title')}</title>
 <style>
-  body { font: 14px/1.5 sans-serif; margin: 16px; color: #1a1a1a; }
-  button { height: 32px; margin: 4px 6px 4px 0; padding: 0 12px; cursor: pointer; }
-  li { margin: 6px 0; }
-  .current { font-weight: 700; }
+  body { margin: 0; background: #f4f5f7; color: #1c1c1c; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 28px 20px 48px; }
+  h1 { margin: 0 0 8px; font-size: 20px; font-weight: 650; }
+  #status { margin: 0 0 16px; color: #3a3a3a; }
+  button { height: 32px; padding: 0 12px; border: 1px solid #c8c8c8; border-radius: 6px; background: #fff; color: #1c1c1c; cursor: pointer; }
+  button.primary { background: #1a56db; border-color: #1a56db; color: #fff; }
+  #scope { margin: 0 0 8px; color: #3a3a3a; }
+  ul { list-style: none; margin: 0 0 16px; padding: 0; }
+  li { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 10px; border: 1px solid #e2e2e2; border-radius: 8px; background: #fff; }
+  li.current { border-color: #1a56db; }
+  .name { min-width: 0; }
 </style>
 </head>
 <body>
-<h1>录制控制</h1>
-<p id="status">请在另一个窗口登录。登录完成后点下面的按钮，浏览器会保持打开。</p>
-<button id="login" type="button">登录完成，开始录</button>
+<main>
+<h1>${uiText('record.control.title')}</h1>
+<p id="status">${text.loginPrompt}</p>
+<button id="login" class="primary" type="button">${uiText('record.control.loginButton')}</button>
 <div id="picker" hidden>
   <p id="scope"></p>
   <ul id="list"></ul>
-  <button id="finish" type="button">全部录完，关闭浏览器</button>
+  <button id="finish" class="primary" type="button">${uiText('record.control.finish')}</button>
 </div>
+</main>
 <script>
+  const text = ${JSON.stringify(text)};
   const status = document.getElementById('status');
   const picker = document.getElementById('picker');
   const list = document.getElementById('list');
   let cases = [];
   let current = '';
   function send(message) { return window.opentestRecord(message); }
+  function fill(template, item) {
+    return template.replaceAll('{id}', item.id).replaceAll('{title}', item.title);
+  }
   function render() {
     list.replaceChildren();
     for (const item of cases) {
       const row = document.createElement('li');
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = current === item.id ? '正在录，这条录完' : '录这条';
+      button.textContent = current === item.id ? text.recording : text.record;
       button.addEventListener('click', async () => {
         if (current === item.id) {
           current = '';
-          status.textContent = '这条已保存。选择下一条，或结束录制。';
+          status.textContent = text.saved;
           render();
           await send({ type: 'stop' });
           return;
         }
         current = item.id;
-        status.textContent = '正在录 ' + item.id + ' ' + item.title + '。在另一个窗口按这条用例操作，录完回到这里。';
+        status.textContent = fill(text.recordingStatus, item);
         render();
         await send({ type: 'start', caseId: item.id });
       });
-      row.append(button, document.createTextNode(' ' + item.id + ' ' + item.title));
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = item.id + ' ' + item.title;
+      row.append(button, name);
       if (current === item.id) row.className = 'current';
       list.append(row);
     }
   }
   window.__setCases = (items, scope) => {
     cases = items;
-    document.getElementById('scope').textContent = scope === 'core'
-      ? '这些是优先级为高的核心流程。登录状态会保留，不必每条重新登录。'
-      : '没有优先级为高的用例，这里列出全部用例。';
+    document.getElementById('scope').textContent = scope === 'core' ? text.scopeCore : text.scopeAll;
     render();
   };
   document.getElementById('login').addEventListener('click', async () => {
     document.getElementById('login').hidden = true;
     picker.hidden = false;
-    status.textContent = '登录状态已保留。选择一条用例开始录。';
+    status.textContent = text.loggedIn;
     await send({ type: 'login-done' });
   });
   document.getElementById('finish').addEventListener('click', async () => {
-    status.textContent = '正在保存并关闭浏览器…';
+    status.textContent = text.closing;
     await send({ type: 'finish' });
   });
 </script>
@@ -243,11 +269,9 @@ async function runRecordingSession({
 }) {
   const catalog = cases || loadWorkspaceCases(workspace);
   const selected = selectSessionCases(catalog);
-  if (!selected.cases.length) return { recorded: false, matches: [], message: '没有可录的用例。' };
-  const allowed = await confirm(
-    '浏览器只打开一次。先登录，再在控制页连续录多条核心流程。全部录完再关闭浏览器。脚本按用例编号和标题命名。',
-  );
-  if (!allowed) return { recorded: false, matches: [], message: '未打开沙箱，没有录制。' };
+  if (!selected.cases.length) return { recorded: false, matches: [], message: 'No cases are available to record.' };
+  const allowed = await confirm(uiText('record.hint'));
+  if (!allowed) return { recorded: false, matches: [], message: 'The sandbox was not opened, so nothing was recorded.' };
 
   const harFile = mode === 'ui-only' ? '' : path.join(workspace, 'automation', `session-${Date.now()}.har`);
   const session = await openSession({
@@ -273,11 +297,11 @@ async function runRecordingSession({
     const item = byId.get(caseId);
     const segment = await session.stop();
     if (!item) {
-      skipped.push(`${caseId} 不在这次可录的用例里`);
+      skipped.push(`${caseId} is not in this recording list`);
       return;
     }
     if (!segment.actions.length) {
-      skipped.push(`${item.id} 没有录到操作`);
+      skipped.push(`${item.id} recorded no actions`);
       return;
     }
     const relative = path.posix.join('automation', scriptName(item.id, item.title));
@@ -333,15 +357,15 @@ async function runRecordingSession({
     return {
       recorded: false,
       matches: [],
-      message: skipped.length ? skipped.join('；') : '没有录到用例。',
+      message: skipped.length ? skipped.join('; ') : 'No case was recorded.',
     };
   }
   const lines = [
-    `录制完成，浏览器已关闭。共 ${written.length} 条。`,
+    uiText('record.done', { count: written.length }),
     ...written.map((item) => `${item.id} → ${item.uiSpec}`),
   ];
-  if (skipped.length) lines.push(skipped.join('；'));
-  if (har) lines.push(`整段会话的 HAR：${path.relative(workspace, har)}`);
+  if (skipped.length) lines.push(skipped.join('; '));
+  if (har) lines.push(uiText('record.har', { path: path.relative(workspace, har) }));
   return { recorded: true, matches: written, message: lines.join('\n') };
 }
 
@@ -350,6 +374,7 @@ module.exports = {
   scriptName,
   renderSpec: renderSpecFile,
   loadWorkspaceCases,
+  controlPage,
   runRecordingSession,
   createPlaywrightRecordingSession,
 };

@@ -33,7 +33,7 @@ test('a pending case that joins two checks cannot be completed', () => {
   const issues = reviewStepStandards(root, 'cases', '班组信息');
   assert.ok(issues.some((item) => item.includes('TC001') && item.includes('与')));
   assert.ok(issues.some((item) => item.includes('步骤')));
-  assert.throws(() => assertStepStandards(root, 'cases', '班组信息'), /不要开始下一步/);
+  assert.throws(() => assertStepStandards(root, 'cases', '班组信息'), /Do not start the next step/);
 });
 
 test('a pending case that follows the template can be completed', () => {
@@ -128,7 +128,7 @@ test('the checkpoint tool rejects a draft that fails the standard', async () => 
       task: 'cases',
       step: '班组信息',
     }, null, null, { hasUI: false }),
-    /不要开始下一步/,
+    /Do not start the next step/,
   );
   assert.equal(fs.existsSync(path.join(product, 'tasks', 'checkpoint.json')), false);
 });

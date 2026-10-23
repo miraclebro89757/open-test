@@ -15,13 +15,13 @@ function parseSseJson(text) {
       if (payload && payload !== '[DONE]') return JSON.parse(payload);
     }
   }
-  throw new Error('MCP 没有返回 JSON');
+  throw new Error('MCP did not return JSON');
 }
 
 function createMcpHttpClient(url, options = {}) {
-  if (!url) throw new Error('需要 MCP 地址');
+  if (!url) throw new Error('An MCP address is required');
   const fetchImpl = options.fetch || globalThis.fetch;
-  if (typeof fetchImpl !== 'function') throw new Error('当前环境不能发起 MCP 请求');
+  if (typeof fetchImpl !== 'function') throw new Error('This environment cannot send an MCP request');
   let nextId = 1;
   let sessionId = '';
 

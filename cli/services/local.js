@@ -99,8 +99,8 @@ function ensureNeo4jImage(execFile) {
 }
 
 function publicMessage(neo4j, started) {
-  const state = started ? 'Neo4j 已启动。' : 'Neo4j 已在运行。';
-  return `${state}\n浏览器 ${neo4j.browser || 'http://127.0.0.1:7474'}\nBolt ${neo4j.uri}\n账号 ${neo4j.user}\n连接写在 ~/.opentest/services.json，打开 agent 时会自动带上。`;
+  const state = started ? 'Neo4j started.' : 'Neo4j is already running.';
+  return `${state}\nBrowser ${neo4j.browser || 'http://127.0.0.1:7474'}\nBolt ${neo4j.uri}\nUser ${neo4j.user}\nThe connection is in ~/.opentest/services.json and is loaded when the agent starts.`;
 }
 
 async function waitForBolt(probe, attempts = 45) {
@@ -108,7 +108,7 @@ async function waitForBolt(probe, attempts = 45) {
     if (await probe(BOLT_PORT)) return;
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
-  throw new Error('Neo4j 容器已创建，但 7687 还没有就绪。查看日志：npx open-test services logs');
+  throw new Error('The Neo4j container was created, but port 7687 is not ready. See the logs: npx open-test services logs');
 }
 
 async function startGraphService({
@@ -119,7 +119,7 @@ async function startGraphService({
   if (await probe(BOLT_PORT)) {
     const existing = readService(homeDir);
     if (!existing) {
-      throw new Error('7687 已被占用，但没有已保存的连接。先停下占用端口的程序，或自行设置 NEO4J_URI、NEO4J_USER、NEO4J_PASSWORD。');
+      throw new Error('Port 7687 is in use, and no saved connection was found. Stop the program using that port, or set NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD.');
     }
     return { ...existing, started: false, message: publicMessage(existing, false) };
   }
@@ -131,7 +131,7 @@ async function startGraphService({
       stdio: 'inherit',
     });
   } catch (error) {
-    if (error.code === 'ENOENT') throw new Error('没有找到 Docker。安装并打开 Docker 后运行：npx open-test services');
+    if (error.code === 'ENOENT') throw new Error('Docker was not found. Install and start Docker, then run: npx open-test services');
     if (!registryFailed(error)) throw error;
     execFile('docker', ['pull', NEO4J_MIRROR], { stdio: 'inherit' });
     execFile('docker', ['tag', NEO4J_MIRROR, NEO4J_IMAGE], { stdio: 'inherit' });
@@ -172,12 +172,12 @@ async function prepareGraphService({
   probe = portOpen,
 } = {}) {
   if (env.NEO4J_URI && env.NEO4J_USER && env.NEO4J_PASSWORD) {
-    return { env, message: `图谱服务 ${env.NEO4J_URI}` };
+    return { env, message: `Graph service ${env.NEO4J_URI}` };
   }
   const open = await probe(BOLT_PORT);
   const saved = readService(homeDir);
   if (!open && interactive) {
-    const yes = await confirm('本机没有 Neo4j，图谱只会写在产品目录。现在启动？[y/N] ');
+    const yes = await confirm('Neo4j is not running, so the graph will only be written in the product folder. Start it now? [y/N] ');
     if (yes) {
       try {
         const started = await start({ homeDir, probe });
@@ -186,20 +186,20 @@ async function prepareGraphService({
           message: started.message,
         };
       } catch (error) {
-        return { env, message: `${error.message}\n图谱先写在产品目录。` };
+        return { env, message: `${error.message}\nThe graph will be written in the product folder for now.` };
       }
     }
   }
   if (open && saved) {
     return {
       env: { ...env, NEO4J_URI: saved.uri, NEO4J_USER: saved.user, NEO4J_PASSWORD: saved.password },
-      message: `图谱服务 ${saved.uri}`,
+      message: `Graph service ${saved.uri}`,
     };
   }
   if (open) {
-    return { env, message: '7687 已有服务，但没有连接信息。设置 NEO4J_URI、NEO4J_USER、NEO4J_PASSWORD。' };
+    return { env, message: 'Something is already listening on 7687, but there is no connection info. Set NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD.' };
   }
-  return { env, message: '图谱服务未启动。一键启动：npx open-test services' };
+  return { env, message: 'The graph service is not running. Start it with: npx open-test services' };
 }
 
 module.exports = {

@@ -47,12 +47,12 @@ async function launchWeb(options = {}) {
   const hostname = options.hostname || process.env.PI_WEB_HOSTNAME || '127.0.0.1';
   const noOpen = options.noOpen || options.open === false || process.env.PI_WEB_NO_OPEN === '1';
 
-  console.log('\n🌐 正在启动 OpenTest Web UI...\n');
+  console.log('\nStarting the OpenTest Web UI...\n');
 
   const model = readPiModel({ env: process.env });
   if (!model.configured) {
-    console.log('⚠️  还没有默认模型。打开页面后，点左下角「模型」添加 API Key 并选一个默认模型。');
-    console.log(`   保存在 ${model.dir}，终端 Agent 共用这份配置。\n`);
+    console.log('No default model yet. After the page opens, use Models at the bottom left to add an API key and pick a default.');
+    console.log(`   Saved in ${model.dir}. The terminal agent uses the same configuration.\n`);
   }
 
   // Neo4j is optional; the Web UI works with local files only.
@@ -66,17 +66,17 @@ async function launchWeb(options = {}) {
     });
     if (graph.env) Object.assign(env, graph.env);
   } catch (error) {
-    console.log(`ℹ️  图谱服务未启动（可选）: ${error.message}`);
+    console.log(`Graph service did not start (optional): ${error.message}`);
   }
   env.PORT = String(port);
   env.PI_WEB_HOSTNAME = hostname;
   if (noOpen) env.PI_WEB_NO_OPEN = '1';
 
   const command = webCommand({ port, hostname, noOpen });
-  console.log('🚀 启动参数：');
-  console.log(`   地址: http://${hostname}:${port}`);
-  console.log(`   模式: ${command.mode === 'start' ? '生产构建' : '开发模式（没有找到 .next 构建，运行 npm run build 可改用生产模式）'}`);
-  console.log(`   配置目录: ${model.dir}\n`);
+  console.log('Starting:');
+  console.log(`   Address: http://${hostname}:${port}`);
+  console.log(`   Mode: ${command.mode === 'start' ? 'production build' : 'development (no .next build was found; npm run build switches to production)'}`);
+  console.log(`   Config: ${model.dir}\n`);
 
   const child = spawn(command.file, command.args, {
     stdio: 'inherit',
@@ -85,19 +85,19 @@ async function launchWeb(options = {}) {
   });
 
   child.on('error', (error) => {
-    console.error('❌ Web UI 启动失败:', error.message);
+    console.error('Web UI failed to start:', error.message);
     process.exit(1);
   });
   child.on('exit', (code) => {
     if (code !== 0 && code !== null) {
-      console.error(`\n❌ Web UI 退出，代码: ${code}`);
+      console.error(`\nWeb UI exited with code ${code}`);
       process.exit(code);
     }
   });
 
   const cleanup = () => {
     if (child && !child.killed) {
-      console.log('\n👋 正在关闭 Web UI...');
+      console.log('\nClosing the Web UI...');
       child.kill();
     }
   };

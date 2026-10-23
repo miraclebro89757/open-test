@@ -6,6 +6,13 @@ export function stripAnsi(text: string): string {
   return text.replace(TUI_CURSOR_MARKER_RE, "").replace(ANSI_ESCAPE_RE, "");
 }
 
+// A dialog that drops the ESC byte still shows the leftover "[36m".
+const ORPHAN_SGR_RE = /\[(?:\d{1,3}(?:;\d{1,3})*)?m/g;
+
+export function stripAnsiForDisplay(text: string): string {
+  return stripAnsi(text).replace(ORPHAN_SGR_RE, "");
+}
+
 function visibleCharPositions(text: string): Array<{ start: number; end: number; char: string }> {
   const positions: Array<{ start: number; end: number; char: string }> = [];
   let i = 0;

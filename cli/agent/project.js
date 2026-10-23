@@ -29,10 +29,10 @@ function readProject(homeDir) {
 function setProject(input, homeDir) {
   const current = expandPath(input, homeDir);
   if (!current || !fs.existsSync(current) || !fs.statSync(current).isDirectory()) {
-    throw new Error(`项目目录不存在：${current || input}`);
+    throw new Error(`Project directory does not exist: ${current || input}`);
   }
   if (path.basename(current).startsWith('.')) {
-    throw new Error('项目目录必须在 Finder 里可见');
+    throw new Error('The project directory must be a visible folder');
   }
   const saved = readProject(homeDir);
   const recent = [current, ...saved.recent.filter((item) => item !== current)].slice(0, 8);

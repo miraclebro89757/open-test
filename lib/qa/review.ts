@@ -109,18 +109,18 @@ export function editItem(workspace: string, kind: ReviewKind, file: string, edit
   if (kind === "test-points") materializeConfirmedStatuses(workspace);
   let markdown = fs.readFileSync(absolute, "utf8");
   const before = parseItems(markdown).find((item) => item.id === edit.id);
-  if (!before) throw new ReviewError(`没有找到 ${edit.id}`, 404);
+  if (!before) throw new ReviewError(`Item ${edit.id} was not found`, 404);
 
   let contentChanged = false;
   if (typeof edit.body === "string") {
     const next = setItemBody(markdown, edit.id, edit.body);
-    if (next === null) throw new ReviewError(`没有找到 ${edit.id}`, 404);
+    if (next === null) throw new ReviewError(`Item ${edit.id} was not found`, 404);
     contentChanged ||= parseItems(next).find((item) => item.id === edit.id)?.body.trim() !== before.body.trim();
     markdown = next;
   }
   if (typeof edit.title === "string" && edit.title.trim() && edit.title.trim() !== before.title) {
     const next = setItemTitle(markdown, edit.id, edit.title);
-    if (next === null) throw new ReviewError("标题不能为空", 400);
+    if (next === null) throw new ReviewError("The title cannot be empty", 400);
     contentChanged = true;
     markdown = next;
   }

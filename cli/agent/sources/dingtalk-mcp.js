@@ -95,7 +95,7 @@ function callArgs(ref) {
 
 function createDingTalkFetcher(options) {
   const rpc = options.rpc;
-  if (typeof rpc !== 'function') throw new Error('需要 MCP rpc');
+  if (typeof rpc !== 'function') throw new Error('An MCP rpc function is required');
   let names = options.tools || null;
 
   async function tools() {
@@ -108,7 +108,7 @@ function createDingTalkFetcher(options) {
   async function call(kind, ref) {
     const picked = await tools();
     const name = picked[kind];
-    if (!name) throw new Error(`钉钉文档 MCP 没有 ${kind} 工具`);
+    if (!name) throw new Error(`The DingTalk document MCP has no ${kind} tool`);
     return rpc('tools/call', { name, arguments: callArgs(ref) });
   }
 
@@ -136,7 +136,7 @@ function createDingTalkFetcher(options) {
 async function createDingTalkFetcherFromConfig(environment = process.env) {
   const url = findDingTalkMcpUrl(environment);
   if (!url) {
-    const error = new Error('没有找到钉钉文档 MCP。请在设置 → MCP 里粘贴官方钉钉文档的 Streamable HTTP 地址。');
+    const error = new Error('No DingTalk document MCP was found. In Settings → MCP, paste the official DingTalk document Streamable HTTP address.');
     error.code = 'mcp-missing';
     throw error;
   }

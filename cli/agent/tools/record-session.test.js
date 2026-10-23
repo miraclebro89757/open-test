@@ -5,13 +5,32 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { selectSessionCases, scriptName, renderSpec, runRecordingSession } = require('./record-session');
+const { selectSessionCases, scriptName, renderSpec, runRecordingSession, controlPage } = require('./record-session');
 
 const CASES = [
   { file: 'cases/班组.md', id: 'TC012', title: '新建作业班组', priority: '高', automated: false },
   { file: 'cases/班组.md', id: 'TC013', title: '作业班组重名时提示', priority: '中', automated: false },
   { file: 'cases/登录.md', id: 'TC001', title: '管理员登录', priority: '高', automated: true },
 ];
+
+test('the control page follows the UI language and does not print color codes', () => {
+  const previous = process.env.OPENTEST_UI_LOCALE;
+  try {
+    process.env.OPENTEST_UI_LOCALE = 'en';
+    const html = controlPage();
+    assert.match(html, /<html lang="en">/);
+    assert.match(html, /Recording/);
+    assert.match(html, /Logged in, start recording/);
+    assert.doesNotMatch(html, /录制控制|\x1b|\[\d+m/);
+    process.env.OPENTEST_UI_LOCALE = 'zh-CN';
+    const chinese = controlPage();
+    assert.match(chinese, /录制控制/);
+    assert.match(chinese, /登录完成，开始录/);
+  } finally {
+    if (previous === undefined) delete process.env.OPENTEST_UI_LOCALE;
+    else process.env.OPENTEST_UI_LOCALE = previous;
+  }
+});
 
 test('a session offers high-priority cases, including ones already automated', () => {
   const selected = selectSessionCases(CASES);

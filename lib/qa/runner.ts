@@ -160,7 +160,7 @@ function tail(text: string): string {
 async function runUi(workspace: string, file: string, options: { headed: boolean }, root: string): Promise<Pick<RunScript, "status" | "tests" | "error">> {
   const cli = path.join(root, "node_modules", "playwright", "cli.js");
   if (!fs.existsSync(cli)) {
-    return { status: "error", tests: [], error: "没有安装 Playwright 1.63.0。在 open-test 目录执行 npm install。" };
+    return { status: "error", tests: [], error: "Playwright 1.63.0 is not installed. Run npm install in the open-test directory." };
   }
   const args = [cli, "test", path.join(workspace, file), "--reporter=json", ...(options.headed ? ["--headed"] : [])];
   const result = await execute(process.execPath, args, {
@@ -168,11 +168,11 @@ async function runUi(workspace: string, file: string, options: { headed: boolean
     timeoutMs: SCRIPT_TIMEOUT_MS,
     env: { ...process.env, CI: "1", FORCE_COLOR: "0", NODE_PATH: ensurePlaywrightShim(root), npm_config_yes: "false" },
   });
-  if (result.timedOut) return { status: "error", tests: [], error: "执行超过 5 分钟，已终止。" };
+  if (result.timedOut) return { status: "error", tests: [], error: "Stopped after 5 minutes." };
   const parsed = parsePlaywrightReport(result.stdout);
-  if (!parsed) return { status: "error", tests: [], error: tail(result.stderr || result.stdout) || "Playwright 没有输出结果。" };
+  if (!parsed) return { status: "error", tests: [], error: tail(result.stderr || result.stdout) || "Playwright did not report a result." };
   if (!parsed.tests.length) {
-    return { status: "error", tests: [], error: parsed.errors.join("\n") || "没有找到可执行的用例。" };
+    return { status: "error", tests: [], error: parsed.errors.join("\n") || "No runnable test was found." };
   }
   const failed = parsed.tests.some((test) => test.status === "failed");
   return {
@@ -190,9 +190,9 @@ async function runApi(workspace: string, file: string): Promise<Pick<RunScript, 
   const options = { cwd: path.dirname(script), env, timeoutMs: SCRIPT_TIMEOUT_MS };
   let result = await execute("pytest", args, options);
   if (result.missing) result = await execute("python3", ["-m", "pytest", ...args], options);
-  const missingMessage = "没有安装 pytest。执行 pip install pytest requests python-dotenv 后重试。";
+  const missingMessage = "pytest is not installed. Run pip install pytest requests python-dotenv and try again.";
   if (result.missing || /No module named pytest/.test(result.stderr)) return { status: "error", tests: [], error: missingMessage };
-  if (result.timedOut) return { status: "error", tests: [], error: "执行超过 5 分钟，已终止。" };
+  if (result.timedOut) return { status: "error", tests: [], error: "Stopped after 5 minutes." };
   let tests: RunTest[] = [];
   try {
     tests = parseJunit(fs.readFileSync(junit, "utf8"));
@@ -201,7 +201,7 @@ async function runApi(workspace: string, file: string): Promise<Pick<RunScript, 
   } finally {
     fs.rmSync(junit, { force: true });
   }
-  if (!tests.length) return { status: "error", tests: [], error: tail(result.stdout + "\n" + result.stderr) || "pytest 没有产出结果。" };
+  if (!tests.length) return { status: "error", tests: [], error: tail(result.stdout + "\n" + result.stderr) || "pytest did not report a result." };
   const failed = tests.some((test) => test.status === "failed");
   return {
     status: failed ? "failed" : tests.every((test) => test.status === "skipped") ? "skipped" : "passed",
@@ -241,7 +241,7 @@ export function selectScripts(workspace: string, request: RunRequest): Array<{ f
   const wanted = request.files ? new Set(request.files) : null;
   if (wanted) {
     for (const file of wanted) {
-      if (!known.some((script) => script.file === file)) throw new Error(`不是 automation/ 下的脚本：${file}`);
+      if (!known.some((script) => script.file === file)) throw new Error(`Not a script under automation/: ${file}`);
     }
   }
   return known.filter((script) => (wanted ? wanted.has(script.file) : kind === "all" || script.kind === kind));
@@ -253,8 +253,8 @@ export function selectScripts(workspace: string, request: RunRequest): Array<{ f
  */
 export function startRun(workspace: string, request: RunRequest, root: string = opentestRoot()): RunRecord {
   const scripts = selectScripts(workspace, request);
-  if (!scripts.length) throw new Error("没有可执行的自动化脚本。先录制，或让 Agent 生成脚本。");
-  if (activeRuns().has(workspace)) throw new RunBusyError(`正在执行 ${activeRuns().get(workspace)}，等它结束。`);
+  if (!scripts.length) throw new Error("No automation script to run. Record one, or ask the agent to generate one.");
+  if (activeRuns().has(workspace)) throw new RunBusyError(`Already running ${activeRuns().get(workspace)}. Wait for it to finish.`);
 
   const caseIdsByScript = new Map<string, string[]>();
   for (const file of readCases(workspace)) {
@@ -368,7 +368,7 @@ export function listPendingHeals(workspace: string): HealEntry[] {
 /** Keep the healed or the original version, as /heal does in the terminal. */
 export function keepHeal(workspace: string, before: string, choice: "before" | "after"): { file: string } {
   const entry = listPendingHeals(workspace).find((item) => item.before === before);
-  if (!entry) throw new Error("这个自愈版本已经处理过了。");
+  if (!entry) throw new Error("This healed version was already decided.");
   readVersionText(workspace, entry.file);
   readVersionText(workspace, entry.before);
   const heal = loadAgentModule<{ keepHealVersion: (entry: HealEntry, choice: string) => { file: string } }>("tools/heal.js");
@@ -378,6 +378,6 @@ export function keepHeal(workspace: string, before: string, choice: "before" | "
 export function readVersionText(workspace: string, absolute: string): string {
   const root = path.join(path.resolve(workspace), "automation") + path.sep;
   const resolved = path.resolve(absolute);
-  if (!resolved.startsWith(root)) throw new Error("文件不在 automation/ 下");
+  if (!resolved.startsWith(root)) throw new Error("The file is not under automation/");
   return fs.readFileSync(resolved, "utf8");
 }

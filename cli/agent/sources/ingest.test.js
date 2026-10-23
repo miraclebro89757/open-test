@@ -199,7 +199,7 @@ test('without a fetcher it asks for the dingTalk MCP', async () => {
       url: 'https://alidocs.dingtalk.com/i/nodes/root1',
       env: { PI_CODING_AGENT_DIR: dir, DINGTALK_DOC_MCP_URL: '' },
     }),
-    /钉钉文档 MCP/,
+    /DingTalk document MCP/,
   );
 });
 

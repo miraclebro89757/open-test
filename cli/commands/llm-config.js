@@ -290,7 +290,7 @@ async function configureDefaultLLM() {
     
   } catch (error) {
     console.error('');
-    console.error('❌ 配置失败:', error.message);
+    console.error('Configuration failed:', error.message);
     console.error('');
     process.exit(1);
   }

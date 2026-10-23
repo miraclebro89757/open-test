@@ -222,7 +222,7 @@ test('product workspace is a visible directory named after the product', () => {
   assert.equal(productWorkspace('/Users/me/Desktop/易训', '筑安通'), '/Users/me/Desktop/易训/筑安通');
   assert.equal(productWorkspace('/Users/me/Desktop/易训', '.筑安通'), '/Users/me/Desktop/易训/筑安通');
   assert.equal(sanitizeProductName('绩效管理'), '绩效管理');
-  assert.throws(() => sanitizeProductName('...'), /产品项目名/);
+  assert.throws(() => sanitizeProductName('...'), /visible product name/);
   assert.notEqual(path.basename(productWorkspace('/tmp/docs', '筑安通')).startsWith('.'), true);
 });
 

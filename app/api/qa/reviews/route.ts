@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       );
       return NextResponse.json(result);
     }
-    return NextResponse.json({ error: "action 必须是 decide、accept-bulk、accept-kind、save-lesson、apply-lesson 或 apply-baseline" }, { status: 400 });
+    return NextResponse.json({ error: "action must be decide, accept-bulk, accept-kind, save-lesson, apply-lesson, or apply-baseline" }, { status: 400 });
   } catch (error) {
     return qaError(error, error instanceof ReviewError ? error.status : 409);
   }

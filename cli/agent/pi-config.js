@@ -101,7 +101,7 @@ function readPiModel({ env = process.env, homeDir = os.homedir() } = {}) {
 
 /** One line for the start-up banner. Never contains the key. */
 function describeModel(info) {
-  if (!info.configured) return '还没有默认模型';
+  if (!info.configured) return 'No default model';
   const mask = info.keyMask ? ` · ${info.keyMask}` : '';
   return `${info.provider} · ${info.model}${mask}`;
 }

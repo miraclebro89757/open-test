@@ -136,7 +136,7 @@ test('a cut-off graph asks for another append batch', async () => {
       graph: '{"features":[{"id":"FEAT_01","name":"巡检"}],"relationships":[{"from":"SCEN_23","',
       env: {},
     }),
-    /分批调用/,
+    /mode append/,
   );
 });
 
@@ -185,7 +185,7 @@ test('replace is refused once the product graph already has nodes', async () => 
       graph: { features: [{ id: 'FEAT_02', name: '另一功能' }] },
       env: {},
     }),
-    /不能用 replace 覆盖/,
+    /instead of replace/,
   );
   const saved = JSON.parse(fs.readFileSync(path.join(workspace, 'graph', 'graph.json'), 'utf8'));
   assert.equal(saved.features[0].id, 'FEAT_01');
@@ -205,7 +205,7 @@ test('a batch that plans the whole document is rejected', async () => {
       graph: { features: [{ id: 'FEAT_01', name: '巡检' }], rules },
       env: {},
     }),
-    /按文档标题拆开/,
+    /Split it by heading/,
   );
   assert.equal(fs.existsSync(path.join(workspace, 'graph', 'graph.json')), false);
 });

@@ -53,7 +53,7 @@ export function readLessons(workspace: string): Lesson[] {
 
 export function findLesson(workspace: string, id: string): Lesson {
   const lesson = readLessons(workspace).find((item) => item.id === id);
-  if (!lesson) throw new ReviewError(`没有经验 ${id}`, 404);
+  if (!lesson) throw new ReviewError(`Lesson ${id} was not found`, 404);
   return lesson;
 }
 
@@ -66,10 +66,10 @@ function nextId(markdown: string, prefix: "R" | "G"): string {
 }
 
 export function saveLesson(workspace: string, input: LessonInput, counts: { hits?: number; overturned?: number } = {}): Lesson {
-  if (!input.title.trim() || !input.action.trim()) throw new ReviewError("经验要写标题和做法");
-  if (!LESSON_TARGETS.includes(input.target)) throw new ReviewError("适用只能是待澄清、测试点或用例");
+  if (!input.title.trim() || !input.action.trim()) throw new ReviewError("A lesson needs a title and an action");
+  if (!LESSON_TARGETS.includes(input.target)) throw new ReviewError("target must be 待澄清, 测试点 or 用例");
   if (input.target === "待澄清" && !["已补充", "忽略", "待讨论"].includes(input.decision)) {
-    throw new ReviewError("待澄清的经验要写决定：已补充、忽略或待讨论");
+    throw new ReviewError("A clarification lesson needs a decision: 已补充, 忽略 or 待讨论");
   }
   const global = input.scope === "全部产品";
   const file = global ? globalLessonFile() : path.join(workspace, PRODUCT_LESSON_FILE);
@@ -85,7 +85,7 @@ function setFields(workspace: string, id: string, values: Record<string, string>
   let markdown = readFile(file);
   for (const [name, value] of Object.entries(values)) {
     const next = setItemField(markdown, id, name, value);
-    if (next === null) throw new ReviewError(`没有经验 ${id}`, 404);
+    if (next === null) throw new ReviewError(`Lesson ${id} was not found`, 404);
     markdown = next;
   }
   writeAtomic(file, markdown);
@@ -93,7 +93,7 @@ function setFields(workspace: string, id: string, values: Record<string, string>
 }
 
 export function setLessonStatus(workspace: string, id: string, status: LessonStatus): Lesson {
-  if (!LESSON_STATUSES.includes(status)) throw new ReviewError("状态只能是待确认、已启用或停用");
+  if (!LESSON_STATUSES.includes(status)) throw new ReviewError("status must be 待确认, 已启用 or 停用");
   return setFields(workspace, id, { 状态: status });
 }
 

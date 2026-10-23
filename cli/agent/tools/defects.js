@@ -36,7 +36,7 @@ async function fetchZentao(config, fetchImpl) {
   const response = await fetchImpl(url, {
     headers: { Token: config.token, Accept: 'application/json' },
   });
-  if (!response.ok) throw new Error(`禅道返回 HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`Zentao returned HTTP ${response.status}`);
   const body = await response.json();
   const rows = body.bugs || body.data || [];
   return rows.slice(0, 20).map((bug) => ({
@@ -60,7 +60,7 @@ async function fetchJira(config, fetchImpl) {
     headers.Authorization = `Bearer ${config.token}`;
   }
   const response = await fetchImpl(url, { headers });
-  if (!response.ok) throw new Error(`Jira 返回 HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`Jira returned HTTP ${response.status}`);
   const body = await response.json();
   return (body.issues || []).slice(0, 20).map((issue) => ({
     source: 'jira',

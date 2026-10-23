@@ -137,7 +137,7 @@ function saveState(workspace, state) {
 
 function taskOf(state, taskId) {
   const task = state.tasks[taskId];
-  if (!task) throw new Error(`未知任务 ${taskId}。可用任务：${TASKS.map(([id]) => id).join(', ')}`);
+  if (!task) throw new Error(`Unknown task ${taskId}. Available tasks: ${TASKS.map(([id]) => id).join(', ')}`);
   return task;
 }
 
@@ -159,7 +159,7 @@ function planSteps(task, stepIds) {
 
 function setStep(task, stepId, status, note) {
   const id = String(stepId || '').trim();
-  if (!id) throw new Error('step 不能为空');
+  if (!id) throw new Error('step is required');
   let step = task.steps.find((item) => item.id === id);
   if (!step) {
     step = { id, status, note: note || '' };
@@ -202,7 +202,7 @@ function updateCheckpoint(workspace, { product, sourceFile, sources, action = 's
     current.steps = current.steps.filter((item) => item.id !== String(step || '').trim());
     refresh(current);
   } else if (action !== 'status') {
-    throw new Error('action 必须是 status、plan、complete、fail 或 drop');
+    throw new Error('action must be status, plan, complete, fail, or drop');
   }
   if (action !== 'status' && TASKS.some(([id]) => state.tasks[id].steps.length) && !state.startedAt) {
     state.startedAt = new Date().toISOString();

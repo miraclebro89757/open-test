@@ -79,13 +79,13 @@ function findSection(sections, heading) {
   if (!wanted) return null;
   const exact = sections.filter((section) => normalizeHeading(section.heading) === wanted);
   if (exact.length === 1) return exact[0];
-  if (exact.length > 1) throw new Error(`标题「${heading}」对上了不止一节。请传完整标题。`);
+  if (exact.length > 1) throw new Error(`Heading "${heading}" matches more than one section. Pass the full heading.`);
   const partial = sections.filter((section) => {
     const name = normalizeHeading(section.heading);
     return name.length > 1 && (name.includes(wanted) || wanted.includes(name));
   });
   if (partial.length === 1) return partial[0];
-  if (partial.length > 1) throw new Error(`标题「${heading}」对上了不止一节。请传完整标题。`);
+  if (partial.length > 1) throw new Error(`Heading "${heading}" matches more than one section. Pass the full heading.`);
   return null;
 }
 
@@ -141,7 +141,7 @@ function freshUrlByKey(markdown) {
 
 async function readSectionFigures({ workspace, markdown, freshMarkdown, heading, vision }) {
   const section = findSection(parseFigureSections(markdown), heading);
-  if (!section) throw new Error(`源包里没有这一节：${heading}`);
+  if (!section) throw new Error(`The source pack has no section: ${heading}`);
   const urls = freshUrlByKey(freshMarkdown || markdown);
   const readings = [];
   for (const image of section.images) {
@@ -151,15 +151,15 @@ async function readSectionFigures({ workspace, markdown, freshMarkdown, heading,
       continue;
     }
     const url = urls.get(image.key);
-    if (!url) throw new Error(`图 ${image.key} 没有拿到新的临时地址。重新采集这一篇钉钉正文后再读。`);
-    if (typeof vision !== 'function') throw new Error('当前模型不能看图。设置 OPENTEST_VISION_MODEL 后再读这一节。');
+    if (!url) throw new Error(`Figure ${image.key} did not get a fresh temporary URL. Collect this DingTalk document again, then read it.`);
+    if (typeof vision !== 'function') throw new Error('The current model cannot read images. Set OPENTEST_VISION_MODEL, then read this section.');
     const reading = String(await vision({
       url,
       heading: section.heading,
       context: image.context,
       alt: image.alt,
     }) || '').trim();
-    if (!reading) throw new Error(`图 ${image.key} 没有读出内容。`);
+    if (!reading) throw new Error(`Figure ${image.key} produced no reading.`);
     const note = {
       key: image.key,
       heading: section.heading,
@@ -175,19 +175,19 @@ async function readSectionFigures({ workspace, markdown, freshMarkdown, heading,
 
 async function readRequirementFigures({ workspace, heading, fetcher, vision }) {
   const docs = loadPackDocuments(workspace);
-  if (!docs.length) throw new Error('没有需求源包。先采集钉钉文档，或分析本地没有图的文件。');
+  if (!docs.length) throw new Error('There is no requirement source pack. Collect the DingTalk document, or analyze a local file that has no figures.');
   const doc = docs.find((item) => findSection(parseFigureSections(item.markdown), heading));
-  if (!doc) throw new Error(`源包里没有这一节：${heading}`);
+  if (!doc) throw new Error(`The source pack has no section: ${heading}`);
   const section = findSection(parseFigureSections(doc.markdown), heading);
   const pending = section.images.filter((image) => !readFigureNote(workspace, image.key));
   let freshMarkdown = doc.markdown;
   if (pending.length) {
     if (!fetcher || typeof fetcher.fetch !== 'function') {
-      throw new Error('这一节有图，但没有钉钉连接，拿不到当时有效的图地址。');
+      throw new Error('This section has figures, but there is no DingTalk connection, so their temporary URLs cannot be refreshed.');
     }
     const fresh = await fetcher.fetch(doc.nodeId);
     freshMarkdown = fresh && fresh.markdown;
-    if (!freshMarkdown) throw new Error('钉钉没有返回这一篇正文，图地址无法刷新。');
+    if (!freshMarkdown) throw new Error('DingTalk did not return this document, so the figure URLs could not be refreshed.');
   }
   return readSectionFigures({
     workspace,
@@ -212,17 +212,17 @@ function assertSectionFiguresRead(workspace, heading) {
   if (!unreadHeadings.length) return;
   if (!heading) {
     const count = new Set(unreadHeadings).size;
-    throw new Error(`源包里有 ${count} 节的图还没读。写图谱前先调用 read_requirement_figures，并传入 sectionHeading。`);
+    throw new Error(`${count} sections still have unread figures. Call read_requirement_figures with sectionHeading before writing the graph.`);
   }
   const matches = docs
     .map((doc) => findSection(parseFigureSections(doc.markdown), heading))
     .filter(Boolean);
-  if (!matches.length) throw new Error(`源包里没有这一节：${heading}`);
+  if (!matches.length) throw new Error(`The source pack has no section: ${heading}`);
   const missing = matches.reduce((sum, section) => (
     sum + section.images.filter((image) => !readFigureNote(workspace, image.key)).length
   ), 0);
   if (missing) {
-    throw new Error(`「${matches[0].heading}」还有 ${missing} 张图没读。先调用 read_requirement_figures。图和正文一起看完再写这一节图谱。`);
+    throw new Error(`"${matches[0].heading}" still has ${missing} unread figures. Call read_requirement_figures. Read the figures with the text before writing this section of the graph.`);
   }
 }
 
@@ -237,7 +237,7 @@ function assertAnalysisStepFiguresRead(workspace, step) {
     sum + section.images.filter((image) => !readFigureNote(workspace, image.key)).length
   ), 0);
   if (missing) {
-    throw new Error(`「${matches[0].heading}」还有 ${missing} 张图没读。先调用 read_requirement_figures。图和正文一起看完再 complete 这一节。`);
+    throw new Error(`"${matches[0].heading}" still has ${missing} unread figures. Call read_requirement_figures. Read the figures with the text before completing this section.`);
   }
 }
 
@@ -270,7 +270,7 @@ function createVisionReader({ model, env = process.env, fetch: fetchImpl = globa
     const info = model || (readModel || require('../pi-config').readPiModel)({ env });
     const direct = info && info.direct;
     if (!direct || !direct.baseUrl || !direct.apiKey) {
-      throw new Error('没有可用的模型地址，无法读图。');
+      throw new Error('No model address is available, so the figure cannot be read.');
     }
     const visionModel = String(env.OPENTEST_VISION_MODEL || 'Qwen/Qwen3-VL-8B-Instruct').trim();
     const endpoint = `${String(direct.baseUrl).replace(/\/$/, '')}/v1/chat/completions`;
@@ -292,13 +292,13 @@ function createVisionReader({ model, env = process.env, fetch: fetchImpl = globa
       }),
     });
     if (!response.ok) {
-      throw new Error(`读图失败（${response.status}）。视觉模型 ${visionModel} 没有看这张图。确认账号已开通该模型，或设置 OPENTEST_VISION_MODEL。`);
+      throw new Error(`Reading the figure failed (${response.status}). Vision model ${visionModel} did not see it. Confirm the account can use that model, or set OPENTEST_VISION_MODEL.`);
     }
     const payload = await response.json();
     const text = payload && payload.choices && payload.choices[0] && payload.choices[0].message
       && payload.choices[0].message.content;
     const reading = typeof text === 'string' ? text.trim() : '';
-    if (!reading) throw new Error(`视觉模型 ${visionModel} 没有返回图的内容。`);
+    if (!reading) throw new Error(`Vision model ${visionModel} returned no reading.`);
     return reading;
   };
 }

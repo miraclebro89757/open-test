@@ -131,7 +131,7 @@ function assertStepStandards(workspace, task, step) {
   const issues = reviewStepStandards(workspace, task, step);
   if (!issues.length) return;
   throw new Error([
-    '标准审核没通过。先改这一步的产物，再 complete。不要开始下一步。',
+    'The standard review did not pass. Fix this step’s output, then complete it. Do not start the next step.',
     ...issues.map((item) => `- ${item}`),
   ].join('\n'));
 }

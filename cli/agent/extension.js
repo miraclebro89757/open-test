@@ -10,6 +10,7 @@ const { runPlaywright } = require('./tools/playwright');
 const { runRecordingSession, createPlaywrightRecordingSession } = require('./tools/record-session');
 const { ensureRecordingBrowser } = require('../browser/recording-browser');
 const { selectRecordingMode, getModeConfirmationMessage } = require('./tools/record-mode-selector');
+const { uiText } = require('./ui-copy');
 const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
 const { pickFolder, canPickFolder } = require('./tools/folder-picker');
@@ -28,7 +29,7 @@ const { updateCheckpoint, loadState } = require('./tasks/checkpoint');
 const { assertStepStandards } = require('./standards/review');
 const { noteDocumentRead, workspaceForFile, progressLines } = require('./tasks/progress');
 const { readProject, setProject } = require('./project');
-const { STEPS, CHOICES, prepareStep, confirmPoints } = require('./commands');
+const { STEPS, prepareStep, confirmPoints } = require('./commands');
 
 const execFileAsync = promisify(execFile);
 const requirePi = createRequire(path.join(__dirname, '..', '..', 'node_modules', '@earendil-works', 'pi-coding-agent', 'package.json'));
@@ -60,7 +61,7 @@ function showProgress(ctx, workspace, readProgress) {
 function visibleWorkspace(requirementDir, productName) {
   const workspace = productWorkspace(requirementDir, productName);
   if (path.basename(workspace).startsWith('.')) {
-    throw new Error('产品工作目录必须在 Finder 里可见');
+    throw new Error('The product workspace must be a visible folder');
   }
   return workspace;
 }
@@ -72,15 +73,17 @@ function agentHome() {
 async function reviewHeals(ctx, project) {
   const pending = pendingInProject(project);
   if (!pending.length) {
-    ctx.ui.notify('没有待确认的自愈版本', 'info');
+    ctx.ui.notify(uiText('heal.none'), 'info');
     return;
   }
   for (const entry of pending) {
-    const choice = await ctx.ui.select(`${path.basename(entry.file)} 保留哪一版`, ['保留自愈后', '恢复自愈前']);
+    const after = uiText('heal.after');
+    const before = uiText('heal.before');
+    const choice = await ctx.ui.select(uiText('heal.which', { file: path.basename(entry.file) }), [after, before]);
     if (!choice) return;
-    keepHealVersion(entry, choice === '恢复自愈前' ? 'before' : 'after');
+    keepHealVersion(entry, choice === before ? 'before' : 'after');
   }
-  ctx.ui.notify('已按选择保留自愈版本', 'info');
+  ctx.ui.notify(uiText('heal.saved'), 'info');
 }
 
 /**
@@ -98,7 +101,7 @@ function currentProject(ctx, options = {}) {
 async function runStep(pi, name, ctx, options = {}) {
   const project = currentProject(ctx, options);
   if (!project) {
-    ctx.ui.notify(options.host === 'web' ? '先在左侧打开一个项目目录' : '先用 /project 选择项目目录', 'warning');
+    ctx.ui.notify(uiText(options.host === 'web' ? 'step.needProjectWeb' : 'step.needProjectCli'), 'warning');
     return;
   }
   
@@ -125,17 +128,20 @@ async function runStep(pi, name, ctx, options = {}) {
   }
   
   // Original logic for other steps
-  const choice = await ctx.ui.select('这一步要做什么', CHOICES);
+  const createChoice = uiText('step.create');
+  const viewChoice = uiText('step.view');
+  const choice = await ctx.ui.select(uiText('step.what'), [createChoice, viewChoice]);
   if (!choice) return;
-  const result = prepareStep({ name, choice, project });
+  const canonical = choice === viewChoice ? '查看已有文档' : choice === createChoice ? '创建新任务' : choice;
+  const result = prepareStep({ name, choice: canonical, project });
   if (result.action === 'blocked') {
-    ctx.ui.notify(result.message, 'warning');
+    ctx.ui.notify(uiText('step.pointsBlocked'), 'warning');
     return;
   }
   if (result.action === 'view') {
     pi.sendUserMessage(`当前项目 ${project}。用户要查看已有的${result.step.title}，不要创建或修改文件。\n${result.files.join('\n')}`);
     if (name === 'points') {
-      const ok = await ctx.ui.confirm('确认这些测试点？', '确认后才可以生成用例');
+      const ok = await ctx.ui.confirm(uiText('step.pointsTitle'), uiText('step.pointsBody'));
       if (ok) confirmPoints(project);
     }
     if (name === 'heal') await reviewHeals(ctx, project);
@@ -145,7 +151,7 @@ async function runStep(pi, name, ctx, options = {}) {
   pi.sendUserMessage(result.message);
   if (name === 'points' && typeof ctx.waitForIdle === 'function') {
     await ctx.waitForIdle();
-    const ok = await ctx.ui.confirm('确认这些测试点？', '确认后才可以生成用例');
+    const ok = await ctx.ui.confirm(uiText('step.pointsTitle'), uiText('step.pointsBody'));
     if (ok) confirmPoints(project);
   }
   if (name === 'run' && typeof ctx.waitForIdle === 'function') {
@@ -158,14 +164,8 @@ async function runStep(pi, name, ctx, options = {}) {
 async function promptForProjectPath(ctx) {
   const homeDir = os.homedir();
   const examplePath = path.join(homeDir, 'Desktop', '项目名');
-  ctx.ui.notify(
-    `💡 提示：\n` +
-    `• 使用完整路径，例如：${examplePath}\n` +
-    `• 可以使用 ~ 代表用户目录：~/Desktop/项目名\n` +
-    `• 可以拖拽文件夹到终端获取路径`,
-    'info'
-  );
-  return ctx.ui.input('项目目录（完整路径）', examplePath);
+  ctx.ui.notify(uiText('project.pathHint', { example: examplePath }), 'info');
+  return ctx.ui.input(uiText('project.pathTitle'), examplePath);
 }
 
 /**
@@ -173,18 +173,18 @@ async function promptForProjectPath(ctx) {
  * dialog is unavailable. Returns null when the user cancels or dismisses.
  */
 async function browseForProject(ctx, currentPath, pick) {
-  ctx.ui.notify('正在打开系统文件夹选择器…', 'info');
+  ctx.ui.notify(uiText('project.opening'), 'info');
   const result = await pick({
-    title: '选择项目目录',
+    title: uiText('project.pickerTitle'),
     defaultPath: currentPath || os.homedir(),
   });
 
   if (result.ok) return result.path;
   if (result.reason === 'cancelled') {
-    ctx.ui.notify('已取消选择', 'info');
+    ctx.ui.notify(uiText('project.cancelled'), 'info');
     return null;
   }
-  ctx.ui.notify(`${result.message}\n已切换为手动输入路径`, 'warning');
+  ctx.ui.notify(`${result.message}\n${uiText('project.manualFallback')}`, 'warning');
   return promptForProjectPath(ctx);
 }
 
@@ -196,15 +196,15 @@ async function switchProject(ctx, args, deps = {}) {
   if (!target) {
     const home = agentHome();
     const { recent, current } = readProject(home);
-    const BROWSE = '📁 浏览本机文件夹...';
-    const MANUAL = '输入新路径...';
+    const BROWSE = uiText('project.browse');
+    const MANUAL = uiText('project.manual');
 
     const options = [...recent];
     // Only offer the native picker where one actually exists.
     if (pickerSupported) options.push(BROWSE);
     options.push(MANUAL);
 
-    const picked = await ctx.ui.select('切换项目', options);
+    const picked = await ctx.ui.select(uiText('project.switch'), options);
     if (!picked) return;
 
     if (picked === BROWSE) {
@@ -222,7 +222,7 @@ async function switchProject(ctx, args, deps = {}) {
   try {
     const saved = setProject(target, agentHome());
     if (typeof ctx.ui.setStatus === 'function') ctx.ui.setStatus('opentest-project', path.basename(saved.current));
-    ctx.ui.notify(`✅ 当前项目：${saved.current}`, 'info');
+    ctx.ui.notify(uiText('project.current', { path: saved.current }), 'info');
   } catch (error) {
     ctx.ui.notify(`❌ ${error.message}`, 'error');
   }
@@ -438,10 +438,9 @@ async function installOpentest(pi, options = {}) {
       const result = await runRecordingSession({
         workspace,
         sandboxUrl,
-        confirm: async (summary) => {
+        confirm: async () => {
           if (!ctx.hasUI) return false;
-          const enhancedSummary = getModeConfirmationMessage(selectedMode, sandboxUrl);
-          return ctx.ui.confirm('录制沙箱场景', `${enhancedSummary}\n\n${summary}`);
+          return ctx.ui.confirm(uiText('record.confirmTitle'), getModeConfirmationMessage(selectedMode, sandboxUrl));
         },
         mode: selectedMode,
         openSession: async (options) => createPlaywrightRecordingSession({
@@ -896,19 +895,19 @@ async function installOpentest(pi, options = {}) {
       
       // Format result
       const summary = [
-        '✅ 探索和生成完成！',
+        'Exploration finished.',
         '',
-        '📊 总结：',
-        `   - 录制事件: ${result.summary.eventCount} 个`,
-        `   - 语义动作: ${result.summary.actionCount} 个`,
-        `   - 用户流程: ${result.summary.flowCount} 个`,
-        `   - 测试意图: ${result.summary.testIntent}`,
-        `   - 分析方式: ${result.summary.analysisSource === 'ai' ? 'AI 增强' : '规则引擎'}`,
+        'Summary:',
+        `   - Recorded events: ${result.summary.eventCount}`,
+        `   - Semantic actions: ${result.summary.actionCount}`,
+        `   - User flows: ${result.summary.flowCount}`,
+        `   - Test intent: ${result.summary.testIntent}`,
+        `   - Analysis: ${result.summary.analysisSource === 'ai' ? 'model' : 'rules'}`,
         '',
-        '📁 生成文件：',
-        `   - 测试脚本: ${path.basename(result.summary.files.script)}`,
-        `   - 说明文档: ${path.basename(result.summary.files.readme)}`,
-        `   - 完整数据: ${path.basename(result.summary.files.sessionDir)}`,
+        'Files:',
+        `   - Test script: ${path.basename(result.summary.files.script)}`,
+        `   - Notes: ${path.basename(result.summary.files.readme)}`,
+        `   - Session data: ${path.basename(result.summary.files.sessionDir)}`,
       ].join('\n');
       
       return textResult(summary, result);

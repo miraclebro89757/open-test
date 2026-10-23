@@ -30,11 +30,11 @@ function batchItemCount(parsed) {
 
 function assertBatchSize(text, parsed) {
   if (typeof text === 'string' && text.length > MAX_BATCH_CHARS) {
-    throw new Error(`这一批有 ${text.length} 字符，超过 ${MAX_BATCH_CHARS}。只提交当前章节，不要在回复里规划整份文档。`);
+    throw new Error(`This batch is ${text.length} characters, over ${MAX_BATCH_CHARS}. Submit the current section only. Do not plan the whole document in the reply.`);
   }
   const count = batchItemCount(parsed);
   if (count > MAX_BATCH_ITEMS) {
-    throw new Error(`这一批有 ${count} 项，超过 ${MAX_BATCH_ITEMS}。按文档标题拆开，每节单独 append。`);
+    throw new Error(`This batch has ${count} items, over ${MAX_BATCH_ITEMS}. Split it by heading and append one section at a time.`);
   }
 }
 
@@ -45,9 +45,9 @@ function parseGraphText(text) {
     const trimmed = String(text || '').trim();
     const cutOff = /Unterminated|Unexpected end|end of JSON/i.test(error.message) || !trimmed.endsWith('}');
     if (cutOff) {
-      throw new Error(`图谱 JSON 在末尾被截断（${trimmed.length} 字符）。请分批调用，mode 设为 append，不要删关系来缩短。`);
+      throw new Error(`The graph JSON is truncated (${trimmed.length} characters). Call again with mode append. Do not drop relations to shorten it.`);
     }
-    throw new Error(`图谱不是合法 JSON：${error.message}`);
+    throw new Error(`The graph is not valid JSON: ${error.message}`);
   }
 }
 
@@ -77,24 +77,24 @@ function graphFileInWorkspace(workspace, graphPath, cwd) {
   const file = path.resolve(cwd || workspace, graphPath);
   const root = path.resolve(workspace);
   if (file !== root && !file.startsWith(`${root}${path.sep}`)) {
-    throw new Error('图谱文件必须在产品工作目录里');
+    throw new Error('The graph file must be inside the product workspace');
   }
-  if (!fs.existsSync(file)) throw new Error(`找不到图谱文件 ${file}`);
+  if (!fs.existsSync(file)) throw new Error(`Graph file not found: ${file}`);
   return file;
 }
 
 async function ingestToNeo4j(graph, { env = process.env, execute } = {}) {
   if (!env.NEO4J_URI || !env.NEO4J_USER || !env.NEO4J_PASSWORD) {
-    return { configured: false, written: false, message: '未配置 NEO4J_URI、NEO4J_USER、NEO4J_PASSWORD。图谱已写入产品目录，没有连接 Neo4j。' };
+    return { configured: false, written: false, message: 'NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD are not set. The graph was written in the product folder and was not sent to Neo4j.' };
   }
   const statements = cypherPlan(graph);
   const run = execute || defaultNeo4jExecute;
   try {
     await run(statements, env);
   } catch (error) {
-    return { configured: true, written: false, message: `图谱文件已写入产品目录。Neo4j 写入失败：${error.message}` };
+    return { configured: true, written: false, message: `The graph file was written in the product folder. Neo4j write failed: ${error.message}` };
   }
-  return { configured: true, written: true, message: '已幂等写入 Neo4j。' };
+  return { configured: true, written: true, message: 'Wrote to Neo4j.' };
 }
 
 async function defaultNeo4jExecute(statements, env) {
@@ -102,7 +102,7 @@ async function defaultNeo4jExecute(statements, env) {
   try {
     neo4j = require('neo4j-driver');
   } catch (error) {
-    throw new Error('没有安装 neo4j-driver');
+    throw new Error('neo4j-driver is not installed');
   }
   const driver = neo4j.driver(env.NEO4J_URI, neo4j.auth.basic(env.NEO4J_USER, env.NEO4J_PASSWORD));
   const session = driver.session();
@@ -137,12 +137,12 @@ async function storeRequirementGraph({
   } else if (graph && typeof graph === 'object') {
     parsed = graph;
   } else {
-    throw new Error('需要 graph 或 graphPath');
+    throw new Error('graph or graphPath is required');
   }
   const rawText = graphPath ? null : (typeof graph === 'string' ? graph : null);
   assertBatchSize(rawText, parsed);
   if (mode === 'replace' && batchItemCount(readGraph(workspace)) > 0) {
-    throw new Error('图谱里已经有内容，不能用 replace 覆盖。这一批请用 append。');
+    throw new Error('The graph already has content. Use append for this batch instead of replace.');
   }
   if (mode === 'append') {
     const existing = readGraph(workspace);

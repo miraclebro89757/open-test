@@ -55,6 +55,17 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    void fetch("/api/ui-locale", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ locale }),
+    }).catch(() => {
+      // The page still switches language when the server cannot store it.
+    });
+  }, [hydrated, locale]);
+
   const setLocale = useCallback((next: Locale) => {
     if (!getLocalePlugin(next)) return;
     setLocaleState(next);
