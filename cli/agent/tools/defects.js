@@ -1,74 +1,65 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
-function defectConfig(env) {
-  return {
-    zentao: env.ZENTAO_BASE_URL && env.ZENTAO_TOKEN
-      ? { baseUrl: env.ZENTAO_BASE_URL, token: env.ZENTAO_TOKEN }
-      : null,
-    jira: env.JIRA_BASE_URL && env.JIRA_TOKEN
-      ? { baseUrl: env.JIRA_BASE_URL, email: env.JIRA_EMAIL || '', token: env.JIRA_TOKEN, jql: env.JIRA_JQL || 'ORDER BY updated DESC' }
-      : null,
-  };
+function readServers(file) {
+  if (!file || !fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return parsed && parsed.mcpServers && typeof parsed.mcpServers === 'object' ? parsed.mcpServers : {};
+  } catch {
+    return {};
+  }
 }
 
-async function fetchDefects({ env = process.env, source = 'auto', fetchImpl = fetch } = {}) {
-  const config = defectConfig(env);
-  const useZentao = (source === 'auto' || source === 'zentao') && config.zentao;
-  const useJira = (source === 'auto' || source === 'jira') && config.jira;
-  if (!useZentao && !useJira) {
+/** Jira, Zentao, and other issue trackers. DingTalk document and sheet servers are not trackers. */
+function trackerKind(name, entry) {
+  const label = String(name || '');
+  const args = Array.isArray(entry.args) ? entry.args.join(' ') : '';
+  const vendor = `${label} ${entry.command || ''} ${args} ${typeof entry.url === 'string' ? entry.url : ''}`;
+  if (/钉钉|dingtalk/i.test(vendor) && !/jira|zentao|禅道|atlassian/i.test(label)) return '';
+  if (/zentao|chandao|禅道/i.test(vendor)) return 'zentao';
+  if (/jira|atlassian/i.test(vendor)) return 'jira';
+  if (/youtrack|linear|bugzilla|redmine|tapd|azure-devops|azuredevops|pingcode|teambition/i.test(vendor)) return 'tracker';
+  if (/缺陷|bug|issue/i.test(label)) return 'tracker';
+  return '';
+}
+
+/**
+ * Bug-tracker MCP servers from Pi's mcp.json. Names and kinds only.
+ * A URL or command can hold a token, so neither is returned.
+ */
+function listTrackers({ env = process.env, workspace = '' } = {}) {
+  const home = env.PI_CODING_AGENT_DIR?.trim() || path.join(os.homedir(), '.pi', 'agent');
+  const merged = { ...readServers(path.join(home, 'mcp.json')) };
+  if (workspace) Object.assign(merged, readServers(path.join(workspace, '.pi', 'mcp.json')));
+  const trackers = [];
+  for (const [name, entry] of Object.entries(merged)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const kind = trackerKind(name, entry);
+    if (!kind) continue;
+    trackers.push({ name, kind, enabled: entry.enabled !== false });
+  }
+  return trackers;
+}
+
+function normalizeBugs(bugs) {
+  if (!Array.isArray(bugs)) throw new Error('bugs must be a list read from the bug tracker MCP');
+  return bugs.slice(0, 100).map((bug) => {
+    if (!bug || typeof bug !== 'object') throw new Error('Each defect needs an id and a title');
+    const id = String(bug.id || bug.key || '').trim();
+    const title = String(bug.title || bug.summary || '').trim();
+    if (!id || !title) throw new Error('Each defect needs an id and a title');
     return {
-      configured: false,
-      bugs: [],
-      message: '未配置禅道或 Jira。设置 ZENTAO_BASE_URL 与 ZENTAO_TOKEN，或 JIRA_BASE_URL、JIRA_EMAIL、JIRA_TOKEN。',
+      source: String(bug.source || 'mcp').slice(0, 40),
+      id: id.slice(0, 80),
+      title: title.slice(0, 300),
+      priority: String(bug.priority || '').slice(0, 40),
+      status: String(bug.status || '').slice(0, 40),
     };
-  }
-  const bugs = [];
-  if (useZentao) bugs.push(...await fetchZentao(config.zentao, fetchImpl));
-  if (useJira) bugs.push(...await fetchJira(config.jira, fetchImpl));
-  return { configured: true, bugs, message: `读取到 ${bugs.length} 条缺陷` };
-}
-
-async function fetchZentao(config, fetchImpl) {
-  const url = new URL('api.php/v1/bugs?limit=20', config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
-  const response = await fetchImpl(url, {
-    headers: { Token: config.token, Accept: 'application/json' },
   });
-  if (!response.ok) throw new Error(`Zentao returned HTTP ${response.status}`);
-  const body = await response.json();
-  const rows = body.bugs || body.data || [];
-  return rows.slice(0, 20).map((bug) => ({
-    source: 'zentao',
-    id: String(bug.id ?? ''),
-    title: String(bug.title || bug.name || ''),
-    priority: String(bug.priority ?? bug.severity ?? ''),
-    status: String(bug.status || ''),
-  }));
-}
-
-async function fetchJira(config, fetchImpl) {
-  const url = new URL('rest/api/3/search/jql', config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`);
-  url.searchParams.set('jql', config.jql);
-  url.searchParams.set('maxResults', '20');
-  url.searchParams.set('fields', 'summary,priority,status');
-  const headers = { Accept: 'application/json' };
-  if (config.email) {
-    headers.Authorization = `Basic ${Buffer.from(`${config.email}:${config.token}`).toString('base64')}`;
-  } else {
-    headers.Authorization = `Bearer ${config.token}`;
-  }
-  const response = await fetchImpl(url, { headers });
-  if (!response.ok) throw new Error(`Jira returned HTTP ${response.status}`);
-  const body = await response.json();
-  return (body.issues || []).slice(0, 20).map((issue) => ({
-    source: 'jira',
-    id: String(issue.key || ''),
-    title: String(issue.fields?.summary || ''),
-    priority: String(issue.fields?.priority?.name || ''),
-    status: String(issue.fields?.status?.name || ''),
-  }));
 }
 
 function renderDefects(bugs) {
@@ -76,23 +67,7 @@ function renderDefects(bugs) {
   return bugs.map((bug) => `- [${bug.source}] ${bug.id} ${bug.priority} ${bug.status} ${bug.title}`).join('\n') + '\n';
 }
 
-/**
- * Which variables a person still has to set. Names only, never values, so a page
- * can show the list without risking a token.
- */
-function defectSetup(env = process.env) {
-  const present = (name) => Boolean(env[name]);
-  const check = (required) => {
-    const missing = required.filter((name) => !present(name));
-    return { configured: missing.length === 0, missing, required };
-  };
-  return {
-    zentao: check(['ZENTAO_BASE_URL', 'ZENTAO_TOKEN']),
-    jira: { ...check(['JIRA_BASE_URL', 'JIRA_TOKEN']), optional: ['JIRA_EMAIL', 'JIRA_JQL'].filter((name) => !present(name)) },
-  };
-}
-
-/** Write what was read to defects/latest.md (for people) and latest.json (for the page and the report). */
+/** Write what an MCP read returned. This does not connect to Zentao or Jira. */
 function saveDefects(workspace, result, now = () => new Date()) {
   const dir = path.join(workspace, 'defects');
   fs.mkdirSync(dir, { recursive: true });
@@ -103,4 +78,10 @@ function saveDefects(workspace, result, now = () => new Date()) {
   );
 }
 
-module.exports = { fetchDefects, renderDefects, defectSetup, saveDefects };
+function recordDefects(workspace, bugs, now = () => new Date()) {
+  const normalized = normalizeBugs(bugs);
+  saveDefects(workspace, { bugs: normalized }, now);
+  return { count: normalized.length, bugs: normalized, message: `写入 ${normalized.length} 条缺陷` };
+}
+
+module.exports = { listTrackers, recordDefects, renderDefects, saveDefects, trackerKind };

@@ -92,7 +92,7 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
   run: { mode: "send", text: "运行已经录好的 UI 采集，或 automation 目录里已有的脚本，然后汇报每条用例的结果。不要修改脚本，不要替换选择器。" },
-  defects: { mode: "send", text: "读取禅道或 Jira 的缺陷，写入 defects 目录。没有配置就告诉我缺哪些环境变量。" },
+  defects: { mode: "send", text: "用已经连接的缺陷跟踪 MCP 读取缺陷，并调用 record_defects 写入 defects 目录。没有连接就告诉我去设置的 MCP 里添加，不要编造缺陷，不要用环境变量直连禅道或 Jira。" },
   report: { mode: "send", text: "根据已经写好的用例和缺陷写测试简报。不要编造通过率。" },
 };
 

@@ -236,10 +236,8 @@ Agent 里 `@path/to/doc.md` 可以用绝对路径。`/` 列出提示词。`Ctrl+
 | `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | 使用已有的 Neo4j，而不是随仓库启动的那个 |
 | `DINGTALK_DOC_MCP_URL` | 钉钉文档 MCP；`mcp.json` 里已按名称配好时可以不设 |
 | `DINGTALK_EXCEL_MCP_URL` | 钉钉表格 MCP；没有名为 `dingtalk-excel` 的服务时使用 |
-| `ZENTAO_BASE_URL` / `ZENTAO_TOKEN` | `/defects` 读取禅道 |
-| `JIRA_BASE_URL` / `JIRA_TOKEN` | `/defects` 读取 Jira。`JIRA_EMAIL` 和 `JIRA_JQL` 可选 |
 
-`/defects` 会说明缺哪几项，不会编造缺陷。
+`/defects` 通过设置里已经连接的缺陷跟踪 MCP 读取和操作缺陷，例如 Jira 或禅道。OpenTest 不保存那份令牌，也不再自己直连这些系统。它不会编造缺陷。
 
 [`.env.example`](.env.example) 里的 `OPENTEST_PROVIDER`、`OPENTEST_API_KEY` 以及其余配置档变量，属于旧的 `opentest-ai config`。Agent 不读它们。
 

@@ -14,7 +14,7 @@ const { uiText } = require('./ui-copy');
 const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
 const { pickFolder, canPickFolder } = require('./tools/folder-picker');
-const { fetchDefects, renderDefects, saveDefects } = require('./tools/defects');
+const { recordDefects, renderDefects } = require('./tools/defects');
 const { buildReport } = require('./tools/report');
 const { productWorkspace } = require('./tools/workspace');
 const { bundledPromptsDir, isBuiltinAnalysisPrompt } = require('./prompts');
@@ -423,31 +423,46 @@ async function installOpentest(pi, options = {}) {
   });
 
   pi.registerTool({
-    name: 'fetch_zentao_jira',
-    label: 'Fetch defects',
-    description: '用本机环境变量直连禅道或 Jira，读取未在对话里粘贴的缺陷列表。',
-    promptSnippet: 'Read Zentao or Jira defects from configured credentials',
-    promptGuidelines: ['Use fetch_zentao_jira when the user asks for Zentao or Jira bugs. Do not invent defects when it reports that credentials are missing.'],
+    name: 'record_defects',
+    label: 'Record defects',
+    description: '把已经从缺陷跟踪 MCP 读到的缺陷写入 defects/。不要在这里连接禅道或 Jira。',
+    promptSnippet: 'Save defects already read from a connected bug-tracker MCP',
+    promptGuidelines: [
+      'Read, create, comment, and change issue status only through the bug-tracker MCP the user connected.',
+      'After a read, call record_defects with the id, title, priority, and status. Do not invent defects. Do not call Zentao or Jira HTTP yourself.',
+    ],
     parameters: Type.Object({
       requirementDir: Type.String({ description: 'Directory containing the requirement document' }),
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
-      source: Type.Optional(Type.String({ description: 'auto, zentao, or jira' })),
+      bugs: Type.Array(Type.Object({
+        source: Type.Optional(Type.String({ description: 'Tracker name, such as jira or zentao' })),
+        id: Type.String({ description: 'Issue id or key' }),
+        title: Type.String({ description: 'Issue title' }),
+        priority: Type.Optional(Type.String({ description: 'Priority as reported by the tracker' })),
+        status: Type.Optional(Type.String({ description: 'Status as reported by the tracker' })),
+      }), { description: 'Defects already returned by the connected bug-tracker MCP' }),
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
-      const result = await fetchDefects({ source: params.source || 'auto' });
-      if (result.configured) {
-        saveDefects(workspace, result);
+      try {
+        const result = recordDefects(workspace, params.bugs);
+        markTask(workspace, {
+          product: params.productName,
+          task: 'defects',
+          step: 'fetch',
+          action: 'complete',
+          note: result.message,
+        });
+        showProgress(ctx, workspace);
+        return textResult(`${result.message}\n${renderDefects(result.bugs)}`, { ...result, workspace });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        markTask(workspace, {
+          product: params.productName, task: 'defects', step: 'fetch', action: 'fail', note: message,
+        });
+        showProgress(ctx, workspace);
+        throw error;
       }
-      markTask(workspace, {
-        product: params.productName,
-        task: 'defects',
-        step: 'fetch',
-        action: result.configured ? 'complete' : 'fail',
-        note: result.message,
-      });
-      showProgress(ctx, workspace);
-      return textResult(`${result.message}\n${renderDefects(result.bugs)}`, { ...result, workspace });
     },
   });
 

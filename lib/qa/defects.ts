@@ -1,12 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { checkpointModule, loadAgentModule } from "./legacy";
-import { readCheckpoint } from "./checkpoint";
-import type { Bug, DefectList, DefectSetup } from "./defect-types";
+import { loadAgentModule } from "./legacy";
+import type { Bug, DefectList, DefectSetup, TrackerMcp } from "./defect-types";
 
 interface DefectsModule {
-  fetchDefects(options: { env?: NodeJS.ProcessEnv; source?: string; fetchImpl?: typeof fetch }): Promise<{ configured: boolean; bugs: Bug[]; message: string }>;
-  defectSetup(env?: NodeJS.ProcessEnv): DefectSetup;
+  listTrackers(options?: { env?: NodeJS.ProcessEnv; workspace?: string }): TrackerMcp[];
+  recordDefects(workspace: string, bugs: unknown, now?: () => Date): { count: number; message: string };
   saveDefects(workspace: string, result: { bugs: Bug[] }, now?: () => Date): void;
 }
 
@@ -14,11 +13,12 @@ function defectsModule(): DefectsModule {
   return loadAgentModule<DefectsModule>("tools/defects.js");
 }
 
-export function defectSetup(env: NodeJS.ProcessEnv = process.env): DefectSetup {
-  return defectsModule().defectSetup(env);
+/** Connected bug-tracker MCP servers. Names only. */
+export function defectSetup(workspace: string, env: NodeJS.ProcessEnv = process.env): DefectSetup {
+  return { trackers: defectsModule().listTrackers({ env, workspace }) };
 }
 
-/** defects/latest.json, as the terminal tool and this page both write it. */
+/** defects/latest.json, written after an MCP read. */
 export function readDefects(workspace: string): DefectList | null {
   try {
     const saved = JSON.parse(fs.readFileSync(path.join(workspace, "defects", "latest.json"), "utf8")) as DefectList;
@@ -28,37 +28,7 @@ export function readDefects(workspace: string): DefectList | null {
   }
 }
 
-function product(workspace: string): string {
-  return readCheckpoint(workspace)?.product || path.basename(workspace);
-}
-
-export interface SyncOptions {
-  source?: "auto" | "zentao" | "jira";
-  env?: NodeJS.ProcessEnv;
-  fetchImpl?: typeof fetch;
-}
-
-/**
- * Read defects from Zentao or Jira with the server's own credentials, save them,
- * and record the step in the checkpoint like the terminal tool does.
- */
-export async function syncDefects(workspace: string, options: SyncOptions = {}): Promise<{ configured: boolean; count: number; message: string }> {
-  const checkpoint = checkpointModule();
-  let result: Awaited<ReturnType<DefectsModule["fetchDefects"]>>;
-  try {
-    result = await defectsModule().fetchDefects({ env: options.env ?? process.env, source: options.source ?? "auto", fetchImpl: options.fetchImpl });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    checkpoint.updateCheckpoint(workspace, { product: product(workspace), task: "defects", step: "fetch", action: "fail", note: message });
-    throw error;
-  }
-  if (result.configured) defectsModule().saveDefects(workspace, result);
-  checkpoint.updateCheckpoint(workspace, {
-    product: product(workspace),
-    task: "defects",
-    step: "fetch",
-    action: result.configured ? "complete" : "fail",
-    note: result.message,
-  });
-  return { configured: result.configured, count: result.bugs.length, message: result.message };
+/** Store defects the agent already read from a bug-tracker MCP. */
+export function recordDefects(workspace: string, bugs: unknown, now?: () => Date): { count: number; message: string } {
+  return defectsModule().recordDefects(workspace, bugs, now);
 }

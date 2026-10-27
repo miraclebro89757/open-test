@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { runPlaywright } = require('./tools/playwright');
 const { recordScenario } = require('./tools/record');
-const { fetchDefects, defectSetup, saveDefects } = require('./tools/defects');
+const { listTrackers, recordDefects, saveDefects } = require('./tools/defects');
 const { buildReport, signRelease } = require('./tools/report');
 const { gitDiffImpact } = require('./tools/git-diff');
 const { productWorkspace, sanitizeProductName } = require('./tools/workspace');
@@ -93,10 +93,19 @@ test('recording does not open the sandbox when confirmation is declined', async 
   assert.equal(opened, false);
 });
 
-test('defect fetch does not invent bugs without credentials', async () => {
-  const result = await fetchDefects({ env: {}, fetchImpl: async () => { throw new Error('network'); } });
-  assert.equal(result.configured, false);
-  assert.deepEqual(result.bugs, []);
+test('defect trackers come from MCP config and a token in the URL is not returned', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-mcp-'));
+  fs.writeFileSync(path.join(home, 'mcp.json'), JSON.stringify({ mcpServers: {
+    jira: { url: 'https://jira.example/mcp?token=secret-token' },
+    'dingtalk-doc': { url: 'https://docs.example/mcp' },
+    zentao: { command: 'npx', args: ['zentao-mcp'], enabled: false },
+  } }));
+  const trackers = listTrackers({ env: { PI_CODING_AGENT_DIR: home } });
+  assert.deepEqual(trackers.map((item) => [item.name, item.kind, item.enabled]), [
+    ['jira', 'jira', true],
+    ['zentao', 'zentao', false],
+  ]);
+  assert.ok(!JSON.stringify(trackers).includes('secret-token'));
 });
 
 test('report counts only local case headings', () => {
@@ -149,14 +158,12 @@ test('report uses the latest finished run and says so when there is none', () =>
   assert.ok(!report.text.includes('automation/b.spec.ts'));
 });
 
-test('defect setup lists the variables still missing and never their values', () => {
-  const none = defectSetup({});
-  assert.deepEqual(none.zentao.missing, ['ZENTAO_BASE_URL', 'ZENTAO_TOKEN']);
-  assert.deepEqual(none.jira.missing, ['JIRA_BASE_URL', 'JIRA_TOKEN']);
-  const partial = defectSetup({ ZENTAO_BASE_URL: 'https://z.example.com', ZENTAO_TOKEN: 'secret-token', JIRA_BASE_URL: 'https://j.example.com' });
-  assert.equal(partial.zentao.configured, true);
-  assert.deepEqual(partial.jira.missing, ['JIRA_TOKEN']);
-  assert.ok(!JSON.stringify(partial).includes('secret-token'));
+test('recording defects stores the MCP result and rejects a defect with no title', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-record-defects-'));
+  const saved = recordDefects(dir, [{ source: 'jira', id: 'K-1', title: '登录失败', priority: 'High', status: 'open' }]);
+  assert.equal(saved.count, 1);
+  assert.match(fs.readFileSync(path.join(dir, 'defects', 'latest.md'), 'utf8'), /K-1/);
+  assert.throws(() => recordDefects(dir, [{ id: 'K-2' }]), /id and a title/);
 });
 
 test('saved defects feed the report with counts by status', () => {
@@ -230,7 +237,7 @@ test('extension registers the terminal tools', async () => {
     'task_checkpoint',
     'run_playwright_test',
     'record_playwright_scenario',
-    'fetch_zentao_jira',
+    'record_defects',
     'write_executive_report',
     'ingest_requirement_sources',
     'sync_case_sheet',

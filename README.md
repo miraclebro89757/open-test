@@ -236,10 +236,8 @@ Inside the agent, `@path/to/doc.md` accepts absolute paths. `/` lists prompts. `
 | `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` | An existing Neo4j instead of the bundled one |
 | `DINGTALK_DOC_MCP_URL` | DingTalk document MCP, if it is not named in `mcp.json` |
 | `DINGTALK_EXCEL_MCP_URL` | DingTalk sheet MCP, if it is not named `dingtalk-excel` |
-| `ZENTAO_BASE_URL` / `ZENTAO_TOKEN` | Zentao for `/defects` |
-| `JIRA_BASE_URL` / `JIRA_TOKEN` | Jira for `/defects`. `JIRA_EMAIL` and `JIRA_JQL` are optional |
 
-`/defects` says which of those are missing. It does not invent bugs.
+`/defects` reads and updates issues through a bug tracker already connected under Settings → MCP, such as Jira or Zentao. OpenTest does not store that token and does not call those products itself. It does not invent bugs.
 
 `OPENTEST_PROVIDER`, `OPENTEST_API_KEY`, and the rest of the profile block in [`.env.example`](.env.example) belong to the legacy `opentest-ai config` store. The agent does not read them.
 

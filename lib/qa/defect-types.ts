@@ -1,7 +1,7 @@
 // Client-safe shapes for the defect panel: no node imports.
 
 export interface Bug {
-  source: "zentao" | "jira" | string;
+  source: string;
   id: string;
   title: string;
   priority: string;
@@ -13,17 +13,15 @@ export interface DefectList {
   bugs: Bug[];
 }
 
-export interface DefectSystemSetup {
-  configured: boolean;
-  /** Environment variable names still to be set. Names only, never values. */
-  missing: string[];
-  required: string[];
-  optional?: string[];
+/** A bug tracker the user connected in MCP settings. No URL and no token. */
+export interface TrackerMcp {
+  name: string;
+  kind: "jira" | "zentao" | "tracker" | string;
+  enabled: boolean;
 }
 
 export interface DefectSetup {
-  zentao: DefectSystemSetup;
-  jira: DefectSystemSetup;
+  trackers: TrackerMcp[];
 }
 
 export function countByStatus(bugs: Bug[]): Array<{ status: string; count: number }> {

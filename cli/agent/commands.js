@@ -12,7 +12,7 @@ const STEPS = [
   ['explore', 'ctrl+shift+4', '智能探索', ['automation', 'cases'], '启动浏览器让用户操作一遍，Agent 自动分析并生成测试脚本。使用 explore_and_generate 工具。'],
   ['record', 'ctrl+shift+5', '录制', ['recordings', 'cases'], '先问沙箱的 http 或 https 地址，再采集 Playwright UI 操作到 recordings/。不要编造地址，不要生成脚本，不要录 API。'],
   ['run', 'ctrl+shift+6', '跑自动化', ['automation', 'recordings'], '回放 recordings/ 里的 UI 采集，或跑 automation/ 里已有的脚本。不要改脚本，不要替换选择器。'],
-  ['defects', 'ctrl+shift+8', '缺陷', ['defects'], '读取禅道或 Jira。未配置时说明缺什么，不要编造缺陷。'],
+  ['defects', 'ctrl+shift+8', '缺陷', ['defects'], '用已经连接的缺陷跟踪 MCP 读取或操作缺陷。没有连接时说明去设置里添加，不要编造缺陷，不要用环境变量直连禅道或 Jira。'],
   ['report', 'ctrl+shift+9', '测试简报', ['reports'], '根据已经写好的用例和缺陷写测试简报。不要编造通过率。'],
 ];
 
