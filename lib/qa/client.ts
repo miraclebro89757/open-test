@@ -12,7 +12,6 @@ export type QaPanelId =
   | "automation"
   | "record"
   | "run"
-  | "heal"
   | "defects"
   | "report"
   | "reviews"
@@ -28,7 +27,6 @@ export const QA_PANEL_TITLES: Record<QaPanelId, string> = {
   automation: "自动化脚本",
   record: "录制",
   run: "执行",
-  heal: "自愈",
   defects: "缺陷",
   report: "报告",
   reviews: "待审核",
@@ -93,8 +91,7 @@ export const STAGE_REQUESTS: Record<string, QaAgentRequest> = {
     text: `测试点已经确认。请为已确认的测试点写功能用例。${CASE_TEMPLATE_RULE}写完一个功能就用 task_checkpoint complete。标准审核没通过就先改再 complete，不要带着问题开始下一步。写完后调用 sync_case_sheet 推到钉钉表格。待澄清里标成忽略的不要写，已补充的按补充来写，待讨论的先不写。`,
   },
   record: { mode: "compose", text: "为用例录制自动化脚本。用例编号：   沙箱地址：" },
-  run: { mode: "send", text: "运行 automation 目录里的自动化脚本，选择器失效时自愈，然后汇报每条用例的结果。" },
-  heal: { mode: "send", text: "看最近一次执行里失败的 UI 脚本。如果是选择器失效，用 heal_selector 修复，再重新运行这个脚本，告诉我改了哪些选择器。" },
+  run: { mode: "send", text: "运行已经录好的 UI 采集，或 automation 目录里已有的脚本，然后汇报每条用例的结果。不要修改脚本，不要替换选择器。" },
   defects: { mode: "send", text: "读取禅道或 Jira 的缺陷，写入 defects 目录。没有配置就告诉我缺哪些环境变量。" },
   report: { mode: "send", text: "根据已经写好的用例和缺陷写测试简报。不要编造通过率。" },
 };
@@ -113,7 +110,7 @@ const BATCH_REQUEST: QaAgentRequest = {
 
 /** Guided mode keeps one stage per click. The other two start the whole batch. */
 export function stageRequest(stage: string, mode: WorkPolicy): QaAgentRequest {
-  if (mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "heal" && stage !== "defects" && stage !== "report") {
+  if (mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "defects" && stage !== "report") {
     return BATCH_REQUEST;
   }
   return STAGE_REQUESTS[stage] ?? STAGE_REQUESTS.analysis;

@@ -36,23 +36,7 @@ opentest-ai run "访问 https://example.com 并验证标题包含 Example"
 
 ---
 
-### 3. 智能修复
-
-假设你有一个失败的测试 `tests/login.spec.js`：
-
-```bash
-opentest-ai heal tests/login.spec.js
-```
-
-**预期行为**：
-- Agent 分析失败原因
-- 识别元素变化、超时等问题
-- 自动修复选择器
-- 生成修复后的脚本
-
----
-
-### 4. 测试报告查看
+### 3. 测试报告查看
 
 ```bash
 opentest-ai report
@@ -121,7 +105,6 @@ docker ps
 - [ ] `opentest-ai doctor` 全部通过
 - [ ] `opentest-ai run` 能生成并执行测试
 - [ ] `opentest-ai record` 能录制操作
-- [ ] `opentest-ai heal` 能修复失败的测试
 - [ ] `opentest-ai report` 能查看报告
 
 ---

@@ -280,7 +280,6 @@ npm test
 | `/explore` | Ctrl+Shift+4 | 智能探索 ⭐ |
 | `/record` | Ctrl+Shift+5 | 传统录制 |
 | `/run` | Ctrl+Shift+6 | 运行测试 |
-| `/heal` | Ctrl+Shift+7 | 修复选择器 |
 | `/defects` | Ctrl+Shift+8 | 管理缺陷 |
 | `/report` | Ctrl+Shift+9 | 生成报告 |
 

@@ -30,7 +30,9 @@ test('pi arguments keep @ files and the read-only tool set', () => {
   assert.equal(args.includes('/prompts'), true);
   assert.equal(args.includes('--no-prompt-templates'), false);
   assert.equal(args.includes('/extensions/opentest.js'), true);
-  assert.match(args.find((arg) => arg.includes('run_playwright_test')), /heal_selector/);
+  const tools = args.find((arg) => arg.includes('run_playwright_test'));
+  assert.match(tools, /run_playwright_test/);
+  assert.doesNotMatch(tools, /heal_selector/);
   assert.match(args.find((arg) => arg.includes('run_playwright_test')), /ingest_requirement_sources/);
   assert.match(args.find((arg) => arg.includes('run_playwright_test')), /sync_case_sheet/);
 });

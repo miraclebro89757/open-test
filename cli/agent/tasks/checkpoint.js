@@ -8,7 +8,6 @@ const TASKS = [
   ['test-points', '测试点'],
   ['cases', '功能用例'],
   ['record', '沙箱录制'],
-  ['heal', '选择器自愈'],
   ['defects', '缺陷'],
   ['report', '测试简报'],
 ];

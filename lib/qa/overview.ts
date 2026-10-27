@@ -94,7 +94,6 @@ const REVIEW_STAGE: Partial<Record<ReviewSource, PipelineId>> = {
   case: "cases",
   evolution: "cases",
   baseline: "cases",
-  heal: "run",
 };
 
 /** Run records live under reports/runs/; they are results, not reports. */

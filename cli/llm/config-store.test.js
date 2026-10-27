@@ -441,7 +441,7 @@ test('each step command belongs to the task that should drive its model', () => 
   assert.equal(taskForStep('analyze').id, 'requirementAnalysis');
   assert.equal(taskForStep('cases').id, 'testCaseGeneration');
   assert.equal(taskForStep('record').id, 'codeGeneration');
-  assert.equal(taskForStep('heal').id, 'codeGeneration');
+  assert.equal(taskForStep('heal'), null);
   assert.equal(taskForStep('defects').id, 'bugAnalysis');
   assert.equal(taskForStep('report').id, 'reportGeneration');
   // Status is a read-only view; it should never drag a task model along.

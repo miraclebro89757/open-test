@@ -14,7 +14,6 @@ const { uiText } = require('./ui-copy');
 const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
 const { pickFolder, canPickFolder } = require('./tools/folder-picker');
-const { healSelector, pendingInProject, keepHealVersion } = require('./tools/heal');
 const { fetchDefects, renderDefects, saveDefects } = require('./tools/defects');
 const { buildReport } = require('./tools/report');
 const { productWorkspace } = require('./tools/workspace');
@@ -68,22 +67,6 @@ function visibleWorkspace(requirementDir, productName) {
 
 function agentHome() {
   return process.env.OPENTEST_HOME || os.homedir();
-}
-
-async function reviewHeals(ctx, project) {
-  const pending = pendingInProject(project);
-  if (!pending.length) {
-    ctx.ui.notify(uiText('heal.none'), 'info');
-    return;
-  }
-  for (const entry of pending) {
-    const after = uiText('heal.after');
-    const before = uiText('heal.before');
-    const choice = await ctx.ui.select(uiText('heal.which', { file: path.basename(entry.file) }), [after, before]);
-    if (!choice) return;
-    keepHealVersion(entry, choice === before ? 'before' : 'after');
-  }
-  ctx.ui.notify(uiText('heal.saved'), 'info');
 }
 
 /**
@@ -144,7 +127,6 @@ async function runStep(pi, name, ctx, options = {}) {
       const ok = await ctx.ui.confirm(uiText('step.pointsTitle'), uiText('step.pointsBody'));
       if (ok) confirmPoints(project);
     }
-    if (name === 'heal') await reviewHeals(ctx, project);
     return;
   }
   if (result.action !== 'create') return;
@@ -154,11 +136,6 @@ async function runStep(pi, name, ctx, options = {}) {
     const ok = await ctx.ui.confirm(uiText('step.pointsTitle'), uiText('step.pointsBody'));
     if (ok) confirmPoints(project);
   }
-  if (name === 'run' && typeof ctx.waitForIdle === 'function') {
-    await ctx.waitForIdle();
-    await reviewHeals(ctx, project);
-  }
-  if (name === 'heal') await reviewHeals(ctx, project);
 }
 
 async function promptForProjectPath(ctx) {
@@ -311,7 +288,7 @@ async function installOpentest(pi, options = {}) {
   pi.registerTool({
     name: 'task_checkpoint',
     label: 'Task checkpoint',
-    description: '查看或更新产品任务断点。分析、测试点、用例、录制、自愈、缺陷和简报都用这一份进度。',
+    description: '查看或更新产品任务断点。分析、测试点、用例、录制、缺陷和简报都用这一份进度。',
     promptSnippet: 'Resume every task from the shared checkpoint',
     promptGuidelines: ['Call task_checkpoint with action status before any task. There is no start action. Do not redo steps already marked done. Plan steps once, write the current step, then complete or fail it. Do not complete an analysis section while its figures are still unread. Completing a test-points or cases step reviews 待确认 items against the case standard. Fix the file and complete again before the next step. Do not rewrite confirmed points or cases that have no 待确认 line.'],
     parameters: Type.Object({
@@ -319,7 +296,7 @@ async function installOpentest(pi, options = {}) {
       productName: Type.String({ description: 'Visible product name, such as MyProduct' }),
       sourceFile: Type.Optional(Type.String({ description: 'Requirement file path' })),
       action: Type.Optional(Type.String({ description: 'status to read progress, plan to register steps, complete after the file is written, fail, or drop. There is no start.' })),
-      task: Type.Optional(Type.String({ description: 'analysis, test-points, cases, record, heal, defects, report, signoff, or git-diff' })),
+      task: Type.Optional(Type.String({ description: 'analysis, test-points, cases, record, defects, report, signoff, or git-diff' })),
       steps: Type.Optional(Type.String({ description: 'Step ids for plan, one per line' })),
       step: Type.Optional(Type.String({ description: 'Step id for complete or fail' })),
       note: Type.Optional(Type.String({ description: 'Failure note or a short result' })),
@@ -441,44 +418,6 @@ async function installOpentest(pi, options = {}) {
         });
       }
       showProgress(ctx, workspace);
-      return textResult(result.message, result);
-    },
-  });
-
-  pi.registerTool({
-    name: 'heal_selector',
-    label: 'Heal selector',
-    description: '跑自动化时自动替换失效选择器，并留下替换前和替换后两个版本。',
-    promptSnippet: 'Replace a failed selector immediately and keep both versions',
-    promptGuidelines: ['Call heal_selector as soon as a selector fails during a run. Do not ask the user first. The user chooses which version to keep with /heal.'],
-    executionMode: 'sequential',
-    parameters: Type.Object({
-      filePath: Type.String({ description: 'Test file inside the project' }),
-      oldSelector: Type.String({ description: 'Selector to replace' }),
-      newSelector: Type.String({ description: 'Replacement selector' }),
-      requirementDir: Type.Optional(Type.String({ description: 'Directory containing the requirement document' })),
-      productName: Type.Optional(Type.String({ description: 'Visible product name, such as 筑安通' })),
-    }),
-    async execute(_id, params, _signal, _onUpdate, ctx) {
-      const result = await healSelector({
-        cwd: ctx.cwd,
-        filePath: params.filePath,
-        oldSelector: params.oldSelector,
-        newSelector: params.newSelector,
-        readFile: fs.promises.readFile,
-        writeFile: fs.promises.writeFile,
-      });
-      if (params.requirementDir && params.productName && result.changed) {
-        const workspace = visibleWorkspace(params.requirementDir, params.productName);
-        markTask(workspace, {
-          product: params.productName,
-          task: 'heal',
-          step: `${path.basename(params.filePath)}:${params.oldSelector}`,
-          action: result.success ? 'complete' : 'fail',
-          note: result.message,
-        });
-        showProgress(ctx, workspace);
-      }
       return textResult(result.message, result);
     },
   });

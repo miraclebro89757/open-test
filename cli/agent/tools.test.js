@@ -5,7 +5,6 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { healSelector } = require('./tools/heal');
 const { runPlaywright } = require('./tools/playwright');
 const { recordScenario } = require('./tools/record');
 const { fetchDefects, defectSetup, saveDefects } = require('./tools/defects');
@@ -15,35 +14,6 @@ const { productWorkspace, sanitizeProductName } = require('./tools/workspace');
 const { atToken, createDocumentAutocomplete, documentSuggestions, parentToken, pathSuggestions, mergeSuggestions } = require('./document-complete');
 const { blockBuiltinPromptEdit } = require('./extension');
 const { analysisPromptFile } = require('./prompts');
-
-test('heal selector writes immediately and keeps the previous text', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-heal-'));
-  const file = path.join(dir, 'login.spec.ts');
-  fs.writeFileSync(file, "page.locator('#old')");
-  const healed = await healSelector({
-    cwd: dir,
-    filePath: 'login.spec.ts',
-    oldSelector: '#old',
-    newSelector: '#new',
-    readFile: fs.promises.readFile,
-    writeFile: fs.promises.writeFile,
-    now: () => 1,
-  });
-  assert.equal(healed.changed, true);
-  assert.equal(fs.readFileSync(file, 'utf8'), "page.locator('#new')");
-  assert.equal(fs.readFileSync(healed.before, 'utf8'), "page.locator('#old')");
-});
-
-test('heal selector rejects a path outside the project', async () => {
-  await assert.rejects(() => healSelector({
-    cwd: '/work',
-    filePath: '../secret.spec.ts',
-    oldSelector: 'a',
-    newSelector: 'b',
-    readFile: async () => 'a',
-    writeFile: async () => {},
-  }), /outside/);
-});
 
 test('playwright tool only accepts a spec path', async () => {
   await assert.rejects(() => runPlaywright({
@@ -260,7 +230,6 @@ test('extension registers the terminal tools', async () => {
     'task_checkpoint',
     'run_playwright_test',
     'record_playwright_scenario',
-    'heal_selector',
     'fetch_zentao_jira',
     'write_executive_report',
     'ingest_requirement_sources',
@@ -273,7 +242,7 @@ test('extension registers the terminal tools', async () => {
     'explore_and_generate',
   ]);
   assert.deepEqual(commands, [
-    'project', 'status', 'analyze', 'points', 'cases', 'explore', 'record', 'run', 'heal', 'defects', 'report',
+    'project', 'status', 'analyze', 'points', 'cases', 'explore', 'record', 'run', 'defects', 'report',
   ]);
   // Model choice belongs to Pi (/model, Ctrl+P) and Pi Web, not to a second OpenTest command.
   assert.equal(commands.includes('task-model'), false);

@@ -532,7 +532,7 @@ function formatProfileChoice(item, isActive = false) {
 const TASK_MODELS = [
   { id: 'requirementAnalysis', label: '需求分析', steps: ['analyze'] },
   { id: 'testCaseGeneration', label: '用例生成', steps: ['points', 'cases'] },
-  { id: 'codeGeneration', label: '自动化代码', steps: ['record', 'heal'] },
+  { id: 'codeGeneration', label: '自动化代码', steps: ['record'] },
   { id: 'bugAnalysis', label: '缺陷分析', steps: ['defects'] },
   { id: 'reportGeneration', label: '测试报告', steps: ['report'] },
 ];
@@ -547,7 +547,7 @@ const TASK_MODEL_IDS = TASK_MODELS.map((task) => task.id);
 const TASK_ALIASES = {
   requirementAnalysis: ['requirement', 'requirements', '需求', '需求分析', '分析'],
   testCaseGeneration: ['testcase', 'testcases', 'case', 'cases', 'point', 'points', '用例', '用例生成', '测试点', '测试点生成'],
-  codeGeneration: ['code', 'codegen', '代码', '代码生成', '录制', '自愈', '自动化'],
+  codeGeneration: ['code', 'codegen', '代码', '代码生成', '录制', '自动化'],
   bugAnalysis: ['bug', 'bugs', 'defect', 'defects', 'issue', '缺陷', '缺陷分析'],
   reportGeneration: ['report', 'summary', '报告', '报告生成', '测试报告', '简报'],
 };

@@ -34,8 +34,6 @@ const DECISION: Record<string, string> = {
   确认: "qa.decision.confirm",
   退回: "qa.decision.return",
   接受: "qa.decision.acceptCase",
-  after: "qa.decision.keepSelector",
-  before: "qa.decision.revertSelector",
   apply: "qa.decision.applySelected",
   deprecate: "qa.decision.confirmDeprecate",
   defer: "qa.decision.defer",

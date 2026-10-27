@@ -49,7 +49,7 @@ npm run dev
 
 Open a project directory in the sidebar. That directory is the product workspace: `knowledge/`, `cases/`, and the rest are written directly inside it. The terminal is different: there, artifacts land in a sibling folder named for the product, next to the requirement file.
 
-The right-hand **Test workbench** follows the pipeline: requirements, test points, cases, record, run, defects, report. Beside that it has overview, review queue, lessons, version evolution, the graph, automation scripts, and selector healing.
+The right-hand **Test workbench** follows the pipeline: requirements, test points, cases, record, run, defects, report. Beside that it has overview, review queue, lessons, version evolution, the graph, and automation scripts.
 
 **Settings → General → Language** is English, 简体中文, or 繁體中文. The choice is stored as `pi-locale` and the workbench chrome follows it. Case files, stored statuses, and the text sent to the model stay Chinese.
 
@@ -73,7 +73,7 @@ Tools that call the model directly (explore, and HAR analysis when that path run
 
 ## Workflow
 
-Ten step commands. In the terminal each one also has a shortcut. The Web UI does not register these shortcuts; use the workbench or type the command.
+Nine step commands. In the terminal each one also has a shortcut. The Web UI does not register these shortcuts; use the workbench or type the command.
 
 | Command | Shortcut | Writes |
 |---|---|---|
@@ -83,8 +83,7 @@ Ten step commands. In the terminal each one also has a shortcut. The Web UI does
 | `/cases` | `Ctrl+Shift+3` | `cases/` |
 | `/explore` | `Ctrl+Shift+4` | a script from one free-form browser pass |
 | `/record` | `Ctrl+Shift+5` | `recordings/` |
-| `/run` | `Ctrl+Shift+6` | runs scripts already in `automation/` |
-| `/heal` | `Ctrl+Shift+7` | keep or revert a selector replacement |
+| `/run` | `Ctrl+Shift+6` | replays a UI capture, or runs a script already in `automation/` |
 | `/defects` | `Ctrl+Shift+8` | `defects/` |
 | `/report` | `Ctrl+Shift+9` | `reports/` |
 
@@ -134,7 +133,7 @@ The filename is the module. `录制` is `需要` only for a high-priority core u
 
 Sheet status is only 正常 or 废弃. 待确认 and 已接受 show up as 正常. 执行结果 comes from the latest run. An existing `knowledge/case-sheet.json` is reused. Edits that come back from the sheet are stored as pending lessons, not enabled on their own. Local `cases/*.md` stays the source of truth.
 
-### Recording and healing
+### Recording
 
 `/record` asks for an `http` or `https` sandbox URL. It does not invent one. The address can also come from `OPENTEST_SANDBOX_URL` or from `opentest.sandbox.json` in the workspace.
 
@@ -144,7 +143,7 @@ The browser opens once. You log in, then use the control page to record one or m
 
 `/explore` is a different path: you drive the browser once and `explore_and_generate` writes a script from that pass. It is not the case-by-case recorder.
 
-When a selector fails during `/run`, the agent calls `heal_selector` immediately. The file before and after the replacement are both kept, and the current file uses the replacement so the run can finish. After that run, the terminal asks which version to keep. `/heal` and the heal panel ask the same question.
+OpenTest stops at the capture. It does not repair selectors and it does not turn a recording into a maintainable framework. A failed run stays a failed run.
 
 `/run` replays the UI captures you select, in order, and runs pytest files already under `automation/` when pytest is installed.
 

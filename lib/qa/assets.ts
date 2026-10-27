@@ -73,7 +73,7 @@ function listFiles(dir: string, filter: (name: string) => boolean, depth = 4): s
       if (entry.name.startsWith(".")) continue;
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        // The healing history under versions/ is not a script of its own.
+        // Snapshots under versions/ are not scripts.
         if (level < depth && entry.name !== "versions" && entry.name !== "node_modules" && entry.name !== "source-pack") walk(full, level + 1);
       } else if (filter(entry.name)) {
         found.push(full);
@@ -172,7 +172,7 @@ export interface AutomationScript {
   kind: "ui" | "api";
 }
 
-/** Playwright specs and pytest files under automation/, without healing history. */
+/** Playwright specs and pytest files under automation/, without version snapshots. */
 export function listAutomationScripts(workspace: string): AutomationScript[] {
   const root = path.join(workspace, "automation");
   const scripts: AutomationScript[] = [];
@@ -206,7 +206,7 @@ export interface AssetFile {
   kind?: "ui" | "api";
 }
 
-/** Files of one workspace sub-directory, newest first, without healing history. */
+/** Files of one workspace sub-directory, newest first, without version snapshots. */
 export function listAssetFiles(workspace: string, dir: WorkspaceDir): AssetFile[] {
   const root = path.join(workspace, dir);
   const scripts = dir === "automation" ? new Map(listAutomationScripts(workspace).map((script) => [script.file, script.kind])) : null;

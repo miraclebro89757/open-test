@@ -43,7 +43,7 @@ interface ReviewKind {
   bulkable: number;
 }
 
-const KIND_SOURCES = ["clarification", "auto", "lesson", "test-point", "case", "evolution", "heal", "baseline"];
+const KIND_SOURCES = ["clarification", "auto", "lesson", "test-point", "case", "evolution", "baseline"];
 
 const LEVEL_TONE = { L2: "warn", L3: "bad", L4: "bad" } as const;
 
@@ -58,7 +58,6 @@ function actionsFor(item: ReviewItem): string[] {
   if (item.source === "lesson") return ["启用", "不采纳"];
   if (item.source === "test-point") return ["确认", "退回"];
   if (item.source === "case") return ["接受", "退回"];
-  if (item.source === "heal") return ["after", "before"];
   if (item.source === "baseline") return ["apply"];
   if (item.suggested === "deprecate") return ["deprecate", "defer", "keep"];
   if (item.suggested === "update") return ["update", "defer", "keep"];

@@ -20,11 +20,10 @@ import {
 } from "./lessons";
 import { setItemField } from "./markdown";
 import { applyPointAction, ReviewError } from "./review";
-import { keepHeal, listPendingHeals } from "./runner";
 
 export type ReviewLevel = "L2" | "L3" | "L4";
 export type ReviewGroup = "required" | "lesson" | "auto" | "sample" | "bulk";
-export type ReviewSource = "clarification" | "auto" | "lesson" | "test-point" | "case" | "evolution" | "heal" | "baseline";
+export type ReviewSource = "clarification" | "auto" | "lesson" | "test-point" | "case" | "evolution" | "baseline";
 
 export const REVIEW_KIND_LABEL: Record<ReviewSource, string> = {
   clarification: "待澄清",
@@ -33,7 +32,6 @@ export const REVIEW_KIND_LABEL: Record<ReviewSource, string> = {
   "test-point": "测试点",
   case: "用例草稿",
   evolution: "版本演进",
-  heal: "选择器自愈",
   baseline: "应用基线",
 };
 
@@ -44,11 +42,10 @@ export const REVIEW_KIND_BULK: Partial<Record<ReviewSource, string>> = {
   "test-point": "本类确认",
   case: "本类接受",
   evolution: "本类按建议处理",
-  heal: "本类留下新选择器",
 };
 
 export const REVIEW_KIND_ORDER: ReviewSource[] = [
-  "clarification", "auto", "lesson", "test-point", "case", "evolution", "heal", "baseline",
+  "clarification", "auto", "lesson", "test-point", "case", "evolution", "baseline",
 ];
 
 export interface LessonHint {
@@ -368,29 +365,6 @@ export function listReviews(workspace: string): ReviewItem[] {
     });
   }
 
-  for (const entry of listPendingHeals(workspace)) {
-    items.push({
-      id: `heal:${entry.before}`,
-      source: "heal",
-      title: featureFromFile(entry.relativeFile),
-      feature: featureFromFile(entry.relativeFile),
-      level: "L2",
-      group: "sample",
-      reason: "选择器已经先换成新的，以便这次执行能跑完。留哪一版由人决定。",
-      evidence: `${entry.oldSelector} → ${entry.newSelector}`,
-      before: entry.oldSelector,
-      after: entry.newSelector,
-      impact: "不挡住其他功能",
-      blocking: false,
-      bulkEligible: true,
-      suggested: "留下新选择器",
-      file: entry.relativeFile,
-      itemId: entry.before,
-      fingerprint: fs.existsSync(entry.before) ? fileHash(entry.before) : "",
-      lessons: [],
-    });
-  }
-
   return items;
 }
 
@@ -498,9 +472,6 @@ export function decideReview(workspace: string, id: string, decision: string, no
     } else throw new ReviewError("This decision is not supported");
   } else if (current.source === "evolution") {
     saveEvolutionChoice(workspace, current.itemId, decision);
-  } else if (current.source === "heal") {
-    if (decision !== "before" && decision !== "after") throw new ReviewError("This decision is not supported");
-    keepHeal(workspace, current.itemId, decision);
   } else if (current.source === "baseline") {
     throw new ReviewError("Applying the baseline needs its own confirmation");
   }
@@ -598,16 +569,13 @@ export function acceptKind(workspace: string, source: string, options: { version
     } else if (item.source === "evolution") {
       saveEvolutionChoice(workspace, item.itemId, item.suggested);
       accepted += 1;
-    } else if (item.source === "heal") {
-      keepHeal(workspace, item.itemId, "after");
-      accepted += 1;
     } else skipped += 1;
   }
   if (accepted) appendLog(workspace, { id: `kind:${source}`, source, decision: "accept-kind", accepted, skipped });
   return { accepted, skipped };
 }
 
-const ACCEPT_KIND_ORDER: ReviewSource[] = ["lesson", "clarification", "auto", "test-point", "case", "evolution", "heal"];
+const ACCEPT_KIND_ORDER: ReviewSource[] = ["lesson", "clarification", "auto", "test-point", "case", "evolution"];
 
 export function acceptBulk(workspace: string): { accepted: number; excluded: number } {
   const items = listReviews(workspace);

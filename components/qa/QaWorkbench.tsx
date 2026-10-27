@@ -16,7 +16,6 @@ import { TestPointsPanel } from "./panels/TestPointsPanel";
 import { CasesPanel } from "./panels/CasesPanel";
 import { RecordPanel } from "./panels/RecordPanel";
 import { RunPanel } from "./panels/RunPanel";
-import { HealPanel } from "./panels/HealPanel";
 import { ReportPanel } from "./panels/ReportPanel";
 import { DefectsPanel } from "./panels/DefectsPanel";
 import { ReviewsPanel } from "./panels/ReviewsPanel";
@@ -36,7 +35,7 @@ interface Props {
   onChanged: () => void;
 }
 
-const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "heal", "defects", "report", "reviews", "lessons"];
+const NAV: QaPanelId[] = ["overview", "knowledge", "evolution", "test-points", "cases", "automation", "record", "run", "defects", "report", "reviews", "lessons"];
 
 interface FolderPanel {
   dir: WorkspaceDir;
@@ -50,7 +49,7 @@ function StageAction({ stage, label, mode, onAskAgent }: { stage: keyof typeof S
   const { t } = useI18n();
   const { ask, feedback } = useAskFeedback(onAskAgent);
   const request = stageRequest(stage, mode);
-  const batch = mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "heal" && stage !== "defects" && stage !== "report";
+  const batch = mode !== "guided" && stage !== "record" && stage !== "run" && stage !== "defects" && stage !== "report";
   return (
     <>
       <button type="button" style={buttonStyle("primary")} onClick={() => ask(request)}>{batch ? t("qa.ask.batch") : label}</button>
@@ -70,7 +69,6 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
     automation: { dir: "automation", emptyTitle: t("qa.empty.automation"), emptyHint: t("qa.empty.automationHint"), stage: "record", action: t("qa.action.record") },
     record: { dir: "automation", emptyTitle: "", emptyHint: "" },
     run: { dir: "automation", emptyTitle: "", emptyHint: "" },
-    heal: { dir: "automation", emptyTitle: "", emptyHint: "" },
     defects: { dir: "defects", emptyTitle: "", emptyHint: "" },
     report: { dir: "reports", emptyTitle: t("qa.empty.report"), emptyHint: t("qa.empty.reportHint"), stage: "report", action: t("qa.action.report") },
   };
@@ -127,8 +125,6 @@ export function QaWorkbench({ cwd, overview, error, panel, refreshKey, onPanelCh
           <RecordPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "run" ? (
           <RunPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
-        ) : panel === "heal" ? (
-          <HealPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "defects" ? (
           <DefectsPanel cwd={cwd} refreshKey={refreshKey} onAskAgent={onAskAgent} onOpenFile={onOpenFile} onChanged={onChanged} />
         ) : panel === "report" ? (

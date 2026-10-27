@@ -20,7 +20,7 @@ interface Props {
   onChanged: () => void;
 }
 
-const ALWAYS_STAGED = new Set(["record", "run", "heal", "defects", "report"]);
+const ALWAYS_STAGED = new Set(["record", "run", "defects", "report"]);
 
 export function OverviewPanel({ cwd, overview, error, refreshKey, onOpenPanel, onAskAgent, onChanged }: Props) {
   const { t } = useI18n();

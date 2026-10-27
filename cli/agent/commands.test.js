@@ -7,7 +7,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { setProject, readProject } = require('./project');
 const { confirmPoints, prepareStep } = require('./commands');
-const { healSelector, keepHealVersion, pendingInProject } = require('./tools/heal');
 
 test('project switch is remembered and a hidden directory is rejected', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-home-'));
@@ -33,28 +32,4 @@ test('cases stay blocked until the test points are confirmed', () => {
   const again = prepareStep({ name: 'points', choice: '创建新任务', project });
   assert.equal(again.action, 'create');
   assert.equal(prepareStep({ name: 'cases', choice: '创建新任务', project }).action, 'blocked');
-});
-
-test('heal keeps both versions and can restore the earlier one', async () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-heal-'));
-  const spec = path.join(project, 'automation', 'login.spec.ts');
-  fs.mkdirSync(path.dirname(spec), { recursive: true });
-  fs.writeFileSync(spec, "page.locator('#old')");
-  const healed = await healSelector({
-    cwd: project,
-    filePath: 'automation/login.spec.ts',
-    oldSelector: '#old',
-    newSelector: '#new',
-    readFile: fs.promises.readFile,
-    writeFile: fs.promises.writeFile,
-    now: () => 7,
-  });
-  assert.equal(fs.readFileSync(spec, 'utf8'), "page.locator('#new')");
-  assert.equal(fs.readFileSync(healed.before, 'utf8'), "page.locator('#old')");
-  assert.equal(fs.readFileSync(healed.after, 'utf8'), "page.locator('#new')");
-  const pending = pendingInProject(project);
-  assert.equal(pending.length, 1);
-  keepHealVersion(pending[0], 'before');
-  assert.equal(fs.readFileSync(spec, 'utf8'), "page.locator('#old')");
-  assert.equal(pendingInProject(project).length, 0);
 });

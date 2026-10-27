@@ -175,7 +175,6 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
           const key = item.file;
           const expanded = open === key;
           const label = caseLabel(item);
-          const failing = result?.status === "failed" || result?.status === "error";
           const detail = item.recordedAt ? formatTime(item.recordedAt) : item.file.split("/").pop();
           return (
             <div key={key} style={{ borderBottom: "1px solid var(--border)" }}>
@@ -210,18 +209,6 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
                   {result?.error ? <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 11.5, color: result.status === "error" ? QA_COLORS.warn : "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{result.error}</pre> : null}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button type="button" style={buttonStyle()} onClick={() => onOpenFile(absolute(item.file))}>{t("qa.openScript")}</button>
-                    {failing && result && item.kind === "ui" && result.status === "failed" && item.file.startsWith("automation/") ? (
-                      <button
-                        type="button"
-                        style={buttonStyle("primary")}
-                        onClick={() => ask({
-                          mode: "send",
-                          text: `脚本 ${item.file} 执行失败：${(result.tests.find((test) => test.status === "failed")?.message ?? result.error).split("\n")[0].slice(0, 200)}。如果是选择器失效，用 heal_selector 修复并重新运行这个脚本，告诉我改了哪些选择器；如果是业务失败，不要改脚本，说明可能的缺陷。`,
-                        })}
-                      >
-                        {t("qa.run.heal")}
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               ) : null}

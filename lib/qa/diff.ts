@@ -1,6 +1,6 @@
-// Client-safe: the heal panel imports this, so no node modules here.
+// Client-safe: no node modules, so the browser can import it.
 
-/** The lines that differ between the two versions, with a little context. Healing replaces text in place, so lines pair up. */
+/** The lines that differ. Lines pair by position. */
 export function changedLines(before: string, after: string): Array<{ line: number; before: string; after: string }> {
   const left = before.split("\n");
   const right = after.split("\n");
