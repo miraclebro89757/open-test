@@ -56,19 +56,15 @@ export interface RecordWizardInput {
   cleanupPost: boolean;
 }
 
-/** The request the wizard hands the agent. Every choice is spelled out so the agent has nothing to ask. */
+/** The request the wizard hands the agent. UI capture only; API recording is refused. */
 export function buildRecordRequest(input: RecordWizardInput): string {
+  if (input.mode === "api-only") return "API 录制还没有做。这次不要调用录制工具。";
   const parts = [
-    `请录制自动化脚本，不要再向我确认下面这些选项，直接调用 record_playwright_scenario。浏览器只打开一次：先登录，再连续录多条，全部录完再关闭。`,
+    "请做 Playwright UI 录制采集，不要再向我确认下面这些选项，直接调用 record_playwright_scenario。不要生成 Playwright 脚本或 pytest。",
     `沙箱地址：${input.sandboxUrl}`,
-    `用例：${input.caseId || "（不指定，按录制内容匹配）"}`,
-    `录制模式：${input.mode}`,
+    `用例：${input.caseId || "（不指定，控制页列出需要 Playwright 录制的用例）"}`,
+    "每一段写入 recordings/，不要把用例标成自动化：是。",
   ];
-  if (input.mode !== "ui-only") {
-    parts.push(`API 脚本前置清理：${input.cleanupPre ? "是" : "否"}，后置清理：${input.cleanupPost ? "是" : "否"}`);
-    parts.push(`参数：mode=${input.mode}，cleanupPre=${input.cleanupPre}，cleanupPost=${input.cleanupPost}${input.caseId ? `，caseId=${input.caseId}` : ""}`);
-  } else {
-    parts.push(`参数：mode=ui-only${input.caseId ? `，caseId=${input.caseId}` : ""}`);
-  }
+  if (input.caseId) parts.push(`参数：caseId=${input.caseId}`);
   return parts.join("\n");
 }

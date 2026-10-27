@@ -9,7 +9,8 @@ const { selectSessionCases, scriptName, renderSpec, runRecordingSession, control
 
 const CASES = [
   { file: 'cases/班组.md', id: 'TC012', title: '新建作业班组', priority: '高', automated: false },
-  { file: 'cases/班组.md', id: 'TC013', title: '作业班组重名时提示', priority: '中', automated: false },
+  { file: 'cases/班组.md', id: 'TC013', title: '打开项目列表', priority: '中', automated: false },
+  { file: 'cases/班组.md', id: 'TC015', title: '作业班组重名时提示', priority: '高', automated: false },
   { file: 'cases/登录.md', id: 'TC001', title: '管理员登录', priority: '高', automated: true },
 ];
 
@@ -32,9 +33,9 @@ test('the control page follows the UI language and does not print color codes', 
   }
 });
 
-test('a session offers high-priority cases, including ones already automated', () => {
+test('a session offers core journeys that need a Playwright recording, including ones already automated', () => {
   const selected = selectSessionCases(CASES);
-  assert.equal(selected.scope, 'core');
+  assert.equal(selected.scope, 'record');
   assert.deepEqual(selected.cases.map((item) => item.id), ['TC012', 'TC001']);
 });
 
@@ -115,15 +116,70 @@ test('one login records several cases and closes the browser once', async () => 
   assert.equal(result.recorded, true);
   assert.deepEqual(result.matches.map((item) => item.id), ['TC012', 'TC014']);
   const saved = fs.readFileSync(path.join(workspace, 'cases', '班组.md'), 'utf8');
-  assert.match(saved, /### TC012 新建作业班组[\s\S]*- 自动化：是/);
-  assert.match(saved, /### TC012 新建作业班组[\s\S]*- 脚本：automation\/TC012-新建作业班组\.spec\.ts/);
-  assert.match(saved, /### TC014 打开班组列表[\s\S]*- 自动化：是/);
-  assert.match(saved, /### TC014 打开班组列表[\s\S]*- 脚本：automation\/TC014-打开班组列表\.spec\.ts/);
-  assert.doesNotMatch(saved, /### TC013[\s\S]*- 自动化：/);
-  const first = fs.readFileSync(path.join(workspace, 'automation', 'TC012-新建作业班组.spec.ts'), 'utf8');
-  assert.match(first, /test\('TC012 新建作业班组'/);
-  assert.doesNotMatch(first, /班组列表/);
-  const second = fs.readFileSync(path.join(workspace, 'automation', 'TC014-打开班组列表.spec.ts'), 'utf8');
-  assert.match(second, /test\('TC014 打开班组列表'/);
-  assert.doesNotMatch(second, /新建" \)/);
+  assert.doesNotMatch(saved, /自动化：是|脚本：/);
+  assert.equal(fs.existsSync(path.join(workspace, 'automation')), false);
+  const captures = fs.readdirSync(path.join(workspace, 'recordings')).filter((name) => name.startsWith('ui-'));
+  assert.equal(captures.length, 2);
+  const read = (folder) => JSON.parse(fs.readFileSync(path.join(workspace, 'recordings', folder, 'capture.json'), 'utf8'));
+  const byCase = Object.fromEntries(captures.map((folder) => {
+    const capture = read(folder);
+    return [capture.caseId, capture];
+  }));
+  assert.equal(byCase.TC012.kind, 'ui');
+  assert.deepEqual(byCase.TC012.actions, actions.TC012);
+  assert.equal(byCase.TC012.teardown_strategy, 'none');
+  assert.match(byCase.TC012.storageState, /^recordings\/ui-/);
+  assert.equal(byCase.TC014.caseFile, 'cases/班组.md');
+  assert.doesNotMatch(byCase.TC014.actions.join('\n'), /新建/);
+  assert.equal(fs.existsSync(path.join(workspace, byCase.TC012.storageState)), true);
+});
+
+test('a chosen case is captured even when it is not high priority', async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-session-'));
+  fs.mkdirSync(path.join(workspace, 'cases'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'cases', '班组.md'), `# 功能用例-班组
+
+### TC013 作业班组重名时提示
+- 优先级：中
+- 步骤：
+  1. 再新建一个同名班组
+`);
+  const result = await runRecordingSession({
+    workspace,
+    sandboxUrl: 'https://sandbox.example/app',
+    caseId: 'TC013',
+    confirm: async () => true,
+    openSession: async ({ cases }) => ({
+      async wait() { return this.events.shift(); },
+      events: [{ type: 'login-done' }, { type: 'start', caseId: 'TC013' }, { type: 'stop' }, { type: 'finish' }],
+      start() {},
+      async stop() { return { actions: ['await page.getByRole("button", { name: "保存" }).click();'], url: 'https://sandbox.example/teams' }; },
+      async saveStorage(file) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, '{}');
+      },
+      async close() {},
+      openedCases: cases,
+    }),
+  });
+  assert.equal(result.recorded, true);
+  assert.equal(result.matches[0].id, 'TC013');
+  const folder = fs.readdirSync(path.join(workspace, 'recordings')).find((name) => name.startsWith('ui-'));
+  const capture = JSON.parse(fs.readFileSync(path.join(workspace, 'recordings', folder, 'capture.json'), 'utf8'));
+  assert.match(capture.actions[0], /保存/);
+  assert.match(capture.pageUrl, /teams/);
+});
+
+test('api recording is refused before the browser opens', async () => {
+  let opened = false;
+  const result = await runRecordingSession({
+    workspace: fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-session-')),
+    sandboxUrl: 'https://sandbox.example/app',
+    mode: 'api-only',
+    confirm: async () => { throw new Error('confirm should not run'); },
+    openSession: async () => { opened = true; },
+  });
+  assert.equal(opened, false);
+  assert.equal(result.recorded, false);
+  assert.match(result.message, /API recording is not available/);
 });

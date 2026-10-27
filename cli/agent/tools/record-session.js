@@ -4,9 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const { parseCases, applyAutomationTags } = require('./record');
 const { uiLocale, uiText } = require('../ui-copy');
+const { needsPlaywrightRecording } = require('./recording-need');
 
 const FIELD_LINE = /^[-*]\s*([^：:\n]{1,12})[：:]\s*(.*)$/;
-const STORAGE_STATE = 'automation/auth/admin.json';
 
 function fieldValue(body, name) {
   for (const line of String(body || '').split('\n')) {
@@ -14,6 +14,23 @@ function fieldValue(body, name) {
     if (match && match[1].trim() === name) return match[2].trim();
   }
   return '';
+}
+
+/** A case field and the indented lines under it, until the next field. */
+function fieldBlock(body, name) {
+  const lines = String(body || '').split('\n');
+  const start = lines.findIndex((line) => {
+    const match = FIELD_LINE.exec(line);
+    return match && match[1].trim() === name;
+  });
+  if (start < 0) return '';
+  const first = FIELD_LINE.exec(lines[start]);
+  const collected = [first ? first[2] : ''];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (FIELD_LINE.test(lines[index]) || /^#{1,6}\s/.test(lines[index])) break;
+    collected.push(lines[index]);
+  }
+  return collected.join('\n').trim();
 }
 
 function loadWorkspaceCases(workspace) {
@@ -29,18 +46,19 @@ function loadWorkspaceCases(workspace) {
         id: item.id,
         title: item.title,
         priority: fieldValue(item.body, '优先级'),
+        recording: fieldValue(item.body, '录制'),
         automated: fieldValue(item.body, '自动化') === '是',
+        steps: fieldBlock(item.body, '步骤'),
+        expected: fieldBlock(item.body, '期望结果'),
       });
     }
   }
   return cases;
 }
 
-/** High-priority cases are the core flows. When none exist, the session lists every case. */
+/** Cases marked for Playwright regression. An explicit 录制 field wins over the title rule. */
 function selectSessionCases(cases) {
-  const core = cases.filter((item) => item.priority === '高');
-  if (core.length) return { scope: 'core', cases: core };
-  return { scope: 'all', cases: [...cases] };
+  return { scope: 'record', cases: cases.filter((item) => needsPlaywrightRecording(item)) };
 }
 
 function scriptName(id, title) {
@@ -74,6 +92,7 @@ function controlPage() {
     loginPrompt: uiText('record.control.loginPrompt'),
     scopeCore: uiText('record.control.scopeCore'),
     scopeAll: uiText('record.control.scopeAll'),
+    scopeChosen: uiText('record.control.scopeChosen'),
     record: uiText('record.control.record'),
     recording: uiText('record.control.recording'),
     saved: uiText('record.control.saved'),
@@ -95,9 +114,11 @@ function controlPage() {
   button.primary { background: #1a56db; border-color: #1a56db; color: #fff; }
   #scope { margin: 0 0 8px; color: #3a3a3a; }
   ul { list-style: none; margin: 0 0 16px; padding: 0; }
-  li { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 10px; border: 1px solid #e2e2e2; border-radius: 8px; background: #fff; }
+  li { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 8px 0; padding: 8px 10px; border: 1px solid #e2e2e2; border-radius: 8px; background: #fff; }
   li.current { border-color: #1a56db; }
+  .head { display: flex; align-items: center; gap: 10px; }
   .name { min-width: 0; }
+  .steps { margin: 0; white-space: pre-wrap; color: #3a3a3a; font: 13px/1.5 inherit; }
 </style>
 </head>
 <body>
@@ -145,14 +166,24 @@ function controlPage() {
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = item.id + ' ' + item.title;
-      row.append(button, name);
+      const head = document.createElement('div');
+      head.className = 'head';
+      head.append(button, name);
+      row.append(head);
+      if (item.steps) {
+        const steps = document.createElement('pre');
+        steps.className = 'steps';
+        steps.textContent = item.steps;
+        row.append(steps);
+      }
       if (current === item.id) row.className = 'current';
       list.append(row);
     }
   }
   window.__setCases = (items, scope) => {
     cases = items;
-    document.getElementById('scope').textContent = scope === 'core' ? text.scopeCore : text.scopeAll;
+    const scopeText = scope === 'record' || scope === 'core' ? text.scopeCore : scope === 'chosen' ? text.scopeChosen : text.scopeAll;
+    document.getElementById('scope').textContent = scopeText;
     render();
   };
   document.getElementById('login').addEventListener('click', async () => {
@@ -220,7 +251,7 @@ async function createPlaywrightRecordingSession({ sandboxUrl, cases, scope, exec
   browser.on('disconnected', () => push({ type: 'finish' }));
   await control.setContent(controlPage());
   await control.evaluate((payload) => window.__setCases(payload.cases, payload.scope), {
-    cases: cases.map((item) => ({ id: item.id, title: item.title })),
+    cases: cases.map((item) => ({ id: item.id, title: item.title, steps: item.steps || '' })),
     scope,
   });
   let closed = false;
@@ -259,69 +290,139 @@ async function createPlaywrightRecordingSession({ sandboxUrl, cases, scope, exec
   };
 }
 
+function captureFolderName() {
+  return `ui-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** One UI segment becomes a capture asset. It is not a runnable script. */
+function writeUiCapture(workspace, {
+  caseId = '',
+  title = '',
+  caseFile = '',
+  sandboxUrl,
+  pageUrl,
+  actions,
+  storageStateFile = '',
+  now = Date.now(),
+}) {
+  const folder = captureFolderName();
+  const dir = path.join(workspace, 'recordings', folder);
+  fs.mkdirSync(dir, { recursive: true });
+  let storageState = '';
+  if (storageStateFile && fs.existsSync(storageStateFile)) {
+    fs.copyFileSync(storageStateFile, path.join(dir, 'storage-state.json'));
+    storageState = path.posix.join('recordings', folder, 'storage-state.json');
+  }
+  const capture = {
+    capture_id: folder,
+    kind: 'ui',
+    caseId,
+    title,
+    caseFile,
+    sandboxUrl,
+    pageUrl: pageUrl || sandboxUrl,
+    environment: sandboxUrl,
+    recordedAt: new Date(now).toISOString(),
+    actions,
+    storageState,
+    created_resources: [],
+    teardown_strategy: 'none',
+    cleanup_scope: '',
+    cleanup_note: 'UI capture does not plan cleanup. Server resource ids are recorded when a test runs.',
+  };
+  const file = path.posix.join('recordings', folder, 'capture.json');
+  fs.writeFileSync(path.join(workspace, file), `${JSON.stringify(capture, null, 2)}\n`);
+  return { id: caseId || folder, captureId: folder, file, caseFile };
+}
+
+function listUiCaptures(workspace) {
+  const dir = path.join(workspace, 'recordings');
+  if (!fs.existsSync(dir)) return [];
+  const found = [];
+  for (const name of fs.readdirSync(dir)) {
+    const absolute = path.join(dir, name, 'capture.json');
+    if (!fs.existsSync(absolute)) continue;
+    try {
+      const capture = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+      if (capture.kind !== 'ui') continue;
+      found.push({
+        id: String(capture.capture_id || name),
+        caseId: String(capture.caseId || ''),
+        title: String(capture.title || ''),
+        recordedAt: String(capture.recordedAt || ''),
+        actions: Array.isArray(capture.actions) ? capture.actions.length : 0,
+        file: path.posix.join('recordings', name, 'capture.json'),
+      });
+    } catch {
+      // A half-written capture is skipped until it can be read.
+    }
+  }
+  return found.sort((left, right) => right.recordedAt.localeCompare(left.recordedAt));
+}
+
 async function runRecordingSession({
   workspace,
   sandboxUrl,
   confirm,
   openSession,
   cases,
+  caseId = '',
   mode = 'ui-only',
 }) {
+  if (mode === 'api-only') {
+    return { recorded: false, matches: [], message: 'API recording is not available yet.' };
+  }
   const catalog = cases || loadWorkspaceCases(workspace);
-  const selected = selectSessionCases(catalog);
-  if (!selected.cases.length) return { recorded: false, matches: [], message: 'No cases are available to record.' };
+  let selected;
+  if (caseId) {
+    const chosen = catalog.find((item) => item.id === caseId);
+    if (!chosen) return { recorded: false, matches: [], message: `Case ${caseId} was not found` };
+    selected = { scope: 'chosen', cases: [chosen] };
+  } else {
+    selected = selectSessionCases(catalog);
+  }
+  if (!selected.cases.length) return { recorded: false, matches: [], message: 'No cases need a Playwright recording.' };
   const allowed = await confirm(uiText('record.hint'));
   if (!allowed) return { recorded: false, matches: [], message: 'The sandbox was not opened, so nothing was recorded.' };
 
-  const harFile = mode === 'ui-only' ? '' : path.join(workspace, 'automation', `session-${Date.now()}.har`);
   const session = await openSession({
     sandboxUrl,
     cases: selected.cases,
     scope: selected.scope,
-    mode,
-    harFile,
+    mode: 'ui-only',
+    harFile: '',
   });
   const byId = new Map(selected.cases.map((item) => [item.id, item]));
   const written = [];
   const skipped = [];
   let closed = false;
-  let har = '';
+  const storageStateFile = path.join(workspace, 'recordings', '.session', 'storage-state.json');
   const closeOnce = async () => {
     if (closed) return;
     closed = true;
-    const closedSession = await session.close();
-    har = closedSession && closedSession.har ? closedSession.har : '';
+    await session.close();
   };
 
-  async function take(caseId) {
-    const item = byId.get(caseId);
+  async function take(currentId) {
+    const item = byId.get(currentId);
     const segment = await session.stop();
     if (!item) {
-      skipped.push(`${caseId} is not in this recording list`);
+      skipped.push(`${currentId} is not in this recording list`);
       return;
     }
     if (!segment.actions.length) {
       skipped.push(`${item.id} recorded no actions`);
       return;
     }
-    const relative = path.posix.join('automation', scriptName(item.id, item.title));
-    const absolute = path.join(workspace, relative);
-    await fs.promises.mkdir(path.dirname(absolute), { recursive: true });
-    await fs.promises.writeFile(absolute, renderSpecFile({
-      id: item.id,
+    written.push(writeUiCapture(workspace, {
+      caseId: item.id,
       title: item.title,
-      url: segment.url || sandboxUrl,
+      caseFile: item.file,
+      sandboxUrl,
+      pageUrl: segment.url,
       actions: segment.actions,
-      storageState: STORAGE_STATE,
+      storageStateFile,
     }));
-    const caseFile = path.join(workspace, item.file);
-    const markdown = await fs.promises.readFile(caseFile, 'utf8');
-    await fs.promises.writeFile(caseFile, applyAutomationTags(markdown, {
-      matchedIds: new Set([item.id]),
-      specPaths: [relative],
-      onlyMatched: true,
-    }));
-    written.push({ id: item.id, file: item.file, uiSpec: relative });
   }
 
   try {
@@ -336,7 +437,7 @@ async function runRecordingSession({
       if (!loggedIn) {
         if (message.type === 'login-done') {
           loggedIn = true;
-          await session.saveStorage(path.join(workspace, STORAGE_STATE));
+          await session.saveStorage(storageStateFile);
         }
         continue;
       }
@@ -362,10 +463,9 @@ async function runRecordingSession({
   }
   const lines = [
     uiText('record.done', { count: written.length }),
-    ...written.map((item) => `${item.id} → ${item.uiSpec}`),
+    ...written.map((item) => `${item.id} → ${item.file}`),
   ];
   if (skipped.length) lines.push(skipped.join('; '));
-  if (har) lines.push(uiText('record.har', { path: path.relative(workspace, har) }));
   return { recorded: true, matches: written, message: lines.join('\n') };
 }
 
@@ -375,6 +475,8 @@ module.exports = {
   renderSpec: renderSpecFile,
   loadWorkspaceCases,
   controlPage,
+  writeUiCapture,
+  listUiCaptures,
   runRecordingSession,
   createPlaywrightRecordingSession,
 };

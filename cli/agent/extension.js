@@ -9,7 +9,7 @@ const { createRequire } = require('module');
 const { runPlaywright } = require('./tools/playwright');
 const { runRecordingSession, createPlaywrightRecordingSession } = require('./tools/record-session');
 const { ensureRecordingBrowser } = require('../browser/recording-browser');
-const { selectRecordingMode, getModeConfirmationMessage } = require('./tools/record-mode-selector');
+const { getModeConfirmationMessage } = require('./tools/record-mode-selector');
 const { uiText } = require('./ui-copy');
 const { resolveSandboxUrl, updateLastUsedUrl } = require('./tools/sandbox-config');
 const { createLLMClient } = require('./tools/llm-client');
@@ -375,12 +375,12 @@ async function installOpentest(pi, options = {}) {
   pi.registerTool({
     name: 'record_playwright_scenario',
     label: 'Record scenario',
-    description: '打开一次沙箱浏览器。用户登录后在控制页连续录多条用例，全部录完再关闭。每条脚本用用例编号和标题命名，并写回对应用例。',
-    promptSnippet: 'Record a sandbox scenario with Playwright and tag matching cases',
+    description: '打开一次沙箱浏览器，采集 Playwright UI 操作。每段写入 recordings/，不生成脚本，不录 API。',
+    promptSnippet: 'Capture a Playwright UI recording into recordings/',
     promptGuidelines: [
-      'Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL. The browser stays open: the user logs in once, records several cases from the control page, and closes the browser only when finished. Each script is named with the case id and title.',
-      'Use mode="ui+api" (default) to record both UI (Playwright) and API (HAR) scripts simultaneously.',
-      'Use mode="ui-only" for UI automation only, or mode="api-only" for API recording only.',
+      'Ask for the sandbox http(s) URL, then use record_playwright_scenario. Do not invent the URL. This captures UI actions only and writes recordings/<id>/capture.json. Do not write a Playwright spec, a pytest file, or a HAR.',
+      'Pass caseId when the user named a case. Omit it to list cases that need a Playwright recording: high-priority core user journeys.',
+      'API recording is not available. Do not pass mode="api-only" or mode="ui+api".',
       'The terminal asks the user before opening the browser.',
     ],
     executionMode: 'sequential',
@@ -390,7 +390,7 @@ async function installOpentest(pi, options = {}) {
       sandboxUrl: Type.Optional(Type.String({ description: 'Sandbox base URL (http or https). If not provided, will use configured default or prompt user.' })),
       caseId: Type.Optional(Type.String({ description: 'Functional case id to attach when several cases share the same wording' })),
       mode: Type.Optional(Type.String({ 
-        description: 'Recording mode: "ui+api" (default, records both UI and API), "ui-only" (UI only), or "api-only" (API only)',
+        description: 'UI capture only. Leave this unset. api-only is refused.',
         enum: ['ui+api', 'ui-only', 'api-only'],
       })),
       cleanupPre: Type.Optional(Type.Boolean({ description: 'Generated API script cleans test data before the test. Default true.' })),
@@ -398,6 +398,7 @@ async function installOpentest(pi, options = {}) {
     }),
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const workspace = visibleWorkspace(params.requirementDir, params.productName);
+      if (params.mode === 'api-only') return textResult('API recording is not available yet.');
       const browser = await ensureRecordingBrowser();
       
       // Resolve sandbox URL (from config, env, or prompt)
@@ -415,34 +416,15 @@ async function installOpentest(pi, options = {}) {
         }
       }
       
-      // Interactive mode selection if no mode specified and UI available
-      let selectedMode = params.mode;
-      
-      // Always ask for mode selection if not specified (even if default exists)
-      if (!selectedMode && ctx.hasUI) {
-        try {
-          selectedMode = await selectRecordingMode({ 
-            hasUI: true,
-            piUI: ctx.ui,
-            defaultMode: 'ui+api',
-          });
-        } catch (error) {
-          // User cancelled or error occurred, use default
-          selectedMode = 'ui+api';
-        }
-      } else if (!selectedMode) {
-        // No UI and no mode specified, use default
-        selectedMode = 'ui+api';
-      }
-      
       const result = await runRecordingSession({
         workspace,
         sandboxUrl,
+        caseId: params.caseId,
         confirm: async () => {
           if (!ctx.hasUI) return false;
-          return ctx.ui.confirm(uiText('record.confirmTitle'), getModeConfirmationMessage(selectedMode, sandboxUrl));
+          return ctx.ui.confirm(uiText('record.confirmTitle'), getModeConfirmationMessage('ui-only', sandboxUrl));
         },
-        mode: selectedMode,
+        mode: 'ui-only',
         openSession: async (options) => createPlaywrightRecordingSession({
           ...options,
           executablePath: browser.executablePath || undefined,

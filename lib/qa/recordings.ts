@@ -49,11 +49,11 @@ export function saveSandboxUrl(workspace: string, url: string): void {
   fs.writeFileSync(path.join(workspace, SANDBOX_FILE), `${JSON.stringify(config, null, 2)}\n`);
 }
 
-/** Cases that still have no automation script: what a recording should cover next. */
+/** Cases that still need a Playwright recording and have no script yet. */
 export function casesToRecord(workspace: string): Array<{ id: string; title: string }> {
   return readCases(workspace)
     .flatMap((file) => file.items)
-    .filter((item) => !item.automated)
+    .filter((item) => !item.automated && item.recordingNeed)
     .map((item) => ({ id: item.id, title: item.title }));
 }
 

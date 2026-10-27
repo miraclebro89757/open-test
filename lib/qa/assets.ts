@@ -10,6 +10,7 @@ export const WORKSPACE_DIRS = [
   "graph",
   "test-points",
   "cases",
+  "recordings",
   "automation",
   "defects",
   "reports",
@@ -26,6 +27,8 @@ export interface QaItem {
   status: string;
   /** Case: whether an automation script is attached. */
   automated: boolean;
+  /** Whether this case should be captured as a Playwright regression. */
+  recordingNeed: boolean;
   scripts: string[];
   /** The text under the heading, shown as-is in the detail view. */
   body: string;
@@ -114,19 +117,31 @@ function workspaceRequirementVersion(workspace: string): string {
 }
 
 function readQaFiles(workspace: string, dir: "test-points" | "cases", defaultStatus: string, versionFallback = ""): QaFile[] {
+  const needsRecording = loadAgentModule<{
+    needsPlaywrightRecording(value: { priority: string; title: string; recording: string }): boolean;
+  }>("tools/recording-need.js").needsPlaywrightRecording;
   return listMarkdownFiles(workspace, dir).map((relative) => {
     const markdown = fs.readFileSync(path.join(workspace, relative), "utf8");
-    const items = parseItems(markdown).map<QaItem>((item) => ({
-      id: item.id,
-      title: item.title,
-      priority: item.fields["优先级"] ?? "",
-      status: item.fields["状态"] ?? defaultStatus,
-      automated: item.fields["自动化"] === "是",
-      scripts: splitScripts(item.fields["脚本"]),
-      body: item.body.replace(/^\n+/, "").replace(/\s+$/, ""),
-      file: relative,
-      requirementVersion: normalizeVersion(item.fields["需求版本"]) || versionFallback,
-    }));
+    const items = parseItems(markdown).map<QaItem>((item) => {
+      const priority = item.fields["优先级"] ?? "";
+      const recording = item.fields["录制"] ?? "";
+      return {
+        id: item.id,
+        title: item.title,
+        priority,
+        status: item.fields["状态"] ?? defaultStatus,
+        automated: item.fields["自动化"] === "是",
+        recordingNeed: needsRecording({
+          priority,
+          title: item.title,
+          recording,
+        }),
+        scripts: splitScripts(item.fields["脚本"]),
+        body: item.body.replace(/^\n+/, "").replace(/\s+$/, ""),
+        file: relative,
+        requirementVersion: normalizeVersion(item.fields["需求版本"]) || versionFallback,
+      };
+    });
     return { file: relative, items };
   });
 }

@@ -45,6 +45,7 @@ test('a pending case that follows the template can be completed', () => {
 ### TC001 新建作业班组
 - 优先级：高
 - 自动化：否
+- 录制：需要
 - 状态：待确认
 - 对应测试点：TP001
 - 前置条件：已登录
@@ -54,6 +55,24 @@ test('a pending case that follows the template can be completed', () => {
 `);
   assert.deepEqual(reviewStepStandards(root, 'cases', '班组信息'), []);
   assert.doesNotThrow(() => assertStepStandards(root, 'cases', '班组信息'));
+});
+
+test('a pending case must say whether it needs a Playwright recording', () => {
+  const root = workspace();
+  write(root, 'cases/班组信息.md', `# 功能用例-班组信息
+
+### TC001 新建作业班组
+- 优先级：高
+- 自动化：否
+- 状态：待确认
+- 对应测试点：TP001
+- 前置条件：已登录
+- 步骤：
+  1. 新建一个作业班组
+- 期望结果：作业班组创建成功
+`);
+  const issues = reviewStepStandards(root, 'cases', '班组信息');
+  assert.ok(issues.some((item) => item.includes('录制要写成需要或不需要')));
 });
 
 test('an old case without a status line is not rewritten for this review', () => {

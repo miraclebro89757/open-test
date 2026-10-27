@@ -110,6 +110,8 @@ function reviewCases(workspace, step) {
     if (!String(fields['优先级'] || '').trim()) issues.push(`${item.id} 要写优先级。`);
     const automated = String(fields['自动化'] || '').trim();
     if (automated !== '是' && automated !== '否') issues.push(`${item.id} 自动化要写成是或否。`);
+    const recording = String(fields['录制'] || '').trim();
+    if (recording !== '需要' && recording !== '不需要') issues.push(`${item.id} 录制要写成需要或不需要。只有高优先级的核心用户旅程写需要。`);
     if (!String(fields['对应测试点'] || '').trim()) issues.push(`${item.id} 要写对应测试点。`);
     if (!String(fields['前置条件'] || '').trim()) issues.push(`${item.id} 要写前置条件。`);
     if (!String(fields['期望结果'] || '').trim()) issues.push(`${item.id} 要写期望结果。`);

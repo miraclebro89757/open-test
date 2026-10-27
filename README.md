@@ -18,7 +18,7 @@ Point it at a requirement with `@`, or give it a DingTalk document link. Artifac
 - **Requirement knowledge** — rules, states, preconditions, and open questions, plus a graph
 - **Test points** — one behavior per scenario, each marked for a person to confirm
 - **Functional cases** — numbered steps, one assertion each, runnable without reading code
-- **Recorded automation** — Playwright specs captured after one login, each named for the case you picked
+- **UI captures** — Playwright actions saved under `recordings/` after one login, one capture per case. These are not finished scripts.
 
 A DingTalk link is frozen into `knowledge/source-pack/` first. Later analysis reads that pack. A section that contains figures is graphed only after those figures have been read at fresh URLs. Where the figure and the text disagree, both sides stay and the clash is written as an open question.
 
@@ -82,7 +82,7 @@ Ten step commands. In the terminal each one also has a shortcut. The Web UI does
 | `/points` | `Ctrl+Shift+2` | `test-points/` |
 | `/cases` | `Ctrl+Shift+3` | `cases/` |
 | `/explore` | `Ctrl+Shift+4` | a script from one free-form browser pass |
-| `/record` | `Ctrl+Shift+5` | `automation/` |
+| `/record` | `Ctrl+Shift+5` | `recordings/` |
 | `/run` | `Ctrl+Shift+6` | runs scripts already in `automation/` |
 | `/heal` | `Ctrl+Shift+7` | keep or revert a selector replacement |
 | `/defects` | `Ctrl+Shift+8` | `defects/` |
@@ -106,7 +106,7 @@ In every mode, recording, a shared-environment run, and applying a version-evolu
 
 High-risk open questions mention 下线, 疑似删除, 互相矛盾, 规则缺失, 没有可执行规则, or 新版未提及. They block cases for that feature only.
 
-Completing a test-points or cases step checks the items still marked 待确认. A test point needs a priority and one behavior. A case needs the inspection template, a priority, 自动化 set to 是 or 否, a linked test point, a precondition, an expected result, and steps on their own numbered lines. One case asserts one thing: a title must not join two checks with 与, 兼测, or 同时校验, and a success path is not combined with a duplicate, length, format, or required-field failure. If the check fails, the step is not completed. Items already confirmed, and old cases with no 状态 line, are left as they are.
+Completing a test-points or cases step checks the items still marked 待确认. A test point needs a priority and one behavior. A case needs the inspection template, a priority, 自动化 set to 是 or 否, 录制 set to 需要 or 不需要, a linked test point, a precondition, an expected result, and steps on their own numbered lines. One case asserts one thing: a title must not join two checks with 与, 兼测, or 同时校验, and a success path is not combined with a duplicate, length, format, or required-field failure. If the check fails, the step is not completed. Items already confirmed, and old cases with no 状态 line, are left as they are.
 
 The agent does not invent a pass rate or a defect. A briefing computes a pass rate only from a finished run record, counting passed and failed and leaving skipped and errored scripts out. It does not sign off a release and it does not do change-impact analysis.
 
@@ -118,6 +118,7 @@ The agent does not invent a pass rate or a defect. A briefing computes a pass ra
 ### TC001 标题
 - 优先级：高
 - 自动化：否
+- 录制：需要
 - 状态：待确认
 - 对应测试点：TP001
 - 前置条件：……
@@ -127,7 +128,7 @@ The agent does not invent a pass rate or a defect. A briefing computes a pass ra
 - 期望结果：……
 ```
 
-The filename is the module. Steps are numbered on separate lines even when there is only one. `sync_case_sheet` pushes the cases to a DingTalk spreadsheet in personal space (MCP server name `dingtalk-excel`) and can pull human edits back. The sheet has these columns, in this order:
+The filename is the module. `录制` is `需要` only for a high-priority core user journey that should be covered by a Playwright regression. Validation, permission, default-value, and message cases use `不需要`. A high priority alone is not enough. Old cases without the field are left as they are. Steps are numbered on separate lines even when there is only one. `sync_case_sheet` pushes the cases to a DingTalk spreadsheet in personal space (MCP server name `dingtalk-excel`) and can pull human edits back. The sheet has these columns, in this order:
 
 `编号` `标题` `模块` `需求版本` `优先级` `对应测试点` `前置条件` `步骤` `期望结果` `状态` `执行结果`
 
@@ -139,13 +140,7 @@ Sheet status is only 正常 or 废弃. 待确认 and 已接受 show up as 正常
 
 Recording and replay use the Google Chrome installed on this machine. If Chrome is not there, OpenTest downloads the Chromium build that matches Playwright 1.63.0. The official download is tried first; if it fails, the same install is tried again from the npmmirror Playwright host. Edge, Brave, and a browser saved in `~/.opentest/browser.json` are not used. `opentest-ai doctor` reports which browser will open. `opentest-ai install` prepares it. Docker is only for the optional Neo4j graph service.
 
-The browser opens once. You log in, then use the control page to record several cases, and close the browser only when you are done. The list is every case whose 优先级 is 高. If none are 高, the list is every case. You pick the case; the agent does not guess which clicks belong to which case. Each finished segment is `automation/<id>-<title>.spec.ts`, reuses `automation/auth/admin.json`, and marks only that case `- 自动化：是` with the script path. Other cases are left unchanged. An empty segment is not tagged.
-
-| Mode | What this session writes |
-|---|---|
-| `ui+api` (default) | the Playwright specs above, plus one HAR for the whole session: `automation/session-<timestamp>.har` |
-| `ui-only` | the Playwright specs only |
-| `api-only` | the same specs for the cases you record, plus the session HAR |
+The browser opens once. You log in, then use the control page to record one or more cases, and close the browser only when you are done. A chosen case is the only one listed. Otherwise the list is every case that needs a Playwright recording: a high-priority core user journey. You pick the case; the agent does not guess which clicks belong to which case. Each finished segment is `recordings/<capture_id>/capture.json`: the Playwright actions, the case id, and the saved login. It does not write a spec, a pytest file, or a HAR, and it does not mark the case `- 自动化：是`. API recording is not available yet. An empty segment is not saved.
 
 `/explore` is a different path: you drive the browser once and `explore_and_generate` writes a script from that pass. It is not the case-by-case recorder.
 
@@ -169,7 +164,8 @@ MyProduct/
 ├── graph/          graph.json, index.md, batches; Neo4j only when it is actually reachable
 ├── test-points/
 ├── cases/
-├── automation/     specs, auth/admin.json, and a session HAR when the mode records one
+├── recordings/     UI captures, one folder per segment
+├── automation/     runnable specs and pytest files, assembled separately from captures
 ├── defects/
 ├── reports/
 └── tasks/          checkpoint, status.md, policy.json

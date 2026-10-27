@@ -10,7 +10,7 @@ const STEPS = [
   ['points', 'ctrl+shift+2', '测试点', ['test-points'], '只根据图谱写测试点。写完停下来等人确认。不要写用例。'],
   ['cases', 'ctrl+shift+3', '功能用例', ['cases'], '测试点已经确认。只写功能用例，正文对齐巡检模版，步骤换行编号，一条用例只验证一件事，标题不要用与、兼测、同时校验。创建成功不要和重名或长度写在同一条。新用例的自动化写成否。不要改测试点。'],
   ['explore', 'ctrl+shift+4', '智能探索', ['automation', 'cases'], '启动浏览器让用户操作一遍，Agent 自动分析并生成测试脚本。使用 explore_and_generate 工具。'],
-  ['record', 'ctrl+shift+5', '录制', ['automation', 'cases'], '先问沙箱的 http 或 https 地址，再录制并把结果对上功能用例。不要编造地址。'],
+  ['record', 'ctrl+shift+5', '录制', ['recordings', 'cases'], '先问沙箱的 http 或 https 地址，再采集 Playwright UI 操作到 recordings/。不要编造地址，不要生成脚本，不要录 API。'],
   ['run', 'ctrl+shift+6', '跑自动化', ['automation'], '跑当前项目 automation 里的脚本。选择器失败时立刻调用 heal_selector，不要停下来问。跑完不要自己决定留哪一版。'],
   ['heal', 'ctrl+shift+7', '自愈版本', ['automation'], '自愈在跑自动化时已经自动做完。这里只让用户看前后版本并决定留哪一版，不要再改选择器。'],
   ['defects', 'ctrl+shift+8', '缺陷', ['defects'], '读取禅道或 Jira。未配置时说明缺什么，不要编造缺陷。'],

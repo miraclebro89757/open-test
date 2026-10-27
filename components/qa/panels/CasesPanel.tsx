@@ -21,6 +21,7 @@ interface Props {
 }
 
 type AutomationFilter = "all" | "yes" | "no";
+type RecordingFilter = "all" | "yes" | "no";
 
 /** Cases with their automation coverage; a row opens the steps and the scripts. */
 export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }: Props) {
@@ -33,6 +34,7 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
   const [lifecycle, setLifecycle] = useState("");
   const [runResult, setRunResult] = useState("");
   const [automation, setAutomation] = useState<AutomationFilter>("all");
+  const [recording, setRecording] = useState<RecordingFilter>("all");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -50,6 +52,8 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
     if (runResult && item.runResult !== runResult) return false;
     if (automation === "yes" && !item.automated) return false;
     if (automation === "no" && item.automated) return false;
+    if (recording === "yes" && !item.recordingNeed) return false;
+    if (recording === "no" && item.recordingNeed) return false;
     const needle = query.trim().toLowerCase();
     return !needle || `${item.id} ${item.title}`.toLowerCase().includes(needle);
   });
@@ -113,6 +117,11 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
             <option value="yes">{t("qa.cases.automationYes")}</option>
             <option value="no">{t("qa.cases.automationNo")}</option>
           </select>
+          <select value={recording} onChange={(event) => setRecording(event.target.value as RecordingFilter)} aria-label={t("qa.cases.recordNeed")} style={selectStyle}>
+            <option value="all">{t("qa.cases.recordAll")}</option>
+            <option value="yes">{t("qa.cases.recordYes")}</option>
+            <option value="no">{t("qa.cases.recordNo")}</option>
+          </select>
         </div>
         <CaseSheetPanel cwd={cwd} refreshKey={refreshKey} onChanged={onChanged} />
         {feedback ? <div role="status" style={{ fontSize: 12, color: "var(--text-muted)" }}>{feedback}</div> : null}
@@ -138,6 +147,7 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
                 <Badge tone={item.lifecycle === "废弃" ? "bad" : "ok"}>{storedLabel(t, item.lifecycle || "正常")}</Badge>
                 <Badge tone={item.runResult === "失败" ? "bad" : item.runResult === "通过" ? "ok" : "muted"}>{storedLabel(t, item.runResult || "未执行")}</Badge>
                 {item.priority ? <Badge>{item.priority}</Badge> : null}
+                <Badge tone={item.recordingNeed ? "ok" : "muted"}>{item.recordingNeed ? t("qa.cases.recordNeed") : t("qa.cases.recordSkip")}</Badge>
                 <Badge tone={item.automated ? "ok" : "muted"}>{item.automated ? t("qa.value.automated") : t("qa.value.manual")}</Badge>
                 {item.automated ? (
                   item.scripts.slice(0, 1).map((script) => (
@@ -145,7 +155,7 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
                       {script.split("/").pop()}
                     </button>
                   ))
-                ) : (
+                ) : item.recordingNeed ? (
                   <button
                     type="button"
                     style={{ ...buttonStyle(), height: 24, padding: "0 8px" }}
@@ -153,7 +163,7 @@ export function CasesPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged 
                   >
                     {t("qa.cases.record")}
                   </button>
-                )}
+                ) : null}
               </div>
               {expanded && editing !== rowKey ? (
                 <div style={{ padding: "4px 12px 12px 36px" }}>
