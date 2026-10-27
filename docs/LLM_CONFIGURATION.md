@@ -367,7 +367,7 @@ node cli/commands/llm-config.js show
 3. **团队共享配置示例**
    ```bash
    # 提交配置模板
-   opentest.config.example.json
+   config/opentest.config.example.json
    
    # .gitignore 实际配置
    opentest.config.json

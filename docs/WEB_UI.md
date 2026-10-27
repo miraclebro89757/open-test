@@ -340,5 +340,5 @@ pi-web
 ## 🎯 下一步
 
 - [了解 Explore 模式](./EXPLORE_AND_GENERATE.md)
-- [配置录制模式](../RECORDING_MODES.md)
+- [配置录制模式](guides/RECORDING_MODES.md)
 - [查看完整工作流](./QUICK_START.md)

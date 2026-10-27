@@ -256,13 +256,13 @@ node diagnose-llm.js
 
 ```bash
 # 测试 explore 功能（模拟数据）
-node test-explore.js mock
+node tests/manual/test-explore.js mock
 
 # 测试语义分析
-node test-explore.js semantic
+node tests/manual/test-explore.js semantic
 
 # 测试脚本生成
-node test-explore.js generate
+node tests/manual/test-explore.js generate
 
 # 运行所有测试
 npm test

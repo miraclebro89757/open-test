@@ -425,16 +425,16 @@ npm test -- cli/agent/tools/explore-and-generate.test.js
 
 ```bash
 # 使用模拟数据测试完整流程
-node test-explore.js mock
+node tests/manual/test-explore.js mock
 
 # 测试语义分析
-node test-explore.js semantic
+node tests/manual/test-explore.js semantic
 
 # 测试脚本生成
-node test-explore.js generate
+node tests/manual/test-explore.js generate
 
 # 演示（需要实际浏览器操作）
-node test-explore.js demo
+node tests/manual/test-explore.js demo
 ```
 
 ## 最佳实践
@@ -504,7 +504,7 @@ node test-explore.js demo
 ## 相关文档
 
 - [规划文档](./1008plan.md) - Section 36-39: Browser Explore
-- [录制模式](../RECORDING_MODES.md) - 录制模式选择
+- [录制模式](guides/RECORDING_MODES.md) - 录制模式选择
 - [沙箱配置](../README.md#沙箱配置) - URL 配置管理
 
 ## 总结

@@ -3,7 +3,7 @@
 ## 🚧 Explore and Generate - 智能探索与脚本生成
 
 > **状态**: 开发中 · **文档**: [EXPLORE_AND_GENERATE.md](./docs/EXPLORE_AND_GENERATE.md)
-> **测试**: `npm test` + `node test-explore.js mock`
+> **测试**: `npm test` + `node tests/manual/test-explore.js mock`
 
 ### 功能概述
 
@@ -74,8 +74,8 @@ automation/
 /explore https://test.example.com
 
 # 或通过工具测试
-node test-explore.js mock    # 模拟数据测试
-node test-explore.js demo    # 实际浏览器演示
+node tests/manual/test-explore.js mock    # 模拟数据测试
+node tests/manual/test-explore.js demo    # 实际浏览器演示
 ```
 
 ---
@@ -166,4 +166,4 @@ automation/
 - `.env.example` 去掉已不存在的 Postgres / Redis / Elasticsearch / 前端变量
 
 保留：`cli/`、`.pi/`（`cli/agent/launch.js:28` 运行时加载该技能）、
-`schemas/`、`opentest.config.example.json`、`README.md`、`PUBLISHING.md`、`LICENSE`。
+`schemas/`、`config/opentest.config.example.json`、`README.md`、`LICENSE`。

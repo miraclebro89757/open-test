@@ -10,4 +10,4 @@
 
 `opentest-ai doctor` 只报告 Node 和将要使用的浏览器。Docker 不属于这次检查。`install`、`run` 和 `browser setup` 做同一次准备。
 
-说明写在 [BROWSER_SETUP.md](BROWSER_SETUP.md)，命令表在 README。
+说明写在 [BROWSER_SETUP.md](../guides/BROWSER_SETUP.md)，命令表在 README。

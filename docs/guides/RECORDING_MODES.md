@@ -250,19 +250,19 @@ API Only 模式:
 
 ```bash
 # 查看所有模式信息
-node test-recording-mode.js info
+node tests/manual/test-recording-mode.js info
 
 # 交互式选择模式
-node test-recording-mode.js select
+node tests/manual/test-recording-mode.js select
 
 # 解析模式字符串
-node test-recording-mode.js parse ui+api
+node tests/manual/test-recording-mode.js parse ui+api
 
 # 查看详细帮助
-node test-recording-mode.js help
+node tests/manual/test-recording-mode.js help
 
 # 预览确认消息
-node test-recording-mode.js confirm ui-only
+node tests/manual/test-recording-mode.js confirm ui-only
 ```
 
 ### 单元测试
@@ -352,10 +352,10 @@ A: 不会。所有模式使用相同的录制引擎，质量一致。只是产�
 
 ## 📚 相关文档
 
-- [录制功能总览](./UI_API_RECORDING_SYSTEM.md)
+- [录制功能总览](../notes/UI_API_RECORDING_SYSTEM.md)
 - [HAR 分析文档](./cli/agent/tools/har-analyzer.js)
 - [Playwright 集成](./cli/agent/tools/playwright.js)
 
 ---
 
-**提示**: 如有疑问，运行 `node test-recording-mode.js help` 查看交互式帮助文档！
+**提示**: 如有疑问，运行 `node tests/manual/test-recording-mode.js help` 查看交互式帮助文档！

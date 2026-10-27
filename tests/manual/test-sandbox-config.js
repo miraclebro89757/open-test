@@ -4,10 +4,10 @@
  * 测试沙箱 URL 配置功能
  * 
  * 使用方法：
- * 1. node test-sandbox-config.js setup - 配置沙箱地址
- * 2. node test-sandbox-config.js list - 查看所有配置
- * 3. node test-sandbox-config.js switch <env> - 切换环境
- * 4. node test-sandbox-config.js show - 显示配置文件内容
+ * 1. node tests/manual/test-sandbox-config.js setup - 配置沙箱地址
+ * 2. node tests/manual/test-sandbox-config.js list - 查看所有配置
+ * 3. node tests/manual/test-sandbox-config.js switch <env> - 切换环境
+ * 4. node tests/manual/test-sandbox-config.js show - 显示配置文件内容
  */
 
 const chalk = require('chalk');
@@ -18,7 +18,7 @@ const {
   switchEnvironment,
   listEnvironments,
   getConfigPath,
-} = require('./cli/agent/tools/sandbox-config');
+} = require('../../cli/agent/tools/sandbox-config');
 
 async function main() {
   const command = process.argv[2] || 'help';
@@ -40,7 +40,7 @@ async function main() {
     case 'switch':
       if (!arg) {
         console.log(chalk.red('请指定环境名称'));
-        console.log(chalk.gray('例如：node test-sandbox-config.js switch dev\n'));
+        console.log(chalk.gray('例如：node tests/manual/test-sandbox-config.js switch dev\n'));
         return;
       }
       await testSwitch(workspace, arg);
@@ -116,7 +116,7 @@ async function testList(workspace) {
   
   if (envs.length === 0) {
     console.log(chalk.yellow('⚠️  未找到配置'));
-    console.log(chalk.gray('   运行 ') + chalk.cyan('node test-sandbox-config.js setup') + chalk.gray(' 进行配置\n'));
+    console.log(chalk.gray('   运行 ') + chalk.cyan('node tests/manual/test-sandbox-config.js setup') + chalk.gray(' 进行配置\n'));
     return;
   }
   
@@ -171,7 +171,7 @@ async function testShow(workspace) {
   if (!config) {
     console.log(chalk.yellow('⚠️  未找到配置文件'));
     console.log(chalk.gray('   位置: ') + chalk.cyan(getConfigPath(workspace)));
-    console.log(chalk.gray('   运行 ') + chalk.cyan('node test-sandbox-config.js setup') + chalk.gray(' 进行配置\n'));
+    console.log(chalk.gray('   运行 ') + chalk.cyan('node tests/manual/test-sandbox-config.js setup') + chalk.gray(' 进行配置\n'));
     return;
   }
   
@@ -199,7 +199,7 @@ async function testResolve(workspace) {
     console.log(chalk.yellow('⚠️  无法自动解析 URL\n'));
     console.log(chalk.gray('原因: ') + error.message);
     console.log('');
-    console.log(chalk.gray('提示: 运行 ') + chalk.cyan('node test-sandbox-config.js setup') + chalk.gray(' 进行配置\n'));
+    console.log(chalk.gray('提示: 运行 ') + chalk.cyan('node tests/manual/test-sandbox-config.js setup') + chalk.gray(' 进行配置\n'));
   }
 }
 
@@ -255,7 +255,7 @@ function testEnvironmentVariables() {
  */
 function showHelp() {
   console.log(chalk.bold('用法：'));
-  console.log(chalk.gray('  node test-sandbox-config.js [command] [args]\n'));
+  console.log(chalk.gray('  node tests/manual/test-sandbox-config.js [command] [args]\n'));
   
   console.log(chalk.bold('命令：'));
   console.log(chalk.cyan('  setup         ') + '配置沙箱地址（交互式）');
@@ -268,22 +268,22 @@ function showHelp() {
   
   console.log(chalk.bold('示例：'));
   console.log(chalk.gray('  # 配置沙箱地址'));
-  console.log(chalk.cyan('  node test-sandbox-config.js setup\n'));
+  console.log(chalk.cyan('  node tests/manual/test-sandbox-config.js setup\n'));
   
   console.log(chalk.gray('  # 查看所有环境'));
-  console.log(chalk.cyan('  node test-sandbox-config.js list\n'));
+  console.log(chalk.cyan('  node tests/manual/test-sandbox-config.js list\n'));
   
   console.log(chalk.gray('  # 切换到测试环境'));
-  console.log(chalk.cyan('  node test-sandbox-config.js switch test\n'));
+  console.log(chalk.cyan('  node tests/manual/test-sandbox-config.js switch test\n'));
   
   console.log(chalk.gray('  # 查看配置文件'));
-  console.log(chalk.cyan('  node test-sandbox-config.js show\n'));
+  console.log(chalk.cyan('  node tests/manual/test-sandbox-config.js show\n'));
   
   console.log(chalk.gray('  # 测试 URL 解析'));
-  console.log(chalk.cyan('  node test-sandbox-config.js resolve\n'));
+  console.log(chalk.cyan('  node tests/manual/test-sandbox-config.js resolve\n'));
   
   console.log(chalk.gray('  # 查看环境变量'));
-  console.log(chalk.cyan('  node test-sandbox-config.js env\n'));
+  console.log(chalk.cyan('  node tests/manual/test-sandbox-config.js env\n'));
 }
 
 main().catch(error => {

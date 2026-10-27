@@ -4,10 +4,10 @@
  * 测试录制模式选择功能
  * 
  * 使用方法：
- * 1. node test-recording-mode.js select - 交互式选择模式
- * 2. node test-recording-mode.js parse ui+api - 解析模式字符串
- * 3. node test-recording-mode.js help - 查看模式说明
- * 4. node test-recording-mode.js info - 查看所有模式信息
+ * 1. node tests/manual/test-recording-mode.js select - 交互式选择模式
+ * 2. node tests/manual/test-recording-mode.js parse ui+api - 解析模式字符串
+ * 3. node tests/manual/test-recording-mode.js help - 查看模式说明
+ * 4. node tests/manual/test-recording-mode.js info - 查看所有模式信息
  */
 
 const chalk = require('chalk');
@@ -21,7 +21,7 @@ const {
   producesUIScript,
   producesAPIScript,
   RECORDING_MODES,
-} = require('./cli/agent/tools/record-mode-selector');
+} = require('../../cli/agent/tools/record-mode-selector');
 
 async function main() {
   const command = process.argv[2] || 'select';
@@ -93,7 +93,7 @@ function testParse(input) {
   
   if (!input) {
     console.log(chalk.yellow('⚠️  请提供模式字符串'));
-    console.log(chalk.gray('例如：node test-recording-mode.js parse ui+api\n'));
+    console.log(chalk.gray('例如：node tests/manual/test-recording-mode.js parse ui+api\n'));
     return;
   }
   
@@ -186,7 +186,7 @@ function testConfirmation(mode = 'ui+api') {
  */
 function showUsage() {
   console.log(chalk.bold('用法：'));
-  console.log(chalk.gray('  node test-recording-mode.js [command] [arg]\n'));
+  console.log(chalk.gray('  node tests/manual/test-recording-mode.js [command] [arg]\n'));
   
   console.log(chalk.bold('命令：'));
   console.log(chalk.cyan('  select        ') + '交互式选择录制模式（默认）');
@@ -197,21 +197,21 @@ function showUsage() {
   
   console.log(chalk.bold('示例：'));
   console.log(chalk.gray('  # 交互式选择'));
-  console.log(chalk.cyan('  node test-recording-mode.js select\n'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js select\n'));
   
   console.log(chalk.gray('  # 解析模式'));
-  console.log(chalk.cyan('  node test-recording-mode.js parse ui+api'));
-  console.log(chalk.cyan('  node test-recording-mode.js parse both'));
-  console.log(chalk.cyan('  node test-recording-mode.js parse ui\n'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js parse ui+api'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js parse both'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js parse ui\n'));
   
   console.log(chalk.gray('  # 查看帮助'));
-  console.log(chalk.cyan('  node test-recording-mode.js help\n'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js help\n'));
   
   console.log(chalk.gray('  # 查看所有信息'));
-  console.log(chalk.cyan('  node test-recording-mode.js info\n'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js info\n'));
   
   console.log(chalk.gray('  # 预览确认消息'));
-  console.log(chalk.cyan('  node test-recording-mode.js confirm ui+api\n'));
+  console.log(chalk.cyan('  node tests/manual/test-recording-mode.js confirm ui+api\n'));
 }
 
 main().catch(error => {

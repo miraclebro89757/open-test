@@ -4,15 +4,15 @@
  * 测试首次启动的浏览器配置流程
  * 
  * 使用方法：
- * 1. node test-first-run.js detect - 只检测环境
- * 2. node test-first-run.js setup - 运行完整配置流程
- * 3. node test-first-run.js status - 查看当前配置状态
- * 4. node test-first-run.js reset - 重置配置（模拟首次运行）
+ * 1. node tests/manual/test-first-run.js detect - 只检测环境
+ * 2. node tests/manual/test-first-run.js setup - 运行完整配置流程
+ * 3. node tests/manual/test-first-run.js status - 查看当前配置状态
+ * 4. node tests/manual/test-first-run.js reset - 重置配置（模拟首次运行）
  */
 
-const { detectEnvironment } = require('./cli/browser/env-detector');
-const { loadBrowserConfig, resetBrowserConfig, getConfigPath } = require('./cli/browser/config-store');
-const { setupBrowserEnvironment } = require('./cli/browser/setup');
+const { detectEnvironment } = require('../../cli/browser/env-detector');
+const { loadBrowserConfig, resetBrowserConfig, getConfigPath } = require('../../cli/browser/config-store');
+const { setupBrowserEnvironment } = require('../../cli/browser/setup');
 const chalk = require('chalk');
 
 async function main() {
@@ -101,8 +101,8 @@ async function testDetection() {
   
   // 提示
   console.log(chalk.cyan('💡 提示：'));
-  console.log(chalk.gray('  • 运行 ') + chalk.cyan('node test-first-run.js setup') + chalk.gray(' 体验完整配置流程'));
-  console.log(chalk.gray('  • 运行 ') + chalk.cyan('node test-first-run.js reset') + chalk.gray(' 重置配置模拟首次运行'));
+  console.log(chalk.gray('  • 运行 ') + chalk.cyan('node tests/manual/test-first-run.js setup') + chalk.gray(' 体验完整配置流程'));
+  console.log(chalk.gray('  • 运行 ') + chalk.cyan('node tests/manual/test-first-run.js reset') + chalk.gray(' 重置配置模拟首次运行'));
   console.log('');
 }
 
@@ -118,7 +118,7 @@ async function testSetup() {
     }
     console.log('');
     console.log(chalk.gray('提示: 使用 ') + chalk.cyan('--force') + chalk.gray(' 参数强制重新配置'));
-    console.log(chalk.gray('或运行 ') + chalk.cyan('node test-first-run.js reset') + chalk.gray(' 先重置\n'));
+    console.log(chalk.gray('或运行 ') + chalk.cyan('node tests/manual/test-first-run.js reset') + chalk.gray(' 先重置\n'));
     return;
   }
   
@@ -136,7 +136,7 @@ async function testStatus() {
   
   if (!config.configured || config.type === 'none') {
     console.log(chalk.yellow('⚠️  浏览器环境未配置'));
-    console.log(chalk.gray('\n提示: 运行 ') + chalk.cyan('node test-first-run.js setup') + chalk.gray(' 进行配置\n'));
+    console.log(chalk.gray('\n提示: 运行 ') + chalk.cyan('node tests/manual/test-first-run.js setup') + chalk.gray(' 进行配置\n'));
     return;
   }
   
@@ -179,14 +179,14 @@ async function testReset() {
   
   console.log(chalk.green('✅ 配置已重置！\n'));
   console.log(chalk.cyan('现在可以测试首次运行场景：'));
-  console.log(chalk.gray('  1. 运行 ') + chalk.cyan('node test-first-run.js detect') + chalk.gray(' 验证状态'));
-  console.log(chalk.gray('  2. 运行 ') + chalk.cyan('node test-first-run.js setup') + chalk.gray(' 体验配置流程'));
+  console.log(chalk.gray('  1. 运行 ') + chalk.cyan('node tests/manual/test-first-run.js detect') + chalk.gray(' 验证状态'));
+  console.log(chalk.gray('  2. 运行 ') + chalk.cyan('node tests/manual/test-first-run.js setup') + chalk.gray(' 体验配置流程'));
   console.log(chalk.gray('  3. 或运行 ') + chalk.cyan('npx open-test run --skip-browser-setup') + chalk.gray(' 测试实际启动\n'));
 }
 
 function showHelp() {
   console.log(chalk.bold('用法：'));
-  console.log(chalk.gray('  node test-first-run.js [command]\n'));
+  console.log(chalk.gray('  node tests/manual/test-first-run.js [command]\n'));
   
   console.log(chalk.bold('命令：'));
   console.log(chalk.cyan('  detect') + '  检测环境和当前配置状态（默认）');
@@ -197,16 +197,16 @@ function showHelp() {
   
   console.log(chalk.bold('示例：'));
   console.log(chalk.gray('  # 检测环境'));
-  console.log(chalk.cyan('  node test-first-run.js detect\n'));
+  console.log(chalk.cyan('  node tests/manual/test-first-run.js detect\n'));
   
   console.log(chalk.gray('  # 重置配置，模拟首次运行'));
-  console.log(chalk.cyan('  node test-first-run.js reset\n'));
+  console.log(chalk.cyan('  node tests/manual/test-first-run.js reset\n'));
   
   console.log(chalk.gray('  # 体验配置流程'));
-  console.log(chalk.cyan('  node test-first-run.js setup\n'));
+  console.log(chalk.cyan('  node tests/manual/test-first-run.js setup\n'));
   
   console.log(chalk.gray('  # 查看配置状态'));
-  console.log(chalk.cyan('  node test-first-run.js status\n'));
+  console.log(chalk.cyan('  node tests/manual/test-first-run.js status\n'));
 }
 
 main().catch(error => {

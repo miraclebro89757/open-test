@@ -34,7 +34,7 @@ sample-project/
 ├── scripts/                  # Scripts and helper tools
 ├── config/                   # Configuration files
 ├── examples/                 # Sample test cases
-├── test-workspace/           # Testing workspace
+├── tests/manual/test-workspace/  # Testing workspace
 ├── artifacts/                # Generated test outputs
 ├── README.md                 # This file
 ├── LICENSE                   # License
@@ -100,7 +100,7 @@ Copy the example environment file and configuration:
 
 ```bash
 cp .env.example .env
-cp opentest.config.example.json opentest.config.json
+cp config/opentest.config.example.json opentest.config.json
 ```
 
 ### Running Tests
@@ -190,7 +190,7 @@ For technical questions or issues, please open an Issue in this repository.
 ├── scripts/                  # 脚本与工具
 ├── config/                   # 配置文件
 ├── examples/                 # 示例用例
-├── test-workspace/           # 测试工作区
+├── tests/manual/test-workspace/  # 测试工作区
 ├── artifacts/                # 测试产物输出目录
 ├── README.md                 # 项目说明
 ├── LICENSE                   # 许可证
@@ -256,7 +256,7 @@ npm install
 
 ```bash
 cp .env.example .env
-cp opentest.config.example.json opentest.config.json
+cp config/opentest.config.example.json opentest.config.json
 ```
 
 ### 运行测试

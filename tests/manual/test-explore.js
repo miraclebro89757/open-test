@@ -3,17 +3,17 @@
  * Test tool for Explore and Generate功能
  * 
  * Usage:
- *   node test-explore.js demo         # 演示完整流程
- *   node test-explore.js semantic     # 测试语义分析
- *   node test-explore.js generate     # 测试脚本生成
- *   node test-explore.js mock         # 使用模拟数据测试
+ *   node tests/manual/test-explore.js demo         # 演示完整流程
+ *   node tests/manual/test-explore.js semantic     # 测试语义分析
+ *   node tests/manual/test-explore.js generate     # 测试脚本生成
+ *   node tests/manual/test-explore.js mock         # 使用模拟数据测试
  */
 
 const fs = require('fs');
 const path = require('path');
-const { exploreAndGenerate } = require('./cli/agent/tools/explore-and-generate');
-const { analyzeExploration } = require('./cli/agent/tools/semantic-action');
-const { generateTestFile } = require('./cli/agent/tools/script-generator');
+const { exploreAndGenerate } = require('../../cli/agent/tools/explore-and-generate');
+const { analyzeExploration } = require('../../cli/agent/tools/semantic-action');
+const { generateTestFile } = require('../../cli/agent/tools/script-generator');
 
 const COMMANDS = {
   demo: '演示完整流程（需要实际浏览器操作）',
@@ -317,7 +317,7 @@ async function main() {
   const command = process.argv[2];
   
   if (!command || !COMMANDS[command]) {
-    console.log('Usage: node test-explore.js <command>');
+    console.log('Usage: node tests/manual/test-explore.js <command>');
     console.log('');
     console.log('Commands:');
     Object.entries(COMMANDS).forEach(([cmd, desc]) => {

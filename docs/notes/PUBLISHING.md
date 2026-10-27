@@ -173,9 +173,8 @@ npx opentest-ai@latest init my-project
     "cli/",
     ".pi/",
     "schemas/",
-    "opentest.config.example.json",
+    "config/opentest.config.example.json",
     "README.md",
-    "PUBLISHING.md",
     "LICENSE",
     "!cli/**/*.test.js"
   ],

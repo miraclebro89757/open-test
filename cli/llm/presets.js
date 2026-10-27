@@ -79,7 +79,7 @@ const PROVIDER_ALIASES = {
 /**
  * Wording for the interactive wizard: where to get a key, what a real one looks
  * like, and what to type. Kept separate from PRESETS because PRESETS is
- * serialized into opentest.config.example.json — hints must not leak into the
+ * serialized into config/opentest.config.example.json — hints must not leak into the
  * machine-readable catalog.
  */
 const PROVIDER_GUIDE = {
