@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { selectSessionCases, scriptName, renderSpec, runRecordingSession, controlPage } = require('./record-session');
+const { selectSessionCases, scriptName, renderSpec, replaySpec, runRecordingSession, controlPage } = require('./record-session');
 
 const CASES = [
   { file: 'cases/班组.md', id: 'TC012', title: '新建作业班组', priority: '高', automated: false },
@@ -52,6 +52,38 @@ test('the script file and test title use the case id and title', () => {
   assert.match(spec, /storageState: "automation\/auth\/admin\.json"/);
   assert.match(spec, /page\.goto\("https:\/\/sandbox\.example\/app"\)/);
   assert.match(spec, /getByRole\("button", \{ name: "新建" \}\)/);
+});
+
+test('a capture replays as the original case, and a login recording starts signed out', () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'opentest-replay-'));
+  const storage = path.join(workspace, 'recordings', 'ui-1', 'storage-state.json');
+  fs.mkdirSync(path.dirname(storage), { recursive: true });
+  fs.writeFileSync(storage, '{}');
+  const signedIn = replaySpec({
+    caseId: 'TC100',
+    title: '编辑自定义工种',
+    pageUrl: 'https://sandbox.example/app',
+    sandboxUrl: 'https://sandbox.example/login',
+    storageState: 'recordings/ui-1/storage-state.json',
+    actions: ['await page.locator(".menu").click();', "await expect(page.getByText('已保存')).toBeVisible();"],
+  }, workspace);
+  assert.match(signedIn, /import \{ test, expect \}/);
+  assert.match(signedIn, /test\('TC100 编辑自定义工种'/);
+  assert.match(signedIn, /page\.goto\("https:\/\/sandbox\.example\/app"\)/);
+  assert.match(signedIn, new RegExp(storage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const login = replaySpec({
+    caseId: 'TC099',
+    title: '新建自定义工种',
+    pageUrl: 'https://sandbox.example/app',
+    sandboxUrl: 'https://sandbox.example/login',
+    storageState: 'recordings/ui-1/storage-state.json',
+    actions: ["await page1.getByRole('button', { name: '登录' }).click();"],
+  }, workspace);
+  assert.match(login, /page\.getByRole\('button', \{ name: '登录' \}\)/);
+  assert.doesNotMatch(login, /page1/);
+  assert.doesNotMatch(login, /storageState/);
+  assert.match(login, /page\.goto\("https:\/\/sandbox\.example\/login"\)/);
 });
 
 test('one login records several cases and closes the browser once', async () => {

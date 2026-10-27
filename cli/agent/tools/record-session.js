@@ -69,17 +69,41 @@ function scriptName(id, title) {
   return `${clean}.spec.ts`;
 }
 
+function normalizeAction(line) {
+  return String(line || '').trim().replace(/\bpage1\b/g, 'page');
+}
+
+/** A capture becomes a temporary Playwright spec. Login steps start at the sandbox and do not reuse storage. */
+function replaySpec(capture, workspace) {
+  const actions = (Array.isArray(capture.actions) ? capture.actions : []).map(normalizeAction).filter(Boolean);
+  const login = actions.some((line) => /登录|请输入手机号|请输入用户名|获取验证码/.test(line));
+  let storageState = '';
+  if (!login && capture.storageState && workspace) {
+    const root = path.resolve(workspace);
+    const absolute = path.resolve(root, capture.storageState);
+    const relative = path.relative(root, absolute);
+    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative) && fs.existsSync(absolute)) storageState = absolute;
+  }
+  const url = login ? (capture.sandboxUrl || capture.pageUrl || '') : (capture.pageUrl || capture.sandboxUrl || '');
+  return renderSpecFile({
+    id: capture.caseId || capture.capture_id || 'capture',
+    title: capture.title || '',
+    url,
+    actions,
+    storageState,
+  });
+}
+
 function renderSpecFile({ id, title, url, actions, storageState }) {
   const name = `${id} ${title}`.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const lines = (actions || []).map((line) => String(line || '').trim()).filter(Boolean);
   const steps = [];
   if (!lines.some((line) => /page\.goto\(/.test(line))) steps.push(`  await page.goto(${JSON.stringify(url)});`);
   lines.forEach((line) => steps.push(`  ${line.replace(/^\s+/, '')}`));
+  const header = ["import { test, expect } from '@playwright/test';", ''];
+  if (storageState) header.push(`test.use({ storageState: ${JSON.stringify(storageState)} });`, '');
   return [
-    "import { test } from '@playwright/test';",
-    '',
-    `test.use({ storageState: ${JSON.stringify(storageState)} });`,
-    '',
+    ...header,
     `test('${name}', async ({ page }) => {`,
     ...steps,
     '});',
@@ -473,6 +497,7 @@ module.exports = {
   selectSessionCases,
   scriptName,
   renderSpec: renderSpecFile,
+  replaySpec,
   loadWorkspaceCases,
   controlPage,
   writeUiCapture,

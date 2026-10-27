@@ -2,8 +2,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listAutomationScripts, readCases } from "./assets";
 import { loadAgentModule } from "./legacy";
+import { listRunnableCases, type RunnableCase } from "./run-catalog";
 import { opentestRoot } from "./web-session";
 import {
   runsDir,
@@ -162,24 +162,52 @@ async function runUi(workspace: string, file: string, options: { headed: boolean
   if (!fs.existsSync(cli)) {
     return { status: "error", tests: [], error: "Playwright 1.63.0 is not installed. Run npm install in the open-test directory." };
   }
-  const args = [cli, "test", path.join(workspace, file), "--reporter=json", ...(options.headed ? ["--headed"] : [])];
-  const result = await execute(process.execPath, args, {
-    cwd: workspace,
-    timeoutMs: SCRIPT_TIMEOUT_MS,
-    env: { ...process.env, CI: "1", FORCE_COLOR: "0", NODE_PATH: ensurePlaywrightShim(root), npm_config_yes: "false" },
-  });
-  if (result.timedOut) return { status: "error", tests: [], error: "Stopped after 5 minutes." };
-  const parsed = parsePlaywrightReport(result.stdout);
-  if (!parsed) return { status: "error", tests: [], error: tail(result.stderr || result.stdout) || "Playwright did not report a result." };
-  if (!parsed.tests.length) {
-    return { status: "error", tests: [], error: parsed.errors.join("\n") || "No runnable test was found." };
+  const replay = file.endsWith("/capture.json") ? writeReplayProject(workspace, file, options.headed) : null;
+  try {
+    const args = replay
+      ? [cli, "test", "--config", replay.config, "--reporter=json", ...(options.headed ? ["--headed"] : [])]
+      : [cli, "test", path.join(workspace, file), "--reporter=json", ...(options.headed ? ["--headed"] : [])];
+    const result = await execute(process.execPath, args, {
+      cwd: replay ? replay.dir : workspace,
+      timeoutMs: SCRIPT_TIMEOUT_MS,
+      env: { ...process.env, CI: "1", FORCE_COLOR: "0", NODE_PATH: ensurePlaywrightShim(root), npm_config_yes: "false" },
+    });
+    if (result.timedOut) return { status: "error", tests: [], error: "Stopped after 5 minutes." };
+    const parsed = parsePlaywrightReport(result.stdout);
+    if (!parsed) return { status: "error", tests: [], error: tail(result.stderr || result.stdout) || "Playwright did not report a result." };
+    if (!parsed.tests.length) {
+      return { status: "error", tests: [], error: [parsed.errors.join("\n"), tail(result.stderr)].filter(Boolean).join("\n") || "No runnable test was found." };
+    }
+    const failed = parsed.tests.some((test) => test.status === "failed");
+    return {
+      status: failed ? "failed" : parsed.tests.every((test) => test.status === "skipped") ? "skipped" : "passed",
+      tests: parsed.tests,
+      error: failed ? tail(result.stderr) : "",
+    };
+  } finally {
+    if (replay) fs.rmSync(replay.dir, { recursive: true, force: true });
   }
-  const failed = parsed.tests.some((test) => test.status === "failed");
-  return {
-    status: failed ? "failed" : parsed.tests.every((test) => test.status === "skipped") ? "skipped" : "passed",
-    tests: parsed.tests,
-    error: failed ? tail(result.stderr) : "",
-  };
+}
+
+/** A capture is replayed from its own directory, so the product tree cannot hide the spec. */
+export function writeReplayProject(workspace: string, file: string, headed: boolean): { dir: string; config: string } {
+  const capture = JSON.parse(fs.readFileSync(path.join(workspace, file), "utf8")) as unknown;
+  const spec = loadAgentModule<{ replaySpec(value: unknown, root: string): string }>("tools/record-session.js").replaySpec(capture, workspace);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "opentest-replay-"));
+  fs.writeFileSync(path.join(dir, "replay.spec.ts"), spec);
+  fs.writeFileSync(path.join(dir, "playwright.config.js"), [
+    "module.exports = {",
+    "  testDir: __dirname,",
+    "  testMatch: 'replay.spec.ts',",
+    "  timeout: 120000,",
+    "  use: {",
+    "    channel: 'chrome',",
+    `    headless: ${headed ? "false" : "true"},`,
+    "  },",
+    "};",
+    "",
+  ].join("\n"));
+  return { dir, config: path.join(dir, "playwright.config.js") };
 }
 
 async function runApi(workspace: string, file: string): Promise<Pick<RunScript, "status" | "tests" | "error">> {
@@ -234,17 +262,19 @@ export interface RunRequest {
   retries?: number;
 }
 
-/** Pick the scripts a request names, refusing anything that is not a script under automation/. */
-export function selectScripts(workspace: string, request: RunRequest): Array<{ file: string; kind: "ui" | "api" }> {
-  const known = listAutomationScripts(workspace);
+/** Pick the cases a request names, in that order. Anything outside the catalog is refused. */
+export function selectScripts(workspace: string, request: RunRequest): RunnableCase[] {
+  const known = listRunnableCases(workspace);
   const kind = request.kind ?? "all";
-  const wanted = request.files ? new Set(request.files) : null;
-  if (wanted) {
-    for (const file of wanted) {
-      if (!known.some((script) => script.file === file)) throw new Error(`Not a script under automation/: ${file}`);
-    }
+  if (request.files) {
+    const byFile = new Map(known.map((item) => [item.file, item]));
+    return request.files.map((file) => {
+      const found = byFile.get(file);
+      if (!found) throw new Error(`Not a recorded case or a script under automation/: ${file}`);
+      return found;
+    });
   }
-  return known.filter((script) => (wanted ? wanted.has(script.file) : kind === "all" || script.kind === kind));
+  return known.filter((item) => kind === "all" || item.kind === kind);
 }
 
 /**
@@ -253,15 +283,8 @@ export function selectScripts(workspace: string, request: RunRequest): Array<{ f
  */
 export function startRun(workspace: string, request: RunRequest, root: string = opentestRoot()): RunRecord {
   const scripts = selectScripts(workspace, request);
-  if (!scripts.length) throw new Error("No automation script to run. Record one, or ask the agent to generate one.");
+  if (!scripts.length) throw new Error("No case to run. Record a UI capture, or add a script under automation/.");
   if (activeRuns().has(workspace)) throw new RunBusyError(`Already running ${activeRuns().get(workspace)}. Wait for it to finish.`);
-
-  const caseIdsByScript = new Map<string, string[]>();
-  for (const file of readCases(workspace)) {
-    for (const item of file.items) {
-      for (const script of item.scripts) caseIdsByScript.set(script, [...(caseIdsByScript.get(script) ?? []), item.id]);
-    }
-  }
 
   const retries = Math.max(0, Math.min(2, Math.floor(request.retries ?? 0)));
   const run: RunRecord = {
@@ -272,7 +295,7 @@ export function startRun(workspace: string, request: RunRequest, root: string = 
     options: { headed: Boolean(request.headed), retries },
     scripts: scripts.map((script) => ({
       file: script.file, kind: script.kind, status: "pending", durationMs: 0, attempts: 0, tests: [], error: "",
-      caseIds: caseIdsByScript.get(script.file) ?? [],
+      caseIds: script.caseId ? [script.caseId] : [],
     })),
     summary: { passed: 0, failed: 0, skipped: 0, errors: 0 },
   };

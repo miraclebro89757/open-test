@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listAutomationScripts } from "@/lib/qa/assets";
+import { listRunnableCases } from "@/lib/qa/run-catalog";
 import { qaError, resolveQaWorkspace } from "@/lib/qa/access";
 import { listRuns, readRun } from "@/lib/qa/runs";
 import { RunBusyError, startRun } from "@/lib/qa/runner";
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({
       runs: listRuns(resolved.workspace),
-      scripts: listAutomationScripts(resolved.workspace),
+      cases: listRunnableCases(resolved.workspace),
     });
   } catch (error) {
     return qaError(error);

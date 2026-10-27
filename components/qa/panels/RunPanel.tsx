@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { QaAskAgent } from "@/lib/qa/client";
 import { STAGE_REQUESTS } from "@/lib/qa/client";
-import type { AutomationScript } from "@/lib/qa/assets";
+import type { RunnableCase } from "@/lib/qa/run-catalog";
 import type { RunRecord, RunScript, ScriptStatus } from "@/lib/qa/runs";
 import { Badge, EmptyState, QA_COLORS, buttonStyle, formatTime } from "../qa-ui";
 import { useAskFeedback } from "../useAskFeedback";
@@ -39,11 +39,18 @@ function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-/** Run the recorded scripts and read the result of each. Numbers come only from real runs. */
+function caseLabel(item: RunnableCase): string {
+  const name = [item.caseId, item.title].filter(Boolean).join(" ");
+  return name || item.file.split("/").pop() || item.file;
+}
+
+/** Pick UI or API cases by name, then run the checked ones in list order. */
 export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }: Props) {
   const { t } = useI18n();
-  const { data, error, reload, post } = useQaData<{ runs: RunRecord[]; scripts: AutomationScript[] }>("/api/qa/run", cwd, refreshKey);
+  const { data, error, reload, post } = useQaData<{ runs: RunRecord[]; cases: RunnableCase[] }>("/api/qa/run", cwd, refreshKey);
   const { ask, feedback } = useAskFeedback(onAskAgent);
+  const [filter, setFilter] = useState<"ui" | "api">("ui");
+  const [checked, setChecked] = useState<string[]>([]);
   const [headed, setHeaded] = useState(false);
   const [retries, setRetries] = useState(0);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
@@ -55,7 +62,6 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
   const running = latest?.status === "running";
   const run = (selectedRun && data?.runs.find((item) => item.id === selectedRun)) || latest;
 
-  // Poll while a run is in progress, and tell the shell once it ends so the pipeline bar updates.
   const wasRunning = useRef(false);
   useEffect(() => {
     if (running) {
@@ -70,11 +76,11 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
     return undefined;
   }, [running, reload, onChanged]);
 
-  const start = async (files?: string[], kind?: "ui" | "api") => {
+  const start = async (files: string[]) => {
     setStarting(true);
     setMessage(null);
     setSelectedRun(null);
-    const result = await post({ files, kind, headed, retries });
+    const result = await post({ files, headed: filter === "ui" && headed, retries });
     setStarting(false);
     if (!result.ok) setMessage(result.error);
     else onChanged();
@@ -83,9 +89,12 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
   if (error) return <EmptyState title={t("qa.run.loadFailed")} hint={error} />;
   if (!data) return <EmptyState title={t("qa.loading")} />;
 
-  const uiCount = data.scripts.filter((script) => script.kind === "ui").length;
-  const apiCount = data.scripts.filter((script) => script.kind === "api").length;
-  if (!data.scripts.length && !data.runs.length) {
+  const visible = data.cases.filter((item) => item.kind === filter);
+  const selected = visible.filter((item) => checked.includes(item.file));
+  const allChecked = visible.length > 0 && visible.every((item) => checked.includes(item.file));
+  const uiCount = data.cases.filter((item) => item.kind === "ui").length;
+  const apiCount = data.cases.filter((item) => item.kind === "api").length;
+  if (!data.cases.length && !data.runs.length) {
     return (
       <EmptyState title={t("qa.run.empty")} hint={t("qa.run.emptyHint")}>
         <button type="button" style={buttonStyle("primary")} onClick={() => ask(STAGE_REQUESTS.record)}>{t("qa.run.goRecord")}</button>
@@ -97,21 +106,34 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
   const absolute = (relative: string) => `${cwd.replace(/\/+$/, "")}/${relative}`;
   const selectStyle = { height: 26, borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12 } as const;
   const summary = run?.summary;
+  const toggle = (file: string) => {
+    setChecked((current) => current.includes(file) ? current.filter((item) => item !== file) : [...current, file]);
+  };
+  const toggleAll = () => {
+    const files = visible.map((item) => item.file);
+    setChecked((current) => allChecked ? current.filter((file) => !files.includes(file)) : [...new Set([...current, ...files])]);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)", display: "grid", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" disabled={running || starting || !data.scripts.length} style={buttonStyle("primary", running || starting)} onClick={() => void start()}>
-            {running ? t("qa.run.running") : t("qa.run.all", { count: data.scripts.length })}
+          <button type="button" aria-pressed={filter === "ui"} style={buttonStyle(filter === "ui" ? "primary" : "plain")} onClick={() => setFilter("ui")}>{t("qa.run.filterUi", { count: uiCount })}</button>
+          <button type="button" aria-pressed={filter === "api"} style={buttonStyle(filter === "api" ? "primary" : "plain")} onClick={() => setFilter("api")}>{t("qa.run.filterApi", { count: apiCount })}</button>
+          <button type="button" disabled={running || starting || !selected.length} style={buttonStyle("primary", running || starting || !selected.length)} onClick={() => void start(selected.map((item) => item.file))}>
+            {running ? t("qa.run.running") : t("qa.run.selected", { count: selected.length })}
           </button>
-          <button type="button" disabled={running || starting || !uiCount} style={buttonStyle("plain", running || starting || !uiCount)} onClick={() => void start(undefined, "ui")}>{t("qa.run.ui", { count: uiCount })}</button>
-          <button type="button" disabled={running || starting || !apiCount} style={buttonStyle("plain", running || starting || !apiCount)} onClick={() => void start(undefined, "api")}>{t("qa.run.api", { count: apiCount })}</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--text-muted)", flexWrap: "wrap" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <input type="checkbox" checked={headed} onChange={(event) => setHeaded(event.target.checked)} />{t("qa.run.headed")}
+            <input type="checkbox" checked={allChecked} disabled={!visible.length} onChange={toggleAll} />{t("qa.run.selectAll")}
           </label>
+          {filter === "ui" ? (
+            <div role="group" aria-label={t("qa.run.headed")} style={{ display: "inline-flex", gap: 6 }}>
+              <button type="button" aria-pressed={!headed} title={t("qa.run.headlessHint")} style={buttonStyle(headed ? "plain" : "primary")} onClick={() => setHeaded(false)}>{t("qa.run.headless")}</button>
+              <button type="button" aria-pressed={headed} title={t("qa.run.headedHint")} style={buttonStyle(headed ? "primary" : "plain")} onClick={() => setHeaded(true)}>{t("qa.run.headed")}</button>
+            </div>
+          ) : null}
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
             {t("qa.run.retries")}
             <select value={retries} onChange={(event) => setRetries(Number(event.target.value))} aria-label={t("qa.run.retriesLabel")} style={selectStyle}>
@@ -140,38 +162,42 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
           <span style={{ color: "var(--text-muted)" }}>{t("qa.run.skipped", { count: summary.skipped })}</span>
           {summary.errors ? <span style={{ color: QA_COLORS.warn }}>{t("qa.run.errors", { count: summary.errors })}</span> : null}
           <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 11 }}>
+            {run.options?.headed ? t("qa.run.headed") : t("qa.run.headless")}
+            {" · "}
             {run.status === "running" ? t("qa.run.runningNow") : t("qa.run.finished", { time: run.finishedAt ? formatTime(run.finishedAt) : "" })}
           </span>
         </div>
       ) : null}
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {!run ? (
-          <EmptyState title={t("qa.run.none")} hint={t("qa.run.noneHint")} />
-        ) : run.scripts.map((script: RunScript) => {
-          const key = `${run.id}#${script.file}`;
+        {visible.length === 0 ? <EmptyState title={t("qa.run.emptyList")} /> : visible.map((item) => {
+          const result: RunScript | undefined = run?.scripts.find((script) => script.file === item.file);
+          const key = item.file;
           const expanded = open === key;
-          const failing = script.status === "failed" || script.status === "error";
+          const label = caseLabel(item);
+          const failing = result?.status === "failed" || result?.status === "error";
+          const detail = item.recordedAt ? formatTime(item.recordedAt) : item.file.split("/").pop();
           return (
             <div key={key} style={{ borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", fontSize: 12.5 }}>
+                <input type="checkbox" checked={checked.includes(item.file)} aria-label={label} onChange={() => toggle(item.file)} />
                 <button
                   type="button"
                   onClick={() => setOpen(expanded ? null : key)}
                   aria-expanded={expanded}
                   style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12.5 }}
                 >
-                  <Badge tone={script.kind === "ui" ? "accent" : "ok"}>{script.kind === "ui" ? "UI" : "API"}</Badge>
-                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={script.file}>{script.file.replace(/^automation\//, "")}</span>
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={label}>{label}</span>
+                  {detail ? <span style={{ color: "var(--text-dim)", fontSize: 11, flexShrink: 0 }}>{detail}</span> : null}
                 </button>
-                {script.caseIds.length ? <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{script.caseIds.join(" ")}</span> : null}
-                {script.attempts > 1 ? <Badge tone="warn" title={t("qa.run.retried")}>{t("qa.run.retryBadge", { count: script.attempts - 1 })}</Badge> : null}
-                <Badge tone={statusTone(script.status)}>{t(STATUS_KEY[script.status])}</Badge>
-                {script.durationMs ? <span style={{ color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{seconds(script.durationMs)}</span> : null}
+                {result && result.attempts > 1 ? <Badge tone="warn" title={t("qa.run.retried")}>{t("qa.run.retryBadge", { count: result.attempts - 1 })}</Badge> : null}
+                {result?.status === "error" && result.error ? <span title={result.error} style={{ color: QA_COLORS.warn, fontSize: 11, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{result.error.split("\n")[0]}</span> : null}
+                {result ? <Badge tone={statusTone(result.status)}>{t(STATUS_KEY[result.status])}</Badge> : null}
+                {result?.durationMs ? <span style={{ color: "var(--text-dim)", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{seconds(result.durationMs)}</span> : null}
               </div>
               {expanded ? (
                 <div style={{ padding: "2px 12px 12px 36px", display: "grid", gap: 6 }}>
-                  {script.tests.map((test) => (
+                  {result?.tests.map((test) => (
                     <div key={test.name} style={{ fontSize: 12 }}>
                       <span style={{ color: test.status === "passed" ? QA_COLORS.ok : test.status === "failed" ? QA_COLORS.bad : "var(--text-muted)" }}>
                         {test.status === "passed" ? "✓" : test.status === "failed" ? "✗" : "–"}
@@ -181,17 +207,16 @@ export function RunPanel({ cwd, refreshKey, onAskAgent, onOpenFile, onChanged }:
                       {test.message ? <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", fontSize: 11.5, color: "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{test.message.slice(0, 800)}</pre> : null}
                     </div>
                   ))}
-                  {script.error ? <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 11.5, color: script.status === "error" ? QA_COLORS.warn : "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{script.error}</pre> : null}
+                  {result?.error ? <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 11.5, color: result.status === "error" ? QA_COLORS.warn : "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>{result.error}</pre> : null}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button type="button" style={buttonStyle()} onClick={() => onOpenFile(absolute(script.file))}>{t("qa.openScript")}</button>
-                    <button type="button" disabled={running || starting} style={buttonStyle("plain", running || starting)} onClick={() => void start([script.file])}>{t("qa.run.rerun")}</button>
-                    {failing && script.kind === "ui" && script.status === "failed" ? (
+                    <button type="button" style={buttonStyle()} onClick={() => onOpenFile(absolute(item.file))}>{t("qa.openScript")}</button>
+                    {failing && result && item.kind === "ui" && result.status === "failed" && item.file.startsWith("automation/") ? (
                       <button
                         type="button"
                         style={buttonStyle("primary")}
                         onClick={() => ask({
                           mode: "send",
-                          text: `脚本 ${script.file} 执行失败：${(script.tests.find((test) => test.status === "failed")?.message ?? script.error).split("\n")[0].slice(0, 200)}。如果是选择器失效，用 heal_selector 修复并重新运行这个脚本，告诉我改了哪些选择器；如果是业务失败，不要改脚本，说明可能的缺陷。`,
+                          text: `脚本 ${item.file} 执行失败：${(result.tests.find((test) => test.status === "failed")?.message ?? result.error).split("\n")[0].slice(0, 200)}。如果是选择器失效，用 heal_selector 修复并重新运行这个脚本，告诉我改了哪些选择器；如果是业务失败，不要改脚本，说明可能的缺陷。`,
                         })}
                       >
                         {t("qa.run.heal")}

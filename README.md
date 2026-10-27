@@ -146,7 +146,7 @@ The browser opens once. You log in, then use the control page to record one or m
 
 When a selector fails during `/run`, the agent calls `heal_selector` immediately. The file before and after the replacement are both kept, and the current file uses the replacement so the run can finish. After that run, the terminal asks which version to keep. `/heal` and the heal panel ask the same question.
 
-`/run` executes Playwright specs under `automation/`. A `test_*.py` or `*_test.py` file already in that folder is run with pytest when pytest is installed.
+`/run` replays the UI captures you select, in order, and runs pytest files already under `automation/` when pytest is installed.
 
 ## Where files land
 
